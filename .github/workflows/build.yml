@@ -54,3 +54,13 @@ jobs:
           path: release/*.exe
           retention-days: 7
           continue-on-error: true
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          body: "## Workit 需求管理应用\n\n### 功能\n- 知识库文档管理\n- 需求管理 + AI 分析\n- 快速采集浮窗\n- 桌面应用\n\n### 系统要求\n- Windows 10/11 x64"
+          files: release/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
