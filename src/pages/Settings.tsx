@@ -11,7 +11,7 @@ export default function Settings() {
   const [latestVersion, setLatestVersion] = useState('');
   const [downloadProgress, setDownloadProgress] = useState(0);
 
-  const currentVersion = '1.0.0';
+  const currentVersion = (window as any).electronAPI?.getVersion?.() || '1.0.0';
 
   const checkForUpdate = async () => {
     setUpdateStatus('checking');

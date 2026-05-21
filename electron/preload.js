@@ -1,6 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
-// Expose protected methods to renderer
+function getVersion() {
+  try {
+    const packagePath = path.join(__dirname, '..', 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    return pkg.version || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: {
@@ -8,5 +19,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chrome: process.versions.chrome,
     electron: process.versions.electron,
   },
-  // Add more APIs as needed
+  getVersion,
 });

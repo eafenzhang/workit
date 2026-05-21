@@ -23,7 +23,13 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          VERSION=$(date +'%Y%m%d-%H%M%S')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Setting package.json version to $VERSION"
+          $script = '(Get-Content package.json) -replace '"'"'"version": "[^"]*""'"'"', '"'"'"version": "'$VERSION'""'"'"' | Set-Content package.json'
+          powershell -Command "$script"
+          npm run build
         continue-on-error: true
 
       - name: Build Electron app
@@ -48,12 +54,15 @@ jobs:
         if: success()
         shell: bash
         run: |
+          VERSION="${{ env.VERSION }}"
+          if [ -z "$VERSION" ]; then VERSION=$(date +'%Y%m%d-%H%M%S'); fi
+          echo "Using version: $VERSION"
+
           echo "Finding exe files..."
           EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null | tr '\n' ' ')
           echo "Found: $EXE_FILES"
           if [ -z "$EXE_FILES" ]; then echo "No exe files found"; exit 1; fi
 
-          VERSION=$(date +'%Y%m%d-%H%M%S')
           echo "Creating release v$VERSION"
 
           RESPONSE=$(curl -s -X POST "https://api.github.com/repos/eafenzhang/workit/releases" \
@@ -75,6 +84,23 @@ jobs:
             echo "Done: $basename_f"
           done
 
+          echo "Creating version.json..."
+          VERSION_JSON="{\"version\":\"$VERSION\",\"date\":\"$(date -Iseconds)\",\"downloadUrl\":\"https://github.com/eafenzhang/workit/releases/download/v$VERSION/Workit.exe\"}"
+          echo "$VERSION_JSON" > version.json
+
+          curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "@version.json" \
+            "https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets?name=version.json"
+
+          echo "Updating latest release tag..."
+          curl -s -X PATCH "https://api.github.com/repos/eafenzhang/workit/releases/326389479" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"latest\",\"name\":\"Workit Latest\",\"body\":\"最新版本: v$VERSION\n\n下载: https://github.com/eafenzhang/workit/releases/download/v$VERSION/Workit.exe\"}"
+
           echo "Release created: https://github.com/eafenzhang/workit/releases/tag/v$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
