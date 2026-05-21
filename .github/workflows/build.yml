@@ -44,17 +44,23 @@ jobs:
           path: release/win-unpacked/
           retention-days: 7
 
-      - name: Create Release
+      - name: Upload to Release
         if: success()
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/win-unpacked/*.exe
-          body: |
-            ## Workit v1.0.0
-            Windows Portable 版本
-            - 下载 `Workit.exe` 或 `electron.exe` 运行
-          draft: false
-          prerelease: false
-          replace: true
+        shell: bash
+        run: |
+          echo "Finding exe files..."
+          EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null | tr '\n' ' ')
+          echo "Found: $EXE_FILES"
+          if [ -z "$EXE_FILES" ]; then echo "No exe files found"; exit 1; fi
+          for f in $EXE_FILES; do
+            echo "Uploading $f..."
+            basename_f=$(basename "$f")
+            curl -s -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" \
+              "https://uploads.github.com/repos/eafenzhang/workit/releases/326389479/assets?name=$basename_f"
+            echo "Done: $basename_f"
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
