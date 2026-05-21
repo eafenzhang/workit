@@ -30,7 +30,6 @@ jobs:
           $script = '(Get-Content package.json) -replace '"'"'"version": "[^"]*""'"'"', '"'"'"version": "'$VERSION'""'"'"' | Set-Content package.json'
           powershell -Command "$script"
           npm run build
-        continue-on-error: true
 
       - name: Build Electron app
         run: npm run electron:build
@@ -54,8 +53,7 @@ jobs:
         if: success()
         shell: bash
         run: |
-          VERSION="${{ env.VERSION }}"
-          if [ -z "$VERSION" ]; then VERSION=$(date +'%Y%m%d-%H%M%S'); fi
+          VERSION=$(grep '"version"' package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
           echo "Using version: $VERSION"
 
           echo "Finding exe files..."
@@ -94,13 +92,6 @@ jobs:
             --data "@version.json" \
             "https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets?name=version.json"
 
-          echo "Updating latest release tag..."
-          curl -s -X PATCH "https://api.github.com/repos/eafenzhang/workit/releases/326389479" \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"tag_name\":\"latest\",\"name\":\"Workit Latest\",\"body\":\"最新版本: v$VERSION\n\n下载: https://github.com/eafenzhang/workit/releases/download/v$VERSION/Workit.exe\"}"
-
           echo "Release created: https://github.com/eafenzhang/workit/releases/tag/v$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ env.VERSION }}
