@@ -63,8 +63,10 @@ function createWindow() {
     // Open devtools in dev mode
     mainWindow.webContents.openDevTools();
   } else {
-    // In production, load the built static files
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    // In production, load from asar root: dist/index.html
+    // Use 'app.getAppPath()' to get the asar root path
+    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    mainWindow.loadFile(indexPath);
   }
 
   // Handle external links

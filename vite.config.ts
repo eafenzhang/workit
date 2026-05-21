@@ -16,6 +16,7 @@ const lucideIconNames = Object.keys(lucide).filter(
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   server: {
     host: '0.0.0.0',
     proxy: {
