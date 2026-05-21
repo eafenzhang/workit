@@ -24,11 +24,9 @@ jobs:
 
       - name: Build frontend
         run: |
-          VERSION=$(date +'%Y%m%d-%H%M%S')
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Setting package.json version to $VERSION"
+          $version = (Get-Date).ToString("yyyyMMdd-HHmmss")
           $content = Get-Content package.json -Raw
-          $content = $content -replace '"version": "[^"]*"', "\"version\": \"$VERSION\""
+          $content = $content -replace '"version": "[^"]*"', "`"version`": `"$version`""
           Set-Content package.json -Value $content
           npm run build
 
