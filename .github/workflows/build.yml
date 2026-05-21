@@ -27,8 +27,9 @@ jobs:
           VERSION=$(date +'%Y%m%d-%H%M%S')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Setting package.json version to $VERSION"
-          $script = '(Get-Content package.json) -replace '"'"'"version": "[^"]*""'"'"', '"'"'"version": "'$VERSION'""'"'"' | Set-Content package.json'
-          powershell -Command "$script"
+          $content = Get-Content package.json -Raw
+          $content = $content -replace '"version": "[^"]*"', "\"version\": \"$VERSION\""
+          Set-Content package.json -Value $content
           npm run build
 
       - name: Build Electron app
