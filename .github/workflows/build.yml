@@ -28,7 +28,6 @@ jobs:
 
       - name: Build Electron app
         run: npm run electron:build
-        continue-on-error: true
 
       - name: Check build output
         run: |
@@ -56,18 +55,11 @@ jobs:
           continue-on-error: true
 
       - name: Create Release
-        if: success()
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
-          body: "## Workit 需求管理应用\n\nWindows 桌面应用"
+          body: "## Workit 需求管理应用\n\nWindows 桌面应用\n\n下载 win-unpacked 文件夹从 Actions artifacts"
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to Release
-        if: success()
-        run: |
-          echo "Release created at https://github.com/eafenzhang/workit/releases/tag/v${{ github.run_number }}"
-          echo "Download the win-unpacked folder from Actions artifacts"
