@@ -31,7 +31,7 @@ jobs:
           npm run build
 
       - name: Build Electron app
-        run: npm run electron:build
+        run: npx electron-builder --win nsis
 
       - name: Check build output
         run: |
