@@ -24,14 +24,12 @@ jobs:
 
       - name: Build frontend
         run: |
-          $version = (Get-Date).ToString("yyyyMMdd-HHmmss")
-          $content = Get-Content package.json -Raw
-          $content = $content -replace '"version": "[^"]*"', "`"version`": `"$version`""
-          Set-Content package.json -Value $content
+          $v = (Get-Date).ToString("yyyyMMdd-HHmmss")
+          (Get-Content package.json) -replace '"version": "[^"]*"', "`"version`": `"$v`"" | Set-Content package.json
           npm run build
 
       - name: Build Electron app
-        run: npx electron-builder --win --dir --publish never
+        run: npx electron-builder --win --publish never
 
       - name: Check build output
         run: |
