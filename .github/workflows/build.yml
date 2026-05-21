@@ -52,6 +52,18 @@ jobs:
           EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null | tr '\n' ' ')
           echo "Found: $EXE_FILES"
           if [ -z "$EXE_FILES" ]; then echo "No exe files found"; exit 1; fi
+
+          VERSION=$(date +'%Y%m%d-%H%M%S')
+          echo "Creating release v$VERSION"
+
+          RESPONSE=$(curl -s -X POST "https://api.github.com/repos/eafenzhang/workit/releases" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"v$VERSION\",\"name\":\"Workit v$VERSION\",\"body\":\"自动构建\",\"draft\":false,\"prerelease\":false}")
+
+          RELEASE_ID=$(echo $RESPONSE | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
+          echo "Release ID: $RELEASE_ID"
+
           for f in $EXE_FILES; do
             echo "Uploading $f..."
             basename_f=$(basename "$f")
@@ -59,8 +71,10 @@ jobs:
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
               --data-binary "@$f" \
-              "https://uploads.github.com/repos/eafenzhang/workit/releases/326389479/assets?name=$basename_f"
+              "https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets?name=$basename_f"
             echo "Done: $basename_f"
           done
+
+          echo "Release created: https://github.com/eafenzhang/workit/releases/tag/v$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
