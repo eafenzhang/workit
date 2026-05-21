@@ -46,8 +46,7 @@ jobs:
 
       - name: Create Release
         if: success()
-        id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release/win-unpacked/*.exe
           body: |
@@ -56,5 +55,6 @@ jobs:
             - 下载 `Workit.exe` 或 `electron.exe` 运行
           draft: false
           prerelease: false
+          replace: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
