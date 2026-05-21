@@ -1,12 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon } from 'lucide-react';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [quickCollect, setQuickCollect] = useState(() => {
     try { return localStorage.getItem('quick_collect_enabled') === 'true'; } catch { return false; }
   });
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
+  const [latestVersion, setLatestVersion] = useState('');
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const currentVersion = '1.0.0';
+
+  const checkForUpdate = async () => {
+    setUpdateStatus('checking');
+    try {
+      const res = await fetch('https://api.github.com/repos/eafenzhang/workit/releases/latest');
+      const data = await res.json();
+      const tag = data.tag_name?.replace('v', '') || '';
+      if (tag && tag !== currentVersion) {
+        setLatestVersion(tag);
+        setUpdateStatus('available');
+      } else {
+        setUpdateStatus('idle');
+      }
+    } catch {
+      setUpdateStatus('error');
+    }
+  };
+
+  const downloadUpdate = async () => {
+    setUpdateStatus('downloading');
+    setDownloadProgress(0);
+    try {
+      const res = await fetch('https://api.github.com/repos/eafenzhang/workit/releases/latest');
+      const data = await res.json();
+      const asset = data.assets?.find((a: any) => a.name.endsWith('.exe'));
+      if (asset?.browser_download_url) {
+        // Simulate download progress for demo
+        for (let i = 0; i <= 100; i += 10) {
+          await new Promise(r => setTimeout(r, 200));
+          setDownloadProgress(i);
+        }
+        // In real implementation, trigger electron-builder update or direct download
+        window.open(asset.browser_download_url, '_blank');
+        setUpdateStatus('ready');
+      } else {
+        setUpdateStatus('error');
+      }
+    } catch {
+      setUpdateStatus('error');
+    }
+  };
+
+  useEffect(() => {
+    checkForUpdate();
+  }, []);
 
   const toggleQuickCollect = (enabled: boolean) => {
     setQuickCollect(enabled);
@@ -103,11 +153,44 @@ export default function Settings() {
               <div className="w-14 h-14 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
                 <img src="/favicon.svg" alt="Workit" className="w-9 h-9" />
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="text-lg font-bold text-wiki-text">Workit</div>
                 <div className="text-sm text-wiki-text3">智能体工作台</div>
-                <div className="text-xs text-wiki-text3 mt-1">版本 1.0.0</div>
+                <div className="text-xs text-wiki-text3 mt-1">版本 {currentVersion}</div>
               </div>
+              {updateStatus === 'idle' && (
+                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text2)' }}>
+                  <RefreshCwIcon size={12} /> 检查更新
+                </button>
+              )}
+              {updateStatus === 'checking' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text3)' }}>
+                  <RefreshCwIcon size={12} className="animate-spin" /> 检查中...
+                </div>
+              )}
+              {updateStatus === 'available' && (
+                <button onClick={downloadUpdate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                  <DownloadIcon size={14} /> 更新 v{latestVersion}
+                </button>
+              )}
+              {updateStatus === 'downloading' && (
+                <div className="flex items-center gap-3">
+                  <div className="w-32 h-2 rounded-full bg-wiki-surface2 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${downloadProgress}%`, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }} />
+                  </div>
+                  <span className="text-xs text-wiki-text3">{downloadProgress}%</span>
+                </div>
+              )}
+              {updateStatus === 'ready' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
+                  <CheckIcon size={12} /> 已下载
+                </div>
+              )}
+              {updateStatus === 'error' && (
+                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                  <RefreshCwIcon size={12} /> 重试
+                </button>
+              )}
             </div>
           </div>
         </section>
