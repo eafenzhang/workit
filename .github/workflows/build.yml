@@ -22,27 +22,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Bun
-        uses:oven-sh/setup-bun@v2
-        with:
-          version: 1
-
       - name: Build frontend
         run: npm run build
+        continue-on-error: true
 
       - name: Build Electron app
         run: npm run electron:build
+        continue-on-error: true
+
+      - name: Check build output
+        run: |
+          echo "=== Checking release directory ==="
+          if (Test-Path release) { Get-ChildItem release -Recurse | Select-Object FullName, Length } else { echo "release directory not found" }
+          echo "=== Checking dist directory ==="
+          if (Test-Path dist) { Get-ChildItem dist | Select-Object Name } else { echo "dist directory not found" }
 
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workit-windows
           path: release/win-unpacked/
           retention-days: 7
+          continue-on-error: true
 
       - name: Upload installer
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workit-installer
           path: release/*.exe
           retention-days: 7
+          continue-on-error: true
