@@ -28,13 +28,10 @@ jobs:
         run: npm run build
 
       - name: Build Electron app
-        run: npx electron-builder --win --dir --publish never
-
-      - name: Check build output
-        if: always()
         run: |
-          echo "=== release directory ==="
-          if (Test-Path release) { Get-ChildItem release -Recurse | Select-Object FullName, Length } else { echo "release directory not found" }
+          npx electron-builder --win --publish never
+          echo "=== release files ==="
+          Get-ChildItem release | Select-Object Name, Length
 
       - name: Upload artifacts
         if: success()
@@ -43,15 +40,6 @@ jobs:
           name: workit-windows-unpacked
           path: release/win-unpacked/
           retention-days: 7
-
-      - name: Package unpacked directory
-        if: success()
-        run: |
-          $RUN_NUMBER = "${{ github.run_number }}"
-          $ZIP_PATH = "release\Workit-$RUN_NUMBER.zip"
-          Compress-Archive -Path "release\win-unpacked\*" -DestinationPath $ZIP_PATH -Force
-          echo "Zip created"
-          Get-Item $ZIP_PATH | Select-Object Name, Length
 
       - name: Create Release
         if: success()
@@ -65,13 +53,21 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset
+      - name: Upload Installer
         if: success()
-        uses: actions/upload-release-asset@v1
+        shell: bash
+        run: |
+          EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null)
+          echo "Found exe files:"
+          echo "$EXE_FILES"
+          for f in $EXE_FILES; do
+            BASENAME=$(basename "$f")
+            curl -s -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" \
+              "https://uploads.github.com/repos/eafenzhang/workit/releases/${{ steps.create_release.outputs.id }}/assets?name=$BASENAME"
+            echo "Uploaded: $BASENAME"
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release/Workit-${{ github.run_number }}.zip
-          asset_name: Workit-${{ github.run_number }}.zip
-          asset_content_type: application/zip
