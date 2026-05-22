@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: { node: process.versions.node, chrome: process.versions.chrome, electron: process.versions.electron },
   getVersion,
+  // Window controls
+  minimize: () => ipcRenderer.invoke('window-minimize'),
+  maximize: () => ipcRenderer.invoke('window-maximize'),
+  close: () => ipcRenderer.invoke('window-close'),
+  onMaximizeChange: (cb) => ipcRenderer.on('window-maximized-change', (_, v) => cb(v)),
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   // Auto-update
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),

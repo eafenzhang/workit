@@ -3,7 +3,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import http from 'http';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -36,7 +36,51 @@ const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 let mainWindow;
 let backendProcess = null;
 
+async function startBackendInProcess() {
+  log('Starting backend in-process...');
+  try {
+    const appPath = app.getAppPath();
+    // Backend files are unpacked outside asar
+    const unpackedPath = appPath.endsWith('.asar') ? appPath + '.unpacked' : appPath;
+    const backendPath = path.join(unpackedPath, 'backend', 'src', 'index.js');
+    process.env.PORT = String(BACKEND_PORT);
+    log('Importing backend from: ' + backendPath);
+    await import(pathToFileURL(backendPath).href);
+    log('Backend module loaded');
+    // Wait for server to be ready
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        await new Promise((resolve, reject) => {
+          http.get(`${BACKEND_URL}/api/health`, () => resolve())
+            .on('error', reject).setTimeout(500, reject);
+        });
+        log('Backend ready on port', BACKEND_PORT);
+        return true;
+      } catch {}
+    }
+    log('Backend start timeout');
+    return false;
+  } catch (e) {
+    log('Backend start failed', e);
+    return false;
+  }
+}
+
+function setupWindowEvents(win) {
+  win.on('maximize', () => win.webContents?.send('window-maximized-change', true));
+  win.on('unmaximize', () => win.webContents?.send('window-maximized-change', false));
+}
+
 function setupIPC() {
+  // Window controls
+  ipcMain.handle('window-minimize', () => mainWindow?.minimize());
+  ipcMain.handle('window-maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
+  });
+  ipcMain.handle('window-close', () => mainWindow?.close());
+  ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() || false);
+
   ipcMain.handle('start-local-backend', async () => {
     if (backendProcess) return { success: true, message: 'Already running' };
     const appPath = app.getAppPath();
@@ -47,9 +91,9 @@ function setupIPC() {
           cwd: path.join(appPath, 'backend'),
           windowsHide: true,
           stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, PORT: '3001' },
+          env: { ...process.env, PORT: String(BACKEND_PORT) },
         });
-        backendProcess.stderr?.on('data', (d) => { try { process.stdout.write(`[backend] ${d}`); } catch {} });
+        backendProcess.stderr?.on('data', (d) => { try { log('[backend] ' + d.toString().trim()); } catch {} });
         backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
         backendProcess.on('exit', () => { backendProcess = null; });
 
@@ -97,23 +141,32 @@ async function createWindow() {
     minHeight: 600,
     title: 'Workit',
     icon: path.join(app.getAppPath(), 'public', 'icon.ico'),
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
       preload: path.join(app.getAppPath(), 'electron', 'preload.js'),
     },
-    autoHideMenuBar: true,
   });
+
+  setupWindowEvents(mainWindow);
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-    log('Loading file: ' + indexPath);
-    mainWindow.loadFile(indexPath);
-    log('Window loaded');
+    const backendOk = await startBackendInProcess();
+    if (backendOk) {
+      log('Loading from backend: ' + BACKEND_URL);
+      try { await mainWindow.loadURL(`${BACKEND_URL}/`); }
+      catch (e) { log('loadURL failed, falling back to file', e); await mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html')); }
+    } else {
+      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+      log('Loading file: ' + indexPath);
+      try { await mainWindow.loadFile(indexPath); }
+      catch (e) { log('loadFile failed', e); }
+    }
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

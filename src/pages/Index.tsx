@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
+import TitleBar from '../components/TitleBar';
 
 interface IndexProps {
   children?: React.ReactNode;
@@ -82,6 +83,7 @@ export default function Index({ children = null }: IndexProps) {
 
       {/* Main content */}
       <main className="flex-1 h-screen overflow-hidden flex flex-col">
+        <TitleBar />
         {/* Top bar */}
         <div
           className="flex items-center px-8 py-3 flex-shrink-0 transition-all duration-300"
