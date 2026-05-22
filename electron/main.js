@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
+import { spawn } from 'child_process';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { autoUpdater } from 'electron-updater';
@@ -23,7 +24,7 @@ const BACKEND_PORT = process.env.PORT || 3001;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 
 let mainWindow;
-let bunProcess;
+let backendProcess;
 
 function checkBackend() {
   return new Promise((resolve) => {
@@ -34,32 +35,25 @@ function checkBackend() {
 }
 
 async function startBackend() {
-  if (await checkBackend()) {
-    console.log('[Workit] Backend already running');
-    return true;
-  }
+  if (await checkBackend()) return;
 
-  console.log('[Workit] Starting backend in-process...');
   try {
-    // Import and run the Express server directly in Electron's main process
-    const backendPath = path.join(app.getAppPath(), 'backend', 'src', 'index.js');
-    // Set PORT before importing so the backend listens on the right port
-    process.env.PORT = String(BACKEND_PORT);
-    await import(backendPath);
-    console.log('[Workit] Backend module loaded');
+    const appPath = app.getAppPath();
+    const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
 
-    // Wait up to 10s for the server to be ready
-    for (let i = 0; i < 20; i++) {
-      if (await checkBackend()) {
-        console.log('[Workit] Backend ready on port', BACKEND_PORT);
-        return true;
-      }
-      await new Promise(r => setTimeout(r, 500));
-    }
-  } catch (e) {
-    console.error('[Workit] Backend failed to start:', e.message);
-  }
-  return false;
+    // Use Electron's bundled Node.js via ELECTRON_RUN_AS_NODE
+    // This avoids needing 'node' in system PATH
+    backendProcess = spawn(process.execPath, [backendPath], {
+      cwd: path.join(appPath, 'backend'),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PORT: String(BACKEND_PORT), ELECTRON_RUN_AS_NODE: '1' },
+      windowsHide: true,
+    });
+
+    backendProcess.stdout?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+    backendProcess.stderr?.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+    backendProcess.on('error', () => {}); // silently ignore spawn errors
+  } catch {}
 }
 
 async function createWindow() {
@@ -83,16 +77,11 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Start backend in-process, then load UI from backend HTTP server
-    // (backend serves frontend static files + API on same origin)
-    const backendOk = await startBackend();
-    if (backendOk) {
-      mainWindow.loadURL(`${BACKEND_URL}/`);
-    } else {
-      // Fallback: load static files directly (no API access)
-      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-      mainWindow.loadFile(indexPath);
-    }
+    // Always load static files first (guaranteed to work)
+    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    mainWindow.loadFile(indexPath);
+    // Then try to start backend in background (non-blocking)
+    startBackend();
   }
 
   // Handle external links
@@ -141,7 +130,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    bunProcess?.kill();
+    backendProcess?.kill();
     app.quit();
   }
 });
@@ -153,5 +142,5 @@ app.on('activate', () => {
 });
 
 app.on('quit', () => {
-  bunProcess?.kill();
+  backendProcess?.kill();
 });
