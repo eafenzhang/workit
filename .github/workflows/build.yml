@@ -44,6 +44,15 @@ jobs:
           path: release/win-unpacked/
           retention-days: 7
 
+      - name: Package unpacked directory
+        if: success()
+        run: |
+          $RUN_NUMBER = "${{ github.run_number }}"
+          $ZIP_PATH = "release\Workit-$RUN_NUMBER.zip"
+          Compress-Archive -Path "release\win-unpacked\*" -DestinationPath $ZIP_PATH -Force
+          echo "Zip created"
+          Get-Item $ZIP_PATH | Select-Object Name, Length
+
       - name: Create Release
         if: success()
         id: create_release
@@ -63,6 +72,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release/win-unpacked/Workit.exe
-          asset_name: Workit.exe
-          asset_content_type: application/octet-stream
+          asset_path: release/Workit-${{ github.run_number }}.zip
+          asset_name: Workit-${{ github.run_number }}.zip
+          asset_content_type: application/zip
