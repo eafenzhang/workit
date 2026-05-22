@@ -108,7 +108,7 @@
     "productName": "Workit",
     "icon": "public/icon.ico",
     "directories": {
-      "output": "release3"
+      "output": "release4"
     },
     "files": [
       "dist/**/*",
