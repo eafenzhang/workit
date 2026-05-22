@@ -44,46 +44,25 @@ jobs:
           path: release/win-unpacked/
           retention-days: 7
 
-      - name: Upload to Release
+      - name: Create Release
         if: success()
-        run: |
-          $VERSION = (Get-Content package.json | Select-String '"version"' | ForEach-Object { [regex]::Match($_, '"version":\s*"([^"]*)"').Groups[1].Value })
-          echo "Version: $VERSION"
-
-          $EXE_PATH = "release\win-unpacked\Workit.exe"
-          if (-Not (Test-Path $EXE_PATH)) {
-            echo "ERROR: Workit.exe not found at $EXE_PATH"
-            exit 1
-          }
-          echo "Found exe: $EXE_PATH"
-
-          echo "Creating GitHub release..."
-          $BODY = @{
-            tag_name = "v$VERSION"
-            name = "Workit v$VERSION"
-            body = "自动构建"
-            draft = $false
-            prerelease = $false
-          } | ConvertTo-Json -Compress
-
-          $RESP = Invoke-RestMethod -Uri "https://api.github.com/repos/eafenzhang/workit/releases" `
-            -Method POST `
-            -Headers @{ Authorization = "token $env:GITHUB_TOKEN"; Accept = "application/vnd.github.v3+json" } `
-            -Body $BODY
-
-          $RELEASE_ID = $RESP.id
-          $UPLOAD_URL = $RESP.upload_url -replace '\{\?name,label\}', ''
-          echo "Release ID: $RELEASE_ID"
-
-          echo "Uploading Workit.exe..."
-          $headers = @{ Authorization = "token $env:GITHUB_TOKEN"; Content-Type = "application/octet-stream" }
-          $fileBytes = [System.IO.File]::ReadAllBytes($EXE_PATH)
-          Invoke-RestMethod -Uri "$UPLOAD_URL?name=Workit.exe" `
-            -Method POST `
-            -Headers $headers `
-            -Body $fileBytes
-
-          echo "Upload complete"
-          echo "Release: https://github.com/eafenzhang/workit/releases/tag/v$VERSION"
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Workit v${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        if: success()
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release/win-unpacked/Workit.exe
+          asset_name: Workit.exe
+          asset_content_type: application/octet-stream
