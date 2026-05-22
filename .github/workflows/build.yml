@@ -30,8 +30,12 @@ jobs:
       - name: Build Electron app
         run: |
           npx electron-builder --win --publish never
-          echo "=== release files ==="
-          Get-ChildItem release | Select-Object Name, Length
+          echo "=== release directory ==="
+          ls -la release/ || echo "no release dir"
+          echo "=== find all .exe in release ==="
+          find release -type f -name "*.exe" 2>/dev/null
+          echo "=== NSIS installer check ==="
+          find release -name "*Setup*.exe" 2>/dev/null
 
       - name: Upload artifacts
         if: success()
