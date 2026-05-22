@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -51,13 +53,17 @@ jobs:
 
           EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null | tr '\n' ' ')
           echo "Found exe: $EXE_FILES"
+          echo "Release dir contents:"
+          ls -la release/ 2>&1 || echo "ls failed"
           if [ -z "$EXE_FILES" ]; then echo "No exe found"; exit 1; fi
 
+          echo "Creating release v$VERSION..."
           RESPONSE=$(curl -s -X POST "https://api.github.com/repos/eafenzhang/workit/releases" \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\":\"v$VERSION\",\"name\":\"Workit v$VERSION\",\"body\":\"自动构建\",\"draft\":false,\"prerelease\":false}")
 
+          echo "API Response: $RESPONSE"
           RELEASE_ID=$(echo $RESPONSE | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
           echo "Release ID: $RELEASE_ID"
 
