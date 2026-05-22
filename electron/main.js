@@ -92,9 +92,17 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Load static files (backend is optional - run separately if needed)
+    // Load static files
     const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
     mainWindow.loadFile(indexPath);
+    // Start backend if node is available (silently skip if not found)
+    try {
+      const { execSync } = await import('child_process');
+      execSync('node --version', { stdio: 'ignore', windowsHide: true });
+      startBackend();
+    } catch {
+      // Node not available - backend won't start, app works without API
+    }
   }
 
   // Handle external links
