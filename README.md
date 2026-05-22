@@ -1,4 +1,6 @@
-# React + TypeScript + Vite
+# Workit
+
+Agent Wiki 需求管理应用（Electron + React + TypeScript）。
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
