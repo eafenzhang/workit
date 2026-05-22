@@ -28,10 +28,7 @@ jobs:
         run: npm run build
 
       - name: Build Electron app
-        run: |
-          npx electron-builder --win --publish never
-          echo "=== release directory ==="
-          ls -la release/
+        run: npx electron-builder --win --publish never
 
       - name: Upload artifacts
         if: success()
@@ -41,42 +38,16 @@ jobs:
           path: release/win-unpacked/
           retention-days: 7
 
-      - name: Create Release
+      - name: Create Release and Upload
         if: success()
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          release_name: Workit v${{ github.run_number }}
+          name: Workit v${{ github.run_number }}
           draft: false
           prerelease: false
-
-      - name: Upload Installer
-        if: success()
-        shell: bash
-        run: |
-          echo "=== release contents ==="
-          ls -la release/
-
-          echo "=== exe files in release root ==="
-          find release -maxdepth 1 -type f -name "*.exe" -exec ls -la {} \;
-
-          RELEASE_ID="${{ steps.create_release.outputs.id }}"
-          UPLOAD_URL="https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets"
-          echo "Upload URL: $UPLOAD_URL"
-
-          for f in $(find release -maxdepth 1 -type f -name "*.exe"); do
-            BASENAME=$(basename "$f")
-            SIZE=$(wc -c < "$f")
-            echo "Uploading $BASENAME (${SIZE} bytes)..."
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@$f" \
-              "$UPLOAD_URL?name=$BASENAME")
-            echo "HTTP $HTTP_CODE: $BASENAME"
-          done
+          files: |
+            release/*.exe
+            release/*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
