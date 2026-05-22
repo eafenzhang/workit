@@ -10,14 +10,14 @@ const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
 
-// Log errors to file instead of crashing silently
+// Log errors to userData directory (always writable)
 import fs from 'fs';
 
 process.on('uncaughtException', (err) => {
-  try { fs.appendFileSync(path.join(__dirname, '..', 'crash.log'), `[${new Date().toISOString()}] ${err.message}\n${err.stack}\n`); } catch {}
+  try { fs.appendFileSync(path.join(app.getPath('userData'), 'workit-crash.log'), `[${new Date().toISOString()}] ${err.message}\n${err.stack}\n`); } catch {}
 });
 process.on('unhandledRejection', (err) => {
-  try { fs.appendFileSync(path.join(__dirname, '..', 'crash.log'), `[${new Date().toISOString()}] Rejection: ${err?.message || err}\n`); } catch {}
+  try { fs.appendFileSync(path.join(app.getPath('userData'), 'workit-crash.log'), `[${new Date().toISOString()}] Rejection: ${err?.message || err}\n`); } catch {}
 });
 
 const BACKEND_PORT = process.env.PORT || 3001;
@@ -26,59 +26,56 @@ const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 let mainWindow;
 let backendProcess = null;
 
-// IPC: Start local backend
-ipcMain.handle('start-local-backend', async () => {
-  if (backendProcess) return { success: true, message: 'Already running' };
-  const appPath = app.getAppPath();
-  const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
-  return new Promise((resolve) => {
-    try {
-      backendProcess = spawn('node', [backendPath], {
-        cwd: path.join(appPath, 'backend'),
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, PORT: '3001' },
-      });
-      backendProcess.stderr?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
-      backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
-      backendProcess.on('exit', () => { backendProcess = null; });
+function setupIPC() {
+  ipcMain.handle('start-local-backend', async () => {
+    if (backendProcess) return { success: true, message: 'Already running' };
+    const appPath = app.getAppPath();
+    const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
+    return new Promise((resolve) => {
+      try {
+        backendProcess = spawn('node', [backendPath], {
+          cwd: path.join(appPath, 'backend'),
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env, PORT: '3001' },
+        });
+        backendProcess.stderr?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+        backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
+        backendProcess.on('exit', () => { backendProcess = null; });
 
-      // Poll for readiness
-      let attempts = 0;
-      const poll = () => {
-        attempts++;
-        if (attempts > 30) { resolve({ success: false, error: '启动超时' }); return; }
-        http.get('http://localhost:3001/api/health', () => resolve({ success: true }))
-          .on('error', () => setTimeout(poll, 500));
-      };
-      poll();
-    } catch (e) {
-      resolve({ success: false, error: e.message });
-    }
+        let attempts = 0;
+        const poll = () => {
+          attempts++;
+          if (attempts > 30) { resolve({ success: false, error: '启动超时' }); return; }
+          http.get('http://localhost:3001/api/health', () => resolve({ success: true }))
+            .on('error', () => setTimeout(poll, 500));
+        };
+        poll();
+      } catch (e) {
+        resolve({ success: false, error: e.message });
+      }
+    });
   });
-});
 
-// IPC: Stop local backend
-ipcMain.handle('stop-local-backend', () => {
-  if (backendProcess) { backendProcess.kill(); backendProcess = null; }
-  return { success: true };
-});
+  ipcMain.handle('stop-local-backend', () => {
+    if (backendProcess) { backendProcess.kill(); backendProcess = null; }
+    return { success: true };
+  });
 
-// IPC: Navigate to server URL
-ipcMain.handle('connect-server', (_, url) => {
-  const targetUrl = url || 'http://localhost:3001';
-  if (mainWindow) mainWindow.loadURL(targetUrl);
-  return { success: true };
-});
+  ipcMain.handle('connect-server', (_, url) => {
+    const targetUrl = url || 'http://localhost:3001';
+    if (mainWindow && mainWindow.webContents) mainWindow.loadURL(targetUrl);
+    return { success: true };
+  });
 
-// IPC: Reload local files
-ipcMain.handle('disconnect-server', () => {
-  if (mainWindow) {
-    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-    mainWindow.loadFile(indexPath);
-  }
-  return { success: true };
-});
+  ipcMain.handle('disconnect-server', () => {
+    if (mainWindow && mainWindow.webContents) {
+      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+      mainWindow.loadFile(indexPath);
+    }
+    return { success: true };
+  });
+}
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -147,6 +144,7 @@ app.on('web-contents-created', (_, contents) => {
 
 app.whenReady().then(() => {
   if (!isDev) setupAutoUpdater();
+  setupIPC();
   return createWindow();
 });
 
