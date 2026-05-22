@@ -31,11 +31,7 @@ jobs:
         run: |
           npx electron-builder --win --publish never
           echo "=== release directory ==="
-          ls -la release/ || echo "no release dir"
-          echo "=== find all .exe in release ==="
-          find release -type f -name "*.exe" 2>/dev/null
-          echo "=== NSIS installer check ==="
-          find release -name "*Setup*.exe" 2>/dev/null
+          ls -la release/
 
       - name: Upload artifacts
         if: success()
@@ -61,36 +57,26 @@ jobs:
         if: success()
         shell: bash
         run: |
-          echo "=== release directory contents ==="
-          ls -la release/ 2>/dev/null || echo "release dir not found"
+          echo "=== release contents ==="
+          ls -la release/
 
-          echo "=== Find exe files in release root (not in subdirs) ==="
-          EXE_FILES=$(find release -maxdepth 1 -name "*.exe" -type f 2>/dev/null)
-          echo "Found exe files: $EXE_FILES"
+          echo "=== exe files in release root ==="
+          find release -maxdepth 1 -type f -name "*.exe" -exec ls -la {} \;
 
           RELEASE_ID="${{ steps.create_release.outputs.id }}"
           UPLOAD_URL="https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets"
-          echo "Release ID: $RELEASE_ID"
           echo "Upload URL: $UPLOAD_URL"
 
-          if [[ -z "$EXE_FILES" ]]; then
-            echo "WARNING: No exe files found in release/ root"
-            echo "Checking all release contents..."
-            find release -type f -name "*.exe" 2>/dev/null | while read f; do
-              echo "Found exe: $f"
-            done
-          else
-            for f in $EXE_FILES; do
-              BASENAME=$(basename "$f")
-              SIZE=$(wc -c < "$f" 2>/dev/null || echo "0")
-              echo "Uploading $BASENAME (${SIZE} bytes)..."
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Content-Type: application/octet-stream" \
-                --data-binary "@$f" \
-                "$UPLOAD_URL?name=$BASENAME")
-              echo "HTTP response: $HTTP_CODE for $BASENAME"
-            done
-          fi
+          for f in $(find release -maxdepth 1 -type f -name "*.exe"); do
+            BASENAME=$(basename "$f")
+            SIZE=$(wc -c < "$f")
+            echo "Uploading $BASENAME (${SIZE} bytes)..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" \
+              "$UPLOAD_URL?name=$BASENAME")
+            echo "HTTP $HTTP_CODE: $BASENAME"
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
