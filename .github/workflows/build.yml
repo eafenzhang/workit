@@ -57,23 +57,36 @@ jobs:
         if: success()
         shell: bash
         run: |
+          echo "=== release directory contents ==="
+          ls -la release/ 2>/dev/null || echo "release dir not found"
+
+          echo "=== Find exe files in release root (not in subdirs) ==="
+          EXE_FILES=$(find release -maxdepth 1 -name "*.exe" -type f 2>/dev/null)
+          echo "Found exe files: $EXE_FILES"
+
           RELEASE_ID="${{ steps.create_release.outputs.id }}"
           UPLOAD_URL="https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets"
+          echo "Release ID: $RELEASE_ID"
           echo "Upload URL: $UPLOAD_URL"
 
-          # Find .exe files in release root (not in win-unpacked)
-          for f in release/*.exe; do
-            if [[ "$f" != *"win-unpacked"* ]]; then
+          if [[ -z "$EXE_FILES" ]]; then
+            echo "WARNING: No exe files found in release/ root"
+            echo "Checking all release contents..."
+            find release -type f -name "*.exe" 2>/dev/null | while read f; do
+              echo "Found exe: $f"
+            done
+          else
+            for f in $EXE_FILES; do
               BASENAME=$(basename "$f")
-              SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
+              SIZE=$(wc -c < "$f" 2>/dev/null || echo "0")
               echo "Uploading $BASENAME (${SIZE} bytes)..."
-              curl -s -X POST \
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
                 -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Content-Type: application/octet-stream" \
                 --data-binary "@$f" \
-                "$UPLOAD_URL?name=$BASENAME"
-              echo "Uploaded: $BASENAME"
-            fi
-          done
+                "$UPLOAD_URL?name=$BASENAME")
+              echo "HTTP response: $HTTP_CODE for $BASENAME"
+            done
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
