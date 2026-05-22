@@ -13,6 +13,7 @@ export default function Insights() {
   const [charts, setCharts] = useState<any>({});
   const [aiInsights, setAiInsights] = useState<any[]>([]);
   const [activeReport, setActiveReport] = useState('performance');
+  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -48,8 +49,8 @@ export default function Insights() {
                 onClick={() => setActiveReport(r.id)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                 style={{
-                  background: activeReport === r.id ? '#1a1a1a' : 'transparent',
-                  color: activeReport === r.id ? '#fff' : 'var(--wiki-text2)',
+                  background: activeReport === r.id ? 'var(--wiki-text)' : 'transparent',
+                  color: activeReport === r.id ? 'var(--wiki-bg)' : 'var(--wiki-text2)',
                 }}
               >
                 {r.label}
@@ -60,7 +61,7 @@ export default function Insights() {
             <RefreshCwIcon size={12} />
             <span>刷新</span>
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: '#1a1a1a' }}>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
             <DownloadIcon size={12} />
             <span>导出报告</span>
           </button>
@@ -95,8 +96,8 @@ export default function Insights() {
             <BarChart data={charts.barData || []}>
               <XAxis dataKey="name" tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
-              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Tooltip contentStyle={{ background: 'transparent', border: 'none', color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} activeBar={{ fill: '#6366f1' }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -110,12 +111,12 @@ export default function Insights() {
           <div className="flex items-center gap-2">
             <ResponsiveContainer width={120} height={140}>
               <PieChart>
-                <Pie data={charts.pieData || []} cx="50%" cy="50%" innerRadius={30} outerRadius={55} dataKey="value" stroke="none">
+                <Pie data={charts.pieData || []} cx="50%" cy="50%" innerRadius={30} outerRadius={activePieIndex !== null ? 60 : 55} dataKey="value" stroke="none" onMouseEnter={(_, index) => setActivePieIndex(index)} onMouseLeave={() => setActivePieIndex(null)}>
                   {(charts.pieData || []).map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} style={{ filter: activePieIndex === index ? 'brightness(1.2)' : 'none', transition: 'all 0.2s' }} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: 'transparent', border: 'none', color: 'var(--wiki-text)', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-col gap-2">

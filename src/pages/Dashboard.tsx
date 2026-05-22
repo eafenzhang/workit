@@ -130,10 +130,10 @@ export default function Dashboard() {
               </defs>
               <XAxis dataKey="name" tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
-              <Area type="monotone" dataKey="需求" stroke="#6366f1" strokeWidth={2} fill="url(#g1)" />
-              <Area type="monotone" dataKey="知识" stroke="#06b6d4" strokeWidth={2} fill="url(#g2)" />
-              <Area type="monotone" dataKey="洞察" stroke="#10b981" strokeWidth={2} fill="url(#g3)" />
+              <Tooltip contentStyle={{ background: 'transparent', border: 'none', color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Area type="monotone" dataKey="需求" stroke="#6366f1" strokeWidth={2} fill="url(#g1)" activeDot={{ r: 5, fill: '#6366f1' }} />
+              <Area type="monotone" dataKey="知识" stroke="#06b6d4" strokeWidth={2} fill="url(#g2)" activeDot={{ r: 5, fill: '#06b6d4' }} />
+              <Area type="monotone" dataKey="洞察" stroke="#10b981" strokeWidth={2} fill="url(#g3)" activeDot={{ r: 5, fill: '#10b981' }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -148,8 +148,8 @@ export default function Dashboard() {
             <BarChart data={barData} layout="vertical">
               <XAxis type="number" tick={{ fill: 'var(--wiki-text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis dataKey="name" type="category" tick={{ fill: 'var(--wiki-text2)', fontSize: 12 }} axisLine={false} tickLine={false} width={36} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
-              <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} />
+              <Tooltip contentStyle={{ background: 'transparent', border: 'none', color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} activeBar={{ fill: '#6366f1' }} />
             </BarChart>
           </ResponsiveContainer>
         </div>

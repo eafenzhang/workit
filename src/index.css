@@ -305,3 +305,8 @@
   --shadow-y: 0px;
   --shadow-spread: 0px;
 }
+
+/* Recharts tooltip — 去掉悬浮时的灰色背景色块 */
+.recharts-tooltip-cursor {
+  fill: transparent !important;
+}

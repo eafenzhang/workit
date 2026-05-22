@@ -9,9 +9,9 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: `总览`, icon: LayoutDashboardIcon, color: '#ffffff', path: '/' },
-  { id: 'requirements', label: `需求`, icon: SparklesIcon, color: '#ffffff', path: '/requirements' },
-  { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: '#ffffff', path: '/knowledge' },
+  { id: 'dashboard', label: `总览`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
+  { id: 'requirements', label: `需求`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
+  { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
   { id: 'insights', label: `洞察`, icon: LightbulbIcon, color: '#10b981', path: '/insights' },
   { id: 'model', label: `模型`, icon: CpuIcon, color: '#f59e0b', path: '/model' },
   { id: 'mcp', label: `MCP`, icon: ServerIcon, color: '#ef4444', path: '/mcp' },
@@ -66,9 +66,8 @@ export default function Sidebar({
       >
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0 overflow-hidden"
-          style={{ background: '#1e1e2e' }}
         >
-          <img src="/icon.png" alt="Workit" className="w-6 h-6" />
+          <img src="/icon.png" alt="Workit" className="w-8 h-8" />
         </div>
         {!collapsed && (
           <div className="text-sm font-bold text-wiki-text tracking-wide">Workit</div>

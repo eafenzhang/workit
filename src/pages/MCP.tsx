@@ -164,8 +164,8 @@ export default function MCP() {
               </button>
               <button
                 onClick={() => saveToken(showToken!)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-white"
-                style={{ background: '#1a1a1a' }}
+                className="px-4 py-2 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
               >
                 保存 Token
               </button>
@@ -277,8 +277,8 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
           </button>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-            style={{ background: '#1a1a1a' }}
+            className="px-4 py-2.5 rounded-xl text-sm font-medium"
+            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
           >
             添加
           </button>

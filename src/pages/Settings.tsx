@@ -150,8 +150,8 @@ export default function Settings() {
 
           <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: '#1a1a1a' }}>
-                <img src="/icon.png" alt="Workit" className="w-10 h-10" />
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="/icon.png" alt="Workit" className="w-12 h-12" />
               </div>
               <div className="flex-1">
                 <div className="text-lg font-bold text-wiki-text">Workit</div>

@@ -136,7 +136,7 @@ export default function QuickCapture() {
       <button
         onClick={handleFloatClick}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40 transition-all duration-200 hover:scale-110"
-        style={{ background: '#1a1a1a', color: '#ffffff' }}
+        style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
         title="快速采集"
       >
         <ClipboardPasteIcon size={20} style={{ color: 'var(--wiki-bg)' }} />

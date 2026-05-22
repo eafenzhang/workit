@@ -31,9 +31,9 @@ interface Document {
 }
 
 const defaultCategories: Category[] = [
-  { id: 'all', name: '全部文档', icon: 'GridIcon', color: '#ffffff' },
-  { id: 'architecture', name: '架构设计', icon: 'FolderIcon', color: '#ffffff' },
-  { id: 'api', name: 'API文档', icon: 'LinkIcon', color: '#ffffff' },
+  { id: 'all', name: '全部文档', icon: 'GridIcon', color: 'var(--wiki-text)' },
+  { id: 'architecture', name: '架构设计', icon: 'FolderIcon', color: 'var(--wiki-text)' },
+  { id: 'api', name: 'API文档', icon: 'LinkIcon', color: 'var(--wiki-text)' },
   { id: 'guide', name: '使用指南', icon: 'BookOpenIcon', color: '#10b981' },
   { id: 'research', name: '研究报告', icon: 'FileTextIcon', color: '#f59e0b' },
   { id: 'tutorial', name: '教程素材', icon: 'BookmarkIcon', color: '#ef4444' },
@@ -570,9 +570,9 @@ export default function Knowledge() {
               <div>
                 <label className="text-xs text-wiki-text3 mb-1.5 block">颜色</label>
                 <div className="flex gap-2">
-                  {['#ffffff', '#ffffff', '#ffffff', '#10b981', '#f59e0b', '#ef4444'].map(c => (
+                  {['#333333', '#666666', '#999999', '#10b981', '#f59e0b', '#ef4444'].map(c => (
                     <button key={c} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, color: c }))} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c, border: showCategoryEdit.color === c ? '2px solid var(--wiki-text)' : '2px solid transparent' }}>
-                      {showCategoryEdit.color === c && <span style={{ color: 'var(--wiki-bg)', fontSize: 12 }}>✓</span>}
+                      {showCategoryEdit.color === c && <span style={{ color: c === '#333333' || c === '#666666' || c === '#999999' ? '#fff' : 'var(--wiki-bg)', fontSize: 12 }}>✓</span>}
                     </button>
                   ))}
                 </div>
