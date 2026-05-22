@@ -55,25 +55,26 @@ jobs:
 
       - name: Upload Installer
         if: success()
-        shell: bash
         run: |
-          # Find NSIS installer (not in win-unpacked subdirectory)
-          EXE_FILES=$(find release -path "*/win-unpacked" -prune -o -name "*.exe" -type f -print 2>/dev/null)
-          echo "Found installer exe: $EXE_FILES"
-          if [ -z "$EXE_FILES" ]; then
-            echo "No installer found, checking all exe..."
-            EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null)
-          fi
-          for f in $EXE_FILES; do
-            BASENAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null)
-            echo "Uploading $BASENAME (${SIZE} bytes)..."
-            curl -s -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@$f" \
-              "https://uploads.github.com/repos/eafenzhang/workit/releases/${{ steps.create_release.outputs.id }}/assets?name=$BASENAME"
-            echo "Uploaded: $BASENAME"
-          done
+          $RELEASE_ID = "${{ steps.create_release.outputs.id }}"
+          Write-Host "Release ID: $RELEASE_ID"
+
+          # Find .exe files in release root (not in subdirs like win-unpacked)
+          $exeFiles = Get-ChildItem "release" -Filter "*.exe" -File -Recurse | Where-Object { $_.FullName -notmatch "win-unpacked" }
+          Write-Host "Found: $($exeFiles.Count) installer file(s)"
+          foreach ($f in $exeFiles) {
+            $name = $f.Name
+            $size = $f.Length
+            Write-Host "Uploading $name ($size bytes)..."
+            $headers = @{ Authorization = "token $env:GITHUB_TOKEN"; Content-Type = "application/octet-stream" }
+            $fileBytes = [System.IO.File]::ReadAllBytes($f.FullName)
+            $uploadUrl = "https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets?name=$name"
+            try {
+              Invoke-RestMethod -Uri $uploadUrl -Method POST -Headers $headers -Body $fileBytes
+              Write-Host "Uploaded: $name"
+            } catch {
+              Write-Host "Error uploading $name : $_"
+            }
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
