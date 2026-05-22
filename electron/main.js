@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
+import { spawn } from 'child_process';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { autoUpdater } from 'electron-updater';
@@ -23,6 +24,61 @@ const BACKEND_PORT = process.env.PORT || 3001;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 
 let mainWindow;
+let backendProcess = null;
+
+// IPC: Start local backend
+ipcMain.handle('start-local-backend', async () => {
+  if (backendProcess) return { success: true, message: 'Already running' };
+  const appPath = app.getAppPath();
+  const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
+  return new Promise((resolve) => {
+    try {
+      backendProcess = spawn('node', [backendPath], {
+        cwd: path.join(appPath, 'backend'),
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PORT: '3001' },
+      });
+      backendProcess.stderr?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+      backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
+      backendProcess.on('exit', () => { backendProcess = null; });
+
+      // Poll for readiness
+      let attempts = 0;
+      const poll = () => {
+        attempts++;
+        if (attempts > 30) { resolve({ success: false, error: '启动超时' }); return; }
+        http.get('http://localhost:3001/api/health', () => resolve({ success: true }))
+          .on('error', () => setTimeout(poll, 500));
+      };
+      poll();
+    } catch (e) {
+      resolve({ success: false, error: e.message });
+    }
+  });
+});
+
+// IPC: Stop local backend
+ipcMain.handle('stop-local-backend', () => {
+  if (backendProcess) { backendProcess.kill(); backendProcess = null; }
+  return { success: true };
+});
+
+// IPC: Navigate to server URL
+ipcMain.handle('connect-server', (_, url) => {
+  const targetUrl = url || 'http://localhost:3001';
+  if (mainWindow) mainWindow.loadURL(targetUrl);
+  return { success: true };
+});
+
+// IPC: Reload local files
+ipcMain.handle('disconnect-server', () => {
+  if (mainWindow) {
+    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    mainWindow.loadFile(indexPath);
+  }
+  return { success: true };
+});
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
