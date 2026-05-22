@@ -57,11 +57,17 @@ jobs:
         if: success()
         shell: bash
         run: |
-          EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null)
-          echo "Found exe files:"
-          echo "$EXE_FILES"
+          # Find NSIS installer (not in win-unpacked subdirectory)
+          EXE_FILES=$(find release -path "*/win-unpacked" -prune -o -name "*.exe" -type f -print 2>/dev/null)
+          echo "Found installer exe: $EXE_FILES"
+          if [ -z "$EXE_FILES" ]; then
+            echo "No installer found, checking all exe..."
+            EXE_FILES=$(find release -name "*.exe" -type f 2>/dev/null)
+          fi
           for f in $EXE_FILES; do
             BASENAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null)
+            echo "Uploading $BASENAME (${SIZE} bytes)..."
             curl -s -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
