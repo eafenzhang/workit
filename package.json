@@ -1,7 +1,7 @@
 {
   "name": "workit",
   "productName": "Workit",
-  "version": "1.0.3",
+  "version": "1.0.0",
   "description": "Workit 需求管理应用",
   "author": "Eafenzhang",
   "private": true,
@@ -117,7 +117,8 @@
       "public/**/*",
       "backend/**/*"
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": "backend/**",
     "win": {
       "target": [
         {

@@ -8,8 +8,17 @@ import { autoUpdater } from 'electron-updater';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Development mode check
 const isDev = !app.isPackaged;
+
+// Log errors to file instead of crashing silently
+import fs from 'fs';
+
+process.on('uncaughtException', (err) => {
+  try { fs.appendFileSync(path.join(__dirname, '..', 'crash.log'), `[${new Date().toISOString()}] ${err.message}\n${err.stack}\n`); } catch {}
+});
+process.on('unhandledRejection', (err) => {
+  try { fs.appendFileSync(path.join(__dirname, '..', 'crash.log'), `[${new Date().toISOString()}] Rejection: ${err?.message || err}\n`); } catch {}
+});
 
 const BACKEND_PORT = process.env.PORT || 3001;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
@@ -36,25 +45,29 @@ async function startBackend() {
   const appPath = app.getAppPath();
   const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
 
-  bunProcess = spawn('node', [backendPath], {
-    cwd: path.join(appPath, 'backend'),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(BACKEND_PORT) },
-  });
+  try {
+    bunProcess = spawn('node', [backendPath], {
+      cwd: path.join(appPath, 'backend'),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PORT: String(BACKEND_PORT) },
+    });
 
-  bunProcess.stdout?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
-  bunProcess.stderr?.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+    bunProcess.stdout?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+    bunProcess.stderr?.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+    bunProcess.on('error', (e) => console.error('[Workit] Backend spawn error:', e.message));
 
-  // Wait up to 15s for backend to be ready
-  for (let i = 0; i < 30; i++) {
-    if (await checkBackend()) {
-      console.log('[Workit] Backend ready');
-      return true;
+    // Wait up to 15s for backend to be ready
+    for (let i = 0; i < 30; i++) {
+      if (await checkBackend()) {
+        console.log('[Workit] Backend ready');
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 500));
     }
-    await new Promise(r => setTimeout(r, 500));
+  } catch (e) {
+    console.error('[Workit] Backend failed to start:', e.message);
   }
 
-  console.error('[Workit] Backend failed to start');
   return false;
 }
 
@@ -79,10 +92,13 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Prod: start backend, then load UI from backend HTTP server
-    // (backend serves frontend static files + API on same origin, allowing external access)
-    await startBackend();
-    mainWindow.loadURL(`${BACKEND_URL}/`);
+    // Always load static files for reliability
+    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    mainWindow.loadFile(indexPath);
+    // Optionally start backend (non-blocking - if it fails, UI still works)
+    startBackend().then(ok => {
+      if (ok) console.log('[Workit] Backend started');
+    });
   }
 
   // Handle external links
@@ -118,7 +134,7 @@ function setupAutoUpdater() {
 // Security: Prevent new windows
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost:5173') && !url.startsWith(BACKEND_URL)) {
+    if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith(BACKEND_URL)) {
       event.preventDefault();
     }
   });
