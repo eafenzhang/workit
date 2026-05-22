@@ -92,13 +92,9 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Always load static files for reliability
+    // Load static files (backend is optional - run separately if needed)
     const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
     mainWindow.loadFile(indexPath);
-    // Optionally start backend (non-blocking - if it fails, UI still works)
-    startBackend().then(ok => {
-      if (ok) console.log('[Workit] Backend started');
-    });
   }
 
   // Handle external links
