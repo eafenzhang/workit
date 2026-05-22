@@ -29,7 +29,11 @@ jobs:
           npm run build
 
       - name: Build Electron app
-        run: npx electron-builder --win --publish never
+        run: |
+          echo "=== package.json version ==="
+          grep '"version"' package.json
+          echo "=== Running electron-builder ==="
+          npx electron-builder --win --dir --publish never --verbose 2>&1
 
       - name: Check build output
         run: |
