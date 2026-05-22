@@ -23,3 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 release/
+release2/
+release3/
