@@ -27,29 +27,8 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Build Electron app
+      - name: Build installer
         run: npx electron-builder --win --publish never
-
-      - name: Zip unpacked directory
-        shell: powershell
-        run: |
-          if (Test-Path "release/win-unpacked") {
-            Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "Workit-win-unpacked.zip" -Force
-            Write-Host "Created Workit-win-unpacked.zip"
-          } else {
-            Write-Host "No win-unpacked directory found, skipping zip"
-          }
-
-      - name: Upload artifacts
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: workit-windows-build
-          path: |
-            release/*.exe
-            release/*.yml
-            Workit-win-unpacked.zip
-          retention-days: 7
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -62,7 +41,5 @@ jobs:
           files: |
             release/*.exe
             release/*.yml
-            release/*.zip
-            Workit-win-unpacked.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
