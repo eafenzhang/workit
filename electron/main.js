@@ -2,22 +2,32 @@ import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
 import { spawn } from 'child_process';
 import http from 'http';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { autoUpdater } from 'electron-updater';
+import updaterPkg from 'electron-updater';
+const { autoUpdater } = updaterPkg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
+let logPath = '';
 
-// Log errors to userData directory (always writable)
-import fs from 'fs';
+function log(msg, err) {
+  try {
+    if (!logPath) logPath = path.join(app.getPath('userData'), 'workit.log');
+    const line = `[${new Date().toISOString()}] ${msg}${err ? ': ' + (err.message || err) : ''}\n`;
+    fs.appendFileSync(logPath, line);
+  } catch {}
+}
 
 process.on('uncaughtException', (err) => {
-  try { fs.appendFileSync(path.join(app.getPath('userData'), 'workit-crash.log'), `[${new Date().toISOString()}] ${err.message}\n${err.stack}\n`); } catch {}
+  log('UNCAUGHT', err);
+  try { fs.appendFileSync(logPath, (err.stack || '') + '\n'); } catch {}
+  app.exit(1);
 });
 process.on('unhandledRejection', (err) => {
-  try { fs.appendFileSync(path.join(app.getPath('userData'), 'workit-crash.log'), `[${new Date().toISOString()}] Rejection: ${err?.message || err}\n`); } catch {}
+  log('UNHANDLED REJECTION', err);
 });
 
 const BACKEND_PORT = process.env.PORT || 3001;
@@ -78,6 +88,8 @@ function setupIPC() {
 }
 
 async function createWindow() {
+  log('Creating window...');
+  try {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -98,20 +110,20 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Load static files (backend not bundled - run separately if needed)
     const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    log('Loading file: ' + indexPath);
     mainWindow.loadFile(indexPath);
+    log('Window loaded');
   }
 
-  // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
+  log('Window created successfully');
+  } catch (e) { log('Window creation failed', e); }
 }
 
 // Auto-updater (production only, configured after app ready)
@@ -124,10 +136,10 @@ function setupAutoUpdater() {
       const result = await autoUpdater.checkForUpdates();
       return { available: result?.updateInfo?.version !== app.getVersion(), version: result?.updateInfo?.version };
     });
-    ipcMain.handle('download-update', async () => { autoUpdater.downloadUpdate(); return true; });
+    ipcMain.handle('download-update', async () => { await autoUpdater.downloadUpdate(); return true; });
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
-    autoUpdater.on('download-progress', (p) => mainWindow?.webContents.send('update-download-progress', Math.round(p.percent)));
-    autoUpdater.on('update-downloaded', () => mainWindow?.webContents.send('update-ready'));
+    autoUpdater.on('download-progress', (p) => mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent)));
+    autoUpdater.on('update-downloaded', () => mainWindow?.webContents?.send('update-ready'));
   } catch (e) {
     console.error('[Workit] AutoUpdater init failed:', e.message);
   }
@@ -143,9 +155,12 @@ app.on('web-contents-created', (_, contents) => {
 });
 
 app.whenReady().then(() => {
-  if (!isDev) setupAutoUpdater();
-  setupIPC();
-  return createWindow();
+  log('App ready');
+  try {
+    if (!isDev) setupAutoUpdater();
+    setupIPC();
+    return createWindow();
+  } catch (e) { log('App ready handler failed', e); }
 });
 
 app.on('window-all-closed', () => {
