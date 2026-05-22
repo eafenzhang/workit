@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { LightbulbIcon, TrendingUpIcon, BarChart2Icon, PieChartIcon, RefreshCwIcon, DownloadIcon, SparklesIcon, ArrowUpRightIcon, ArrowDownRightIcon, BrainCircuitIcon, ZapIcon, AlertTriangleIcon } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 
-const PIE_COLORS = [`#6366f1`, `#8b5cf6`, `#06b6d4`, `#10b981`, `#f59e0b`];
+const PIE_COLORS = [`#6366f1`, `#06b6d4`, `#8b5cf6`, `#10b981`, `#f59e0b`];
 
 const iconMap: Record<string, typeof TrendingUpIcon> = {
   TrendingUpIcon, AlertTriangleIcon, BrainCircuitIcon, ZapIcon,
@@ -48,7 +48,7 @@ export default function Insights() {
                 onClick={() => setActiveReport(r.id)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                 style={{
-                  background: activeReport === r.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+                  background: activeReport === r.id ? '#1a1a1a' : 'transparent',
                   color: activeReport === r.id ? '#fff' : 'var(--wiki-text2)',
                 }}
               >
@@ -56,11 +56,11 @@ export default function Insights() {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--wiki-text2)', border: '1px solid rgba(99,102,241,0.2)' }}>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
             <RefreshCwIcon size={12} />
             <span>刷新</span>
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: '#1a1a1a' }}>
             <DownloadIcon size={12} />
             <span>导出报告</span>
           </button>
@@ -95,7 +95,7 @@ export default function Insights() {
             <BarChart data={charts.barData || []}>
               <XAxis dataKey="name" tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
               <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -115,7 +115,7 @@ export default function Insights() {
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-col gap-2">
@@ -134,9 +134,9 @@ export default function Insights() {
       {/* AI Insights */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <SparklesIcon size={14} style={{ color: '#6366f1' }} />
+          <SparklesIcon size={14} style={{ color: 'var(--wiki-text)' }} />
           <h3 className="text-sm font-semibold text-wiki-text">AI 智能洞察</h3>
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>{aiInsights.length} 条新洞察</span>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{aiInsights.length} 条新洞察</span>
         </div>
         <div className="flex gap-3 flex-wrap">
           {aiInsights.map((insight, i) => {

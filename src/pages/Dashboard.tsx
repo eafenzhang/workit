@@ -64,8 +64,8 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-wiki-text">智能体工作台</h1>
           <p className="text-wiki-text2 text-sm mt-1">欢迎回来，今日数据一切正常</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)' }}>
-          <ClockIcon size={14} style={{ color: '#6366f1' }} />
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+          <ClockIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
           <span style={{ color: 'var(--wiki-text2)' }}>最后同步：刚刚</span>
         </div>
       </div>
@@ -84,7 +84,7 @@ export default function Dashboard() {
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: card.bg }}>
                   <Icon size={18} style={{ color: card.color }} />
                 </div>
-                <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
+                <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>
                   <ArrowUpRightIcon size={10} />
                   <span>{card.change}</span>
                 </div>
@@ -116,21 +116,21 @@ export default function Dashboard() {
             <AreaChart data={areaData}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="name" tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--wiki-text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
               <Area type="monotone" dataKey="需求" stroke="#6366f1" strokeWidth={2} fill="url(#g1)" />
               <Area type="monotone" dataKey="知识" stroke="#06b6d4" strokeWidth={2} fill="url(#g2)" />
               <Area type="monotone" dataKey="洞察" stroke="#10b981" strokeWidth={2} fill="url(#g3)" />
@@ -148,7 +148,7 @@ export default function Dashboard() {
             <BarChart data={barData} layout="vertical">
               <XAxis type="number" tick={{ fill: 'var(--wiki-text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis dataKey="name" type="category" tick={{ fill: 'var(--wiki-text2)', fontSize: 12 }} axisLine={false} tickLine={false} width={36} />
-              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', borderRadius: 8, color: 'var(--wiki-text)', fontSize: 12 }} />
               <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -159,7 +159,7 @@ export default function Dashboard() {
       <div className="p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-wiki-text">最近动态</h3>
-          <button className="text-xs" style={{ color: '#6366f1' }}>查看全部</button>
+          <button className="text-xs" style={{ color: 'var(--wiki-text2)' }}>查看全部</button>
         </div>
         <div className="flex flex-col gap-1">
           {activities.map((activity, i) => {

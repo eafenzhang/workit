@@ -31,9 +31,9 @@ interface Document {
 }
 
 const defaultCategories: Category[] = [
-  { id: 'all', name: '全部文档', icon: 'GridIcon', color: '#6366f1' },
-  { id: 'architecture', name: '架构设计', icon: 'FolderIcon', color: '#8b5cf6' },
-  { id: 'api', name: 'API文档', icon: 'LinkIcon', color: '#06b6d4' },
+  { id: 'all', name: '全部文档', icon: 'GridIcon', color: '#ffffff' },
+  { id: 'architecture', name: '架构设计', icon: 'FolderIcon', color: '#ffffff' },
+  { id: 'api', name: 'API文档', icon: 'LinkIcon', color: '#ffffff' },
   { id: 'guide', name: '使用指南', icon: 'BookOpenIcon', color: '#10b981' },
   { id: 'research', name: '研究报告', icon: 'FileTextIcon', color: '#f59e0b' },
   { id: 'tutorial', name: '教程素材', icon: 'BookmarkIcon', color: '#ef4444' },
@@ -41,19 +41,19 @@ const defaultCategories: Category[] = [
 
 const typeColorMap: Record<string, { color: string; bg: string }> = {
   PDF: { color: `#ef4444`, bg: `rgba(239,68,68,0.12)` },
-  MD: { color: `#10b981`, bg: `rgba(16,185,129,0.12)` },
+  MD: { color: `#10b981`, bg: `var(--wiki-surface2)` },
   HTML: { color: `#f59e0b`, bg: `rgba(245,158,11,0.12)` },
-  DOC: { color: `#6366f1`, bg: `rgba(99,102,241,0.12)` },
-  DOCX: { color: `#6366f1`, bg: `rgba(99,102,241,0.12)` },
+  DOC: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
+  DOCX: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
   XLS: { color: `#22c55e`, bg: `rgba(34,197,94,0.12)` },
   XLSX: { color: `#22c55e`, bg: `rgba(34,197,94,0.12)` },
   CSV: { color: `#22c55e`, bg: `rgba(34,197,94,0.12)` },
   PPT: { color: `#f97316`, bg: `rgba(249,115,22,0.12)` },
   PPTX: { color: `#f97316`, bg: `rgba(249,115,22,0.12)` },
-  ODT: { color: `#8b5cf6`, bg: `rgba(139,92,246,0.12)` },
-  ODS: { color: `#8b5cf6`, bg: `rgba(139,92,246,0.12)` },
-  ODP: { color: `#8b5cf6`, bg: `rgba(139,92,246,0.12)` },
-  RTF: { color: `#6366f1`, bg: `rgba(99,102,241,0.12)` },
+  ODT: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
+  ODS: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
+  ODP: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
+  RTF: { color: `var(--wiki-text)`, bg: `var(--wiki-surface2)` },
   TXT: { color: `#6b7280`, bg: `rgba(107,114,128,0.12)` },
   JPG: { color: `#ec4899`, bg: `rgba(236,72,153,0.12)` },
   JPEG: { color: `#ec4899`, bg: `rgba(236,72,153,0.12)` },
@@ -290,7 +290,7 @@ export default function Knowledge() {
         <div className="flex items-center justify-between mb-5">
           <span className="text-xs font-medium text-wiki-text3 uppercase tracking-wider">分类目录</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowCategoryEdit({ name: '', icon: 'FolderIcon', color: '#6366f1' })} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增分类">
+            <button onClick={() => setShowCategoryEdit({ name: '', icon: 'FolderIcon', color: 'var(--wiki-text)' })} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增分类">
               <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
             </button>
             <button onClick={() => { const cat = categoriesList.find(c => c.id === activeCategory); if (cat && cat.id !== 'all') setShowCategoryEdit(cat); }} disabled={activeCategory === 'all'} className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-wiki-surface2" title="编辑分类">
@@ -308,10 +308,10 @@ export default function Knowledge() {
             const CatIcon = iconMap[cat.icon] || FolderIcon;
             return (
               <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all duration-200"
-                style={{ background: isActive ? 'rgba(99,102,241,0.15)' : 'transparent', border: isActive ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent' }}>
+                style={{ background: isActive ? 'var(--wiki-surface2)' : 'transparent', border: isActive ? '1px solid var(--wiki-border)' : '1px solid transparent' }}>
                 <CatIcon size={14} style={{ color: isActive ? cat.color : 'var(--wiki-text3)' }} />
                 <span className="text-sm flex-1" style={{ color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text2)' }}>{cat.name}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-md" style={{ background: isActive ? cat.color + '25' : 'rgba(99,112,196,0.1)', color: isActive ? cat.color : 'var(--wiki-text3)' }}>{cat.count}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-md" style={{ background: isActive ? 'var(--wiki-surface2)' : 'var(--wiki-border)', color: isActive ? cat.color : 'var(--wiki-text3)' }}>{cat.count}</span>
               </button>
             );
           })}
@@ -319,9 +319,9 @@ export default function Knowledge() {
 
         {/* Fixed bottom section */}
         <div className="mt-4 flex-shrink-0">
-          <div onClick={() => fileInputRef.current?.click()} className="p-4 rounded-xl flex flex-col items-center gap-2 cursor-pointer" style={{ border: '1px dashed rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.05)' }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.15)' }}>
-              <UploadIcon size={14} style={{ color: '#6366f1' }} />
+          <div onClick={() => fileInputRef.current?.click()} className="p-4 rounded-xl flex flex-col items-center gap-2 cursor-pointer" style={{ border: '1px dashed var(--wiki-border)', background: 'var(--wiki-surface)' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
+              <UploadIcon size={14} style={{ color: 'var(--wiki-text)' }} />
             </div>
             <div className="text-center">
               <div className="text-xs font-medium text-wiki-text">上传文档</div>
@@ -330,13 +330,13 @@ export default function Knowledge() {
           </div>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.md,.html,.txt,.jpg,.jpeg,.png,.gif,.bmp,.webp" />
 
-          <div className="mt-4 p-3 rounded-xl" style={{ background: 'rgba(99,112,196,0.06)' }}>
+          <div className="mt-4 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-wiki-text3">存储空间</span>
               <span className="text-xs text-wiki-text">{storageStats.usedBytes.toFixed(2)} GB</span>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(99,112,196,0.15)' }}>
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: '100%', background: 'linear-gradient(90deg, #6366f1, #8b5cf6)' }} />
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--wiki-border)' }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: '100%', background: 'var(--wiki-text)' }} />
             </div>
             <div className="text-xs text-wiki-text3 mt-1.5">知识库总文件占用 {storageStats.usedBytes.toFixed(2)} GB</div>
           </div>
@@ -351,14 +351,14 @@ export default function Knowledge() {
             <input className="bg-transparent flex-1 text-sm outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索文档、标签..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <button onClick={() => setViewMode('grid')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'rgba(99,102,241,0.2)' : 'transparent' }}>
-              <GridIcon size={14} style={{ color: viewMode === 'grid' ? '#6366f1' : 'var(--wiki-text3)' }} />
+            <button onClick={() => setViewMode('grid')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'var(--wiki-surface2)' : 'transparent' }}>
+              <GridIcon size={14} style={{ color: viewMode === 'grid' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
             </button>
-            <button onClick={() => setViewMode('list')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'list' ? 'rgba(99,102,241,0.2)' : 'transparent' }}>
-              <ListIcon size={14} style={{ color: viewMode === 'list' ? '#6366f1' : 'var(--wiki-text3)' }} />
+            <button onClick={() => setViewMode('list')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'list' ? 'var(--wiki-surface2)' : 'transparent' }}>
+              <ListIcon size={14} style={{ color: viewMode === 'list' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
             </button>
           </div>
-          <button onClick={() => setShowEdit({ category: 'guide', type: 'MD', tags: [], featured: false })} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+          <button onClick={() => setShowEdit({ category: 'guide', type: 'MD', tags: [], featured: false })} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
             <PlusIcon size={15} /><span>新建文档</span>
           </button>
         </div>
@@ -374,9 +374,9 @@ export default function Knowledge() {
               {featuredDocs.map((doc) => {
                 const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
                 return (
-                  <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex-1 p-4 rounded-xl cursor-pointer hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.3)' }}>
+                  <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex-1 p-4 rounded-xl cursor-pointer hover:opacity-90 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     <div className="flex items-start justify-between mb-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.2)' }}><FileTextIcon size={14} style={{ color: '#6366f1' }} /></div>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                       <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
                     </div>
                     <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
@@ -399,18 +399,18 @@ export default function Knowledge() {
               return (
                 <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="p-4 rounded-xl cursor-pointer hover:border-indigo-500/40 transition-all duration-200" style={{ width: 'calc(33.33% - 8px)', background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}><FileTextIcon size={16} style={{ color: '#6366f1' }} /></div>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={16} style={{ color: 'var(--wiki-text)' }} /></div>
                     <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>删除</button>
                   </div>
                   <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
-                  <div className="flex flex-wrap gap-1 mb-3">{doc.tags.slice(0, 2).map((tag) => (<span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text2)' }}>{tag}</span>))}</div>
-                  <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid rgba(99,112,196,0.1)' }}><span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span><span className="flex items-center gap-1 text-xs" style={{ color: '#f59e0b' }}><StarIcon size={10} />{doc.stars}</span><span className="text-xs text-wiki-text3 ml-auto">{doc.size}</span></div>
+                  <div className="flex flex-wrap gap-1 mb-3">{doc.tags.slice(0, 2).map((tag) => (<span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}</div>
+                  <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}><span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span><span className="flex items-center gap-1 text-xs" style={{ color: '#f59e0b' }}><StarIcon size={10} />{doc.stars}</span><span className="text-xs text-wiki-text3 ml-auto">{doc.size}</span></div>
                 </div>
               );
             } else {
               return (
                 <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:border-indigo-500/30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.12)' }}><FileTextIcon size={14} style={{ color: '#6366f1' }} /></div>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                   <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
                   <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
                   <span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span>
@@ -432,9 +432,9 @@ export default function Knowledge() {
             <div className="flex-1">
               <div className="text-lg font-bold text-wiki-text">{showDoc.title}</div>
               <div className="flex flex-wrap gap-2 mt-1.5">
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{showDoc.category}</span>
+                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{showDoc.category}</span>
                 <span className="text-xs px-2 py-0.5 rounded" style={{ background: (typeColorMap[showDoc.type] || typeColorMap.MD).bg, color: (typeColorMap[showDoc.type] || typeColorMap.MD).color }}>{showDoc.type}</span>
-                {showDoc.tags?.map(tag => (<span key={tag} className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text2)' }}>{tag}</span>))}
+                {showDoc.tags?.map(tag => (<span key={tag} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}
                 <span className="text-xs text-wiki-text3 ml-2"><EyeIcon size={10} className="inline" /> {showDoc.views}</span>
                 <span className="text-xs" style={{ color: '#f59e0b' }}><StarIcon size={10} className="inline" /> {showDoc.stars}</span>
                 <span className="text-xs text-wiki-text3">{showDoc.date}</span>
@@ -445,8 +445,8 @@ export default function Knowledge() {
           </div>
 
           {showDoc.imageDescriptions && showDoc.imageDescriptions.length > 0 && (
-            <div className="mx-6 mt-4 p-3 rounded-xl" style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)' }}>
-              <div className="flex items-center gap-2 mb-2"><SparklesIcon size={12} style={{ color: '#6366f1' }} /><span className="text-xs font-medium text-wiki-text">AI 图片识别</span></div>
+            <div className="mx-6 mt-4 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+              <div className="flex items-center gap-2 mb-2"><SparklesIcon size={12} style={{ color: 'var(--wiki-text)' }} /><span className="text-xs font-medium text-wiki-text">AI 图片识别</span></div>
               {showDoc.imageDescriptions.map((desc, i) => (<div key={i} className="text-xs text-wiki-text2 mb-1">· {desc}</div>))}
             </div>
           )}
@@ -460,7 +460,7 @@ export default function Knowledge() {
           </div>
 
           <div className="p-4" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-            <button onClick={handleAnalyzeImages} disabled={analyzing} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: analyzing ? 'rgba(99,102,241,0.5)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            <button onClick={handleAnalyzeImages} disabled={analyzing} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: analyzing ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: analyzing ? 'var(--wiki-text2)' : 'var(--wiki-bg)' }}>
               <SparklesIcon size={14} /><span>{analyzing ? '识别中...' : 'AI 识别图片'}</span>
             </button>
           </div>
@@ -490,7 +490,7 @@ export default function Knowledge() {
                 {categoriesList.slice(1).map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </select>
               <button onClick={() => setShowEdit(null)} className="px-4 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-              <button onClick={handleSaveEdit} className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>保存</button>
+              <button onClick={handleSaveEdit} className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
             </div>
           </div>
 
@@ -546,7 +546,7 @@ export default function Knowledge() {
       {/* Category Edit Modal */}
       {showCategoryEdit !== null && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-[400px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <div className="w-[400px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-base font-semibold text-wiki-text">{showCategoryEdit.id ? '编辑分类' : '新增分类'}</span>
               <button onClick={() => setShowCategoryEdit(null)}><XIcon size={18} style={{ color: 'var(--wiki-text3)' }} /></button>
@@ -570,9 +570,9 @@ export default function Knowledge() {
               <div>
                 <label className="text-xs text-wiki-text3 mb-1.5 block">颜色</label>
                 <div className="flex gap-2">
-                  {['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'].map(c => (
+                  {['#ffffff', '#ffffff', '#ffffff', '#10b981', '#f59e0b', '#ef4444'].map(c => (
                     <button key={c} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, color: c }))} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c, border: showCategoryEdit.color === c ? '2px solid var(--wiki-text)' : '2px solid transparent' }}>
-                      {showCategoryEdit.color === c && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
+                      {showCategoryEdit.color === c && <span style={{ color: 'var(--wiki-bg)', fontSize: 12 }}>✓</span>}
                     </button>
                   ))}
                 </div>
@@ -580,7 +580,7 @@ export default function Knowledge() {
             </div>
             <div className="flex gap-3 mt-6 justify-end">
               <button onClick={() => setShowCategoryEdit(null)} className="px-4 py-2.5 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-              <button onClick={handleSaveCategory} className="px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>保存</button>
+              <button onClick={handleSaveCategory} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
             </div>
           </div>
         </div>

@@ -136,20 +136,20 @@ export default function QuickCapture() {
       <button
         onClick={handleFloatClick}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40 transition-all duration-200 hover:scale-110"
-        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
+        style={{ background: '#1a1a1a', color: '#ffffff' }}
         title="快速采集"
       >
-        <ClipboardPasteIcon size={20} color="#fff" />
+        <ClipboardPasteIcon size={20} style={{ color: 'var(--wiki-bg)' }} />
       </button>
       )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-[520px] max-h-[85vh] overflow-y-auto p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <div className="w-[520px] max-h-[85vh] overflow-y-auto p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                  <SparklesIcon size={14} color="#fff" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}>
+                  <SparklesIcon size={14} style={{ color: 'var(--wiki-bg)' }} />
                 </div>
                 <span className="text-sm font-semibold text-wiki-text">快速采集</span>
               </div>
@@ -159,7 +159,7 @@ export default function QuickCapture() {
             </div>
 
             {captured?.text && (
-              <div className="mb-4 p-4 rounded-xl max-h-40 overflow-y-auto" style={{ background: 'rgba(99,112,196,0.08)', border: '1px solid rgba(99,112,196,0.15)' }}>
+              <div className="mb-4 p-4 rounded-xl max-h-40 overflow-y-auto" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                 <div className="text-xs text-wiki-text3 mb-1">剪贴板文本</div>
                 <div className="text-sm text-wiki-text leading-relaxed whitespace-pre-wrap">{captured.text}</div>
               </div>
@@ -171,7 +171,7 @@ export default function QuickCapture() {
                 <div className="flex flex-wrap gap-2">
                   {captured.images.map((img, i) => (
                     <div key={i} className="relative">
-                      <img src={img} className="w-16 h-16 rounded object-cover" style={{ border: '1px solid rgba(99,112,196,0.2)' }} />
+                      <img src={img} className="w-16 h-16 rounded object-cover" style={{ border: '1px solid var(--wiki-border)' }} />
                       <button onClick={() => removeImage(i)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button>
                     </div>
                   ))}
@@ -182,7 +182,7 @@ export default function QuickCapture() {
             <div className="mb-4">
               <label className="text-xs text-wiki-text3 mb-1.5 block">上传图片</label>
               <input type="file" accept="image/*" className="hidden" id="capture-image-input" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUploadImage(file); e.target.value = ''; }} />
-              <button onClick={() => document.getElementById('capture-image-input')?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text2)', border: '1px solid rgba(99,112,196,0.2)' }}>
+              <button onClick={() => document.getElementById('capture-image-input')?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
                 <ClipboardIcon size={12} /> 添加图片
               </button>
             </div>
@@ -191,7 +191,7 @@ export default function QuickCapture() {
               <label className="text-xs text-wiki-text3 mb-1.5 block">补充描述</label>
               <textarea
                 className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none resize-none"
-                style={{ background: 'rgba(99,112,196,0.1)', border: '1px solid rgba(99,112,196,0.2)' }}
+                style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                 rows={3}
                 placeholder="补充更多信息..."
                 value={desc}
@@ -204,7 +204,7 @@ export default function QuickCapture() {
                 <label className="text-xs text-wiki-text3 mb-1.5 block">模块</label>
                 <select
                   className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none"
-                  style={{ background: 'rgba(99,112,196,0.1)', border: '1px solid rgba(99,112,196,0.2)' }}
+                  style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={module}
                   onChange={e => setModule(e.target.value)}
                 >
@@ -215,7 +215,7 @@ export default function QuickCapture() {
                 <label className="text-xs text-wiki-text3 mb-1.5 block">优先级</label>
                 <select
                   className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none"
-                  style={{ background: 'rgba(99,112,196,0.1)', border: '1px solid rgba(99,112,196,0.2)' }}
+                  style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={priority}
                   onChange={e => setPriority(e.target.value)}
                 >
@@ -228,14 +228,14 @@ export default function QuickCapture() {
               <button
                 onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }}
                 className="flex-1 py-2.5 rounded-xl text-sm"
-                style={{ background: 'rgba(99,112,196,0.1)', color: 'var(--wiki-text2)' }}
+                style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
               >
                 取消
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+                style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}
               >
                 提交需求
               </button>

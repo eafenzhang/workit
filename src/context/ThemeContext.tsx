@@ -25,11 +25,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   const accentColorMap: Record<string, string> = {
-    light: '#6366f1',
-    dark: '#6366f1',
-    neutral: '#2563eb',
-    warm: '#b45309',
-    ocean: '#0ea5e9',
+    light: '#ffffff',
+    dark: '#ffffff',
+    neutral: '#ffffff',
+    warm: '#ffffff',
+    ocean: '#ffffff',
   };
 
   const applyTheme = useCallback((t: 'light' | 'dark' | 'neutral' | 'warm' | 'ocean' | 'minimal') => {
@@ -87,8 +87,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resolvedAccent = theme === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#6366f1' : '#6366f1')
-    : accentColorMap[theme] || '#6366f1';
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#ffffff')
+    : accentColorMap[theme] || '#ffffff';
 
   return (
     <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, accentColor: resolvedAccent }}>

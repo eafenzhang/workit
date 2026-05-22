@@ -121,17 +121,17 @@ export default function Model() {
           <p className="text-sm text-wiki-text2 mt-1">支持国内主流大模型供应商</p>
         </div>
         <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#1a1a1a' }}>
           <PlusIcon size={14} />添加配置
         </button>
       </div>
 
       {/* Default Banner */}
       {models.find(m => m.isDefault) && (
-        <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
-          <StarIcon size={18} style={{ color: '#6366f1' }} />
+        <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+          <StarIcon size={18} style={{ color: 'var(--wiki-text)' }} />
           <span className="text-sm text-wiki-text">默认模型：</span>
-          <span className="text-sm font-semibold" style={{ color: '#6366f1' }}>{models.find(m => m.isDefault)?.name}</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>{models.find(m => m.isDefault)?.name}</span>
         </div>
       )}
 
@@ -147,14 +147,14 @@ export default function Model() {
         {models.map(m => (
           <div key={m.id} className="rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: m.hasApiKey ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.1)' }}>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: m.hasApiKey ? 'var(--wiki-surface2)' : 'rgba(239,68,68,0.1)' }}>
                 {m.hasApiKey ? <CheckCircleIcon size={24} style={{ color: '#10b981' }} /> : <CircleIcon size={24} style={{ color: '#ef4444' }} />}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-semibold text-wiki-text">{m.name}</span>
-                  {m.isDefault && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.2)', color: '#6366f1' }}>默认</span>}
-                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{m.provider}</span>
+                  {m.isDefault && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>默认</span>}
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{m.provider}</span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-wiki-text3">
                   <span>{m.baseUrl}</span>
@@ -184,14 +184,14 @@ export default function Model() {
                           }
                         }} className="w-full px-3 py-2 text-left text-sm hover:bg-wiki-surface2 flex items-center justify-between" style={{ color: 'var(--wiki-text)' }}>
                           <div><div>{pm.name}</div><div className="text-xs text-wiki-text3">{pm.id}</div></div>
-                          {pm.id === m.modelId && <CheckCircleIcon size={14} style={{ color: '#6366f1' }} />}
+                          {pm.id === m.modelId && <CheckCircleIcon size={14} style={{ color: 'var(--wiki-text)' }} />}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
                 {!m.isDefault && (
-                  <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>设为默认</button>
+                  <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
                 )}
                 <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
                 <button onClick={() => deleteModel(m.id)} className="p-2 rounded-xl hover:bg-wiki-surface2 transition-colors">
@@ -223,8 +223,8 @@ export default function Model() {
                 {PROVIDER_LIST.map(p => (
                   <button key={p.id} onClick={() => handleProviderChange(p.id)}
                     className="px-3 py-2 rounded-xl text-sm text-left" style={{
-                      background: form.provider === p.id ? 'rgba(99,102,241,0.15)' : 'var(--wiki-surface2)',
-                      border: `1px solid ${form.provider === p.id ? 'rgba(99,102,241,0.4)' : 'var(--wiki-border)'}`,
+                      background: form.provider === p.id ? 'var(--wiki-surface2)' : 'var(--wiki-surface)',
+                      border: `1px solid ${form.provider === p.id ? 'var(--wiki-border)' : 'var(--wiki-border)'}`,
                       color: 'var(--wiki-text)',
                     }}>
                     {p.name}
@@ -251,7 +251,7 @@ export default function Model() {
             </div>
 
             <button onClick={handleSubmit}
-              className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: '#1a1a1a' }}>
               {editingId ? '保存修改' : '添加'}
             </button>
           </div>

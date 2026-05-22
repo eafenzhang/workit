@@ -19,7 +19,9 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'Workit',
-    icon: path.join(__dirname, 'public/favicon.svg'),
+    icon: isDev
+      ? path.join(__dirname, 'public', 'favicon.svg')
+      : path.join(app.getAppPath(), 'public', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

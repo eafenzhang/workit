@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Index from './pages/Index';
 import Dashboard from './pages/Dashboard';
@@ -30,7 +30,7 @@ const App = () => {
   }, []);
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Index><Dashboard /></Index>} />
         <Route path="/requirements" element={<Index><Requirements /></Index>} />
@@ -43,7 +43,7 @@ const App = () => {
       </Routes>
       <Toaster position="top-right" />
       {quickCollectEnabled && <QuickCapture />}
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 

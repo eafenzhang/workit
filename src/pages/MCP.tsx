@@ -74,8 +74,8 @@ export default function MCP() {
       <div className="rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.15)' }}>
-              <PlugIcon size={16} style={{ color: '#6366f1' }} />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
+              <PlugIcon size={16} style={{ color: 'var(--wiki-text)' }} />
             </div>
             <div>
               <div className="text-sm font-semibold text-wiki-text">已安装的 MCP 服务</div>
@@ -84,8 +84,8 @@ export default function MCP() {
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
+            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
           >
             <PlusIcon size={14} /> 添加服务
           </button>
@@ -94,7 +94,7 @@ export default function MCP() {
         <div className="flex flex-col gap-3">
           {servers.map((server) => (
             <div key={server.id} className="flex items-center gap-4 p-4 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: server.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(99,112,196,0.1)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: server.enabled ? 'var(--wiki-surface2)' : 'var(--wiki-surface)' }}>
                 {server.enabled ? <CheckCircleIcon size={20} style={{ color: '#10b981' }} /> : <CircleIcon size={20} style={{ color: 'var(--wiki-text3)' }} />}
               </div>
               <div className="flex-1">
@@ -106,7 +106,7 @@ export default function MCP() {
                   <button
                     onClick={() => setShowToken(showToken === server.id ? null : server.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-                    style={{ background: server.config.token ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.1)', color: server.config.token ? '#10b981' : '#6366f1', border: `1px solid ${server.config.token ? 'rgba(16,185,129,0.3)' : 'rgba(99,102,241,0.2)'}` }}
+                    style={{ background: server.config.token ? 'var(--wiki-surface2)' : 'var(--wiki-surface)', color: server.config.token ? '#10b981' : 'var(--wiki-text2)', border: `1px solid ${server.config.token ? 'var(--wiki-border)' : 'var(--wiki-border)'}` }}
                   >
                     <KeyIcon size={12} />
                     {server.config.token ? 'Token 已配置' : '设置 Token'}
@@ -115,7 +115,7 @@ export default function MCP() {
                 <button
                   onClick={() => toggleServer(server)}
                   className="px-4 py-1.5 rounded-lg text-xs font-medium"
-                  style={{ background: server.enabled ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: server.enabled ? '#ef4444' : '#10b981' }}
+                  style={{ background: server.enabled ? 'rgba(239,68,68,0.1)' : 'var(--wiki-surface2)', color: server.enabled ? '#ef4444' : '#10b981' }}
                 >
                   {server.enabled ? '禁用' : '启用'}
                 </button>
@@ -135,10 +135,10 @@ export default function MCP() {
       {/* Token Input Modal */}
       {showToken !== null && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-[420px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <div className="w-[420px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <KeyIcon size={18} style={{ color: '#6366f1' }} />
+                <KeyIcon size={18} style={{ color: 'var(--wiki-text)' }} />
                 <h3 className="text-base font-semibold text-wiki-text">设置 TAPD Token</h3>
               </div>
               <button onClick={() => { setShowToken(null); setTokenInput(''); }}>
@@ -165,7 +165,7 @@ export default function MCP() {
               <button
                 onClick={() => saveToken(showToken!)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                style={{ background: '#1a1a1a' }}
               >
                 保存 Token
               </button>
@@ -209,10 +209,10 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-[460px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid rgba(99,102,241,0.3)' }}>
+      <div className="w-[460px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <PlusIcon size={18} style={{ color: '#6366f1' }} />
+            <PlusIcon size={18} style={{ color: 'var(--wiki-text)' }} />
             <h3 className="text-base font-semibold text-wiki-text">添加 MCP 服务器</h3>
           </div>
           <button onClick={onClose}>
@@ -278,7 +278,7 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
           <button
             onClick={handleSubmit}
             className="px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+            style={{ background: '#1a1a1a' }}
           >
             添加
           </button>
