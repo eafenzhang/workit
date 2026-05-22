@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
 interface IndexProps {
@@ -10,6 +10,30 @@ export default function Index({ children = null }: IndexProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [backendOnline, setBackendOnline] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+
+      fetch('/api/requirements', { method: 'HEAD', signal: controller.signal })
+        .then(() => {
+          clearTimeout(timeout);
+          if (!cancelled) setBackendOnline(true);
+        })
+        .catch(() => {
+          clearTimeout(timeout);
+          if (!cancelled) setBackendOnline(false);
+        });
+    };
+
+    check();
+    const interval = setInterval(check, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   const pathToTab: Record<string, string> = {
     '/': 'dashboard',
@@ -74,11 +98,22 @@ export default function Index({ children = null }: IndexProps) {
           </div>
           <div className="ml-auto flex items-center gap-3">
             <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
-              style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)' }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all duration-300"
+              style={{
+                background: backendOnline ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                border: `1px solid ${backendOnline ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+              }}
             >
-              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#10b981' }} />
-              <span style={{ color: '#10b981' }}>系统运行正常</span>
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: backendOnline ? '#10b981' : '#ef4444',
+                  animation: backendOnline ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
+                }}
+              />
+              <span style={{ color: backendOnline ? '#10b981' : '#ef4444' }}>
+                {backendOnline ? '网络已连接' : '网络已断开'}
+              </span>
             </div>
           </div>
         </div>
