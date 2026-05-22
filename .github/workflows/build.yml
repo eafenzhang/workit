@@ -31,15 +31,14 @@ jobs:
         run: npx electron-builder --win --publish never
 
       - name: Zip unpacked directory
-        shell: bash
+        shell: powershell
         run: |
-          cd release
-          if [ -d win-unpacked ]; then
-            zip -r ../Workit-win-unpacked.zip win-unpacked/
-            echo "Created Workit-win-unpacked.zip"
-          else
-            echo "No win-unpacked directory found, skipping zip"
-          fi
+          if (Test-Path "release/win-unpacked") {
+            Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "Workit-win-unpacked.zip" -Force
+            Write-Host "Created Workit-win-unpacked.zip"
+          } else {
+            Write-Host "No win-unpacked directory found, skipping zip"
+          }
 
       - name: Upload artifacts
         if: success()
