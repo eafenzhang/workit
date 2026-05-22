@@ -130,6 +130,12 @@ async function initDB() {
     // 不插入样例数据，保持空白
   }
 
+  // 迁移：将旧状态"待评审"更新为"待评估"
+  db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
+
+  // 清理：删除 AI 自动创建的冗余知识文档（由 analyze 接口创建的 '需求' 分类文档是摘要副本，非用户上传）
+  db.run("DELETE FROM documents WHERE category = '需求' AND file_path = ''");
+
   const docCount = db.exec("SELECT COUNT(*) FROM documents")[0]?.values[0][0] || 0;
   if (docCount === 0) {
     // 不插入样例数据，保持空白

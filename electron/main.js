@@ -1,7 +1,9 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
 import { spawn } from 'child_process';
+import http from 'http';
 import { fileURLToPath } from 'url';
+import { autoUpdater } from 'electron-updater';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,66 +11,78 @@ const __dirname = path.dirname(__filename);
 // Development mode check
 const isDev = !app.isPackaged;
 
+const BACKEND_PORT = process.env.PORT || 3001;
+const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
+
 let mainWindow;
 let bunProcess;
 
-function createWindow() {
+function checkBackend() {
+  return new Promise((resolve) => {
+    const req = http.get(`${BACKEND_URL}/api/health`, () => resolve(true));
+    req.on('error', () => resolve(false));
+    req.setTimeout(2000, () => { req.destroy(); resolve(false); });
+  });
+}
+
+async function startBackend() {
+  const running = await checkBackend();
+  if (running) {
+    console.log('[Workit] Backend already running');
+    return true;
+  }
+
+  console.log('[Workit] Starting backend...');
+  const appPath = app.getAppPath();
+  const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
+
+  bunProcess = spawn('node', [backendPath], {
+    cwd: path.join(appPath, 'backend'),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PORT: String(BACKEND_PORT) },
+  });
+
+  bunProcess.stdout?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+  bunProcess.stderr?.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+
+  // Wait up to 15s for backend to be ready
+  for (let i = 0; i < 30; i++) {
+    if (await checkBackend()) {
+      console.log('[Workit] Backend ready');
+      return true;
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  console.error('[Workit] Backend failed to start');
+  return false;
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: 'Workit',
-    icon: isDev
-      ? path.join(__dirname, 'public', 'favicon.svg')
-      : path.join(app.getAppPath(), 'public', 'icon.ico'),
+    icon: path.join(app.getAppPath(), 'public', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      preload: path.join(app.getAppPath(), 'electron', 'preload.js'),
     },
     autoHideMenuBar: true,
   });
 
-  // Load the app
   if (isDev) {
-    // In development, load from Vite dev server
     mainWindow.loadURL('http://localhost:5173');
-
-    // Start Bun backend if not running
-    const checkBackend = () => {
-      return new Promise((resolve) => {
-        const http = require('http');
-        const req = http.get('http://localhost:3001/api/health', () => resolve(true));
-        req.on('error', () => resolve(false));
-        req.setTimeout(1000, () => resolve(false));
-      });
-    };
-
-    const startBackend = async () => {
-      const backendRunning = await checkBackend();
-      if (!backendRunning) {
-        console.log('[Workit] Starting backend...');
-        const backendPath = path.join(__dirname, 'backend', 'src', 'index.js');
-        bunProcess = spawn('bun', ['run', backendPath], {
-          cwd: path.join(__dirname, 'backend'),
-          detached: true,
-          stdio: 'inherit',
-        });
-      } else {
-        console.log('[Workit] Backend already running');
-      }
-    };
-
-    startBackend();
-
-    // Open devtools in dev mode
     mainWindow.webContents.openDevTools();
   } else {
-    // In production, load from asar root: dist/index.html
-    // Use 'app.getAppPath()' to get the asar root path
-    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-    mainWindow.loadFile(indexPath);
+    // Prod: start backend, then load UI from backend HTTP server
+    // (backend serves frontend static files + API on same origin, allowing external access)
+    await startBackend();
+    mainWindow.loadURL(`${BACKEND_URL}/`);
   }
 
   // Handle external links
@@ -82,10 +96,39 @@ function createWindow() {
   });
 }
 
+// Auto-updater (production only)
+if (!isDev) {
+  autoUpdater.autoDownload = false;
+  autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
+
+  ipcMain.handle('check-for-update', async () => {
+    const result = await autoUpdater.checkForUpdates();
+    return { available: result?.updateInfo?.version !== app.getVersion(), version: result?.updateInfo?.version };
+  });
+
+  ipcMain.handle('download-update', async () => {
+    autoUpdater.downloadUpdate();
+    return true;
+  });
+
+  ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall();
+    return true;
+  });
+
+  autoUpdater.on('download-progress', (p) => {
+    mainWindow?.webContents.send('update-download-progress', Math.round(p.percent));
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow?.webContents.send('update-ready');
+  });
+}
+
 // Security: Prevent new windows
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://')) {
+    if (!url.startsWith('http://localhost:5173') && !url.startsWith(BACKEND_URL)) {
       event.preventDefault();
     }
   });
@@ -95,9 +138,7 @@ app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    if (bunProcess) {
-      bunProcess.kill();
-    }
+    bunProcess?.kill();
     app.quit();
   }
 });
@@ -108,9 +149,6 @@ app.on('activate', () => {
   }
 });
 
-// Quit when all windows are closed (Windows)
 app.on('quit', () => {
-  if (bunProcess) {
-    bunProcess.kill();
-  }
+  bunProcess?.kill();
 });

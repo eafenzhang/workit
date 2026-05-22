@@ -51,7 +51,7 @@ export default function Model() {
     fetch('/api/models').then(r => r.json()).then(data => {
       setModels(Array.isArray(data) ? data : []);
       setLoading(false);
-    }).catch(() => { toast.error('获取模型失败'); setLoading(false); });
+    }).catch(() => { setLoading(false); }); // 后端未就绪时静默处理
   };
 
   const handleProviderChange = (providerId: string) => {
@@ -121,8 +121,8 @@ export default function Model() {
           <p className="text-sm text-wiki-text2 mt-1">支持国内主流大模型供应商</p>
         </div>
         <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-          <PlusIcon size={14} />添加配置
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          <PlusIcon size={16} />添加配置
         </button>
       </div>
 

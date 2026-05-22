@@ -35,22 +35,22 @@ app.get('/', (req, res) => {
     results = results.filter(r => (r[1]||'').toLowerCase().includes(s) || (r[2]||'').toLowerCase().includes(s));
   }
   if (status && status !== '全部') {
-    results = results.filter(r => r[5] === status);
+    results = results.filter(r => r[6] === status);
   }
   if (category && category !== '全部') {
     results = results.filter(r => r[3] === category);
   }
   if (priority && priority !== '全部') {
-    results = results.filter(r => r[4] === priority);
+    results = results.filter(r => r[5] === priority);
   }
   if (assignee && assignee !== '全部') {
-    results = results.filter(r => r[6] === assignee);
+    results = results.filter(r => r[7] === assignee);
   }
   if (dateFrom) {
-    results = results.filter(r => (r[13]||'') >= dateFrom);
+    results = results.filter(r => (r[17]||'') >= dateFrom);
   }
   if (dateTo) {
-    results = results.filter(r => (r[13]||'') <= dateTo);
+    results = results.filter(r => (r[17]||'') <= dateTo);
   }
 
   res.json(results.map(r => ({
@@ -153,15 +153,21 @@ app.post('/:id/analyze', async (req, res) => {
 
   const [id, title, description, tags, images] = [row[0], row[1], row[2]||'', JSON.parse(row[3]||'[]'), JSON.parse(row[4]||'[]')];
 
-  // 从本地数据库读取默认模型
+  // 从本地数据库读取模型（优先启用+默认的，其次仅启用的，最后任意）
   let modelName = '', provider = '', baseUrl = '', apiKey = '', modelId = '';
-  const defaultModelRows = db.exec("SELECT name, provider, base_url, api_key, model_id FROM models WHERE is_default = 1")[0]?.values || [];
-  const allModelRows = db.exec("SELECT name, provider, base_url, api_key, model_id FROM models")[0]?.values || [];
-  const targetRows = defaultModelRows.length > 0 ? defaultModelRows : allModelRows;
-  if (targetRows.length === 0) {
+  const allRows = db.exec("SELECT name, provider, base_url, api_key, model_id, enabled, is_default FROM models")[0]?.values || [];
+  if (allRows.length === 0) {
     return res.status(400).json({ error: '无可用模型，请先在模型配置中添加模型' });
   }
-  const [mName, mProvider, mBaseUrl, mApiKey, mModelId] = targetRows[0];
+  // 排序：已启用+默认 > 已启用 > 未启用
+  const sorted = [...allRows].sort((a, b) => {
+    const aEnabled = a[5], bEnabled = b[5];
+    const aDefault = a[6], bDefault = b[6];
+    const aScore = (aEnabled ? 2 : 0) + (aDefault ? 1 : 0);
+    const bScore = (bEnabled ? 2 : 0) + (bDefault ? 1 : 0);
+    return bScore - aScore;
+  });
+  const [mName, mProvider, mBaseUrl, mApiKey, mModelId] = sorted[0];
   modelName = mName; provider = mProvider; baseUrl = mBaseUrl; apiKey = mApiKey; modelId = mModelId;
 
   let aiSummary = '';

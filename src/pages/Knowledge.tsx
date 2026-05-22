@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, DownloadIcon, StarIcon, ClockIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, SaveIcon, BoldIcon, ItalicIcon, ListIcon as ListIcon2, HeadingIcon, Undo2Icon, Redo2Icon, QuoteIcon, CodeIcon, ImageIcon, Link2Icon, ImagePlusIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, DownloadIcon, StarIcon, ClockIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, SaveIcon, BoldIcon, ItalicIcon, ListIcon as ListIcon2, HeadingIcon, Undo2Icon, Redo2Icon, QuoteIcon, CodeIcon, ImageIcon, Link2Icon, ImagePlusIcon, GlobeIcon, MonitorIcon, FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -28,16 +28,23 @@ interface Document {
   content?: string;
   imageDescriptions?: string[];
   createdAt?: string;
+  file_path?: string;
 }
 
 const defaultCategories: Category[] = [
-  { id: 'all', name: '全部文档', icon: 'GridIcon', color: 'var(--wiki-text)' },
-  { id: 'architecture', name: '架构设计', icon: 'FolderIcon', color: 'var(--wiki-text)' },
-  { id: 'api', name: 'API文档', icon: 'LinkIcon', color: 'var(--wiki-text)' },
-  { id: 'guide', name: '使用指南', icon: 'BookOpenIcon', color: '#10b981' },
-  { id: 'research', name: '研究报告', icon: 'FileTextIcon', color: '#f59e0b' },
-  { id: 'tutorial', name: '教程素材', icon: 'BookmarkIcon', color: '#ef4444' },
+  { id: 'all', name: '全部文档', icon: 'GridIcon', color: 'var(--wiki-accent3)' },
 ];
+
+const typeIconMap: Record<string, any> = {
+  PDF: FileTextIcon, MD: CodeIcon, HTML: GlobeIcon,
+  DOC: FileTextIcon, DOCX: BookOpenIcon,
+  XLS: GridIcon, XLSX: GridIcon, CSV: ListIcon,
+  PPT: MonitorIcon, PPTX: MonitorIcon,
+  ODT: FileTextIcon, ODS: GridIcon, ODP: MonitorIcon,
+  RTF: FileTextIcon, TXT: FileIcon,
+  JPG: ImageIcon, JPEG: ImageIcon, PNG: ImageIcon,
+  GIF: ImageIcon, BMP: ImageIcon, WEBP: ImageIcon,
+};
 
 const typeColorMap: Record<string, { color: string; bg: string }> = {
   PDF: { color: `#ef4444`, bg: `rgba(239,68,68,0.12)` },
@@ -63,6 +70,11 @@ const typeColorMap: Record<string, { color: string; bg: string }> = {
   WEBP: { color: `#ec4899`, bg: `rgba(236,72,153,0.12)` },
 };
 
+const DocTypeIcon = ({ type, size, style }: { type: string; size: number; style?: React.CSSProperties }) => {
+  const Icon = typeIconMap[type] || FileTextIcon;
+  return <Icon size={size} strokeWidth={1.5} style={style} />;
+};
+
 export default function Knowledge() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -73,8 +85,13 @@ export default function Knowledge() {
   const [analyzing, setAnalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [categoriesList, setCategoriesList] = useState<Category[]>(() => {
-    try { const saved = localStorage.getItem('wiki_categories'); return saved ? JSON.parse(saved) : defaultCategories; } catch { return defaultCategories; }
+    try {
+      localStorage.setItem('wiki_categories', JSON.stringify(defaultCategories));
+      return [...defaultCategories];
+    } catch { return [...defaultCategories]; }
   });
   const [showCategoryEdit, setShowCategoryEdit] = useState<Partial<Category> | null>(null);
   const [docChangeKey, setDocChangeKey] = useState(0);
@@ -101,27 +118,19 @@ export default function Knowledge() {
       .then(data => setDocuments(data));
   }, [activeCategory, search]);
 
-  // Fetch all documents for category count + storage size
+  // Fetch category counts + actual storage stats
   useEffect(() => {
     fetch('/api/documents')
       .then(r => r.json())
       .then(data => {
         const counts: Record<string, number> = {};
-        let totalBytes = 0;
-        data.forEach((d: Document) => {
-          counts[d.category] = (counts[d.category] || 0) + 1;
-          const sizeStr = d.size || '0';
-          const match = sizeStr.match(/^([\d.]+)\s*(KB|MB|GB)?$/i);
-          if (match) {
-            const num = parseFloat(match[1]);
-            const unit = (match[2] || 'KB').toUpperCase();
-            totalBytes += unit === 'MB' ? num * 1024 * 1024 : unit === 'GB' ? num * 1024 * 1024 * 1024 : num * 1024;
-          }
-        });
+        data.forEach((d: Document) => { counts[d.category] = (counts[d.category] || 0) + 1; });
         setAllDocCounts(counts);
-        const usedGB = totalBytes / (1024 * 1024 * 1024);
-        setStorageStats({ usedBytes: usedGB, totalBytes: usedGB });
       });
+    fetch('/api/storage/stats')
+      .then(r => r.json())
+      .then(s => { const usedGB = (s.usedBytes || 0) / (1024 * 1024 * 1024); setStorageStats({ usedBytes: usedGB, totalBytes: 1.0 }); })
+      .catch(() => setStorageStats({ usedBytes: 0, totalBytes: 1.0 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docChangeKey]);
 
@@ -134,6 +143,37 @@ export default function Knowledge() {
       editor.commands.setContent(showEdit.content || '');
     }
   }, [showEdit?.id]);
+
+  // Fetch uploaded file content for preview (text-based + HTML)
+  const isTextFile = (path: string) => /\.(txt|md|html?|js|ts|jsx|tsx|css|json|xml|yaml|yml|log|sh|bat|py|rb|php|java|c|cpp|h|hpp|sql|ini|cfg|conf)$/i.test(path);
+  const isImageFile = (path: string) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(path);
+  const isOfficeFile = (path: string) => /\.(docx?|xlsx?|pptx?)$/i.test(path);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (showDoc?.file_path && isTextFile(showDoc.file_path)) {
+      setFileContent('__loading__'); // show loading state
+      fetch(showDoc.file_path)
+        .then(r => r.text())
+        .then(text => { if (!cancelled) setFileContent(text); })
+        .catch(() => { if (!cancelled) setFileContent(null); });
+    } else {
+      setFileContent(null);
+    }
+    return () => { cancelled = true; };
+  }, [showDoc?.id, showDoc?.file_path]);
+
+  // Fetch Office file preview (converted to HTML on backend)
+  useEffect(() => {
+    if (showDoc?.id && showDoc.file_path && isOfficeFile(showDoc.file_path)) {
+      fetch(`/api/documents/${showDoc.id}/preview`)
+        .then(r => r.json())
+        .then(data => setPreviewHtml(data.html || null))
+        .catch(() => setPreviewHtml(null));
+    } else {
+      setPreviewHtml(null);
+    }
+  }, [showDoc?.id, showDoc?.file_path]);
 
   const fetchDocs = () => fetch(`/api/documents?${new URLSearchParams(activeCategory !== 'all' ? { category: activeCategory } : {})}`).then(r => r.json()).then(data => { setDocuments(data); setDocChangeKey(k => k + 1); });
 
@@ -182,9 +222,14 @@ export default function Knowledge() {
 
   const handleSaveEdit = () => {
     if (!showEdit) return;
+    const payload = {
+      ...showEdit,
+      size: showEdit.size || `${String(showEdit.content || '').length} B`,
+      date: showEdit.date || new Date().toISOString().split('T')[0],
+    };
     const url = showEdit.id ? `/api/documents/${showEdit.id}` : '/api/documents';
     const method = showEdit.id ? 'PUT' : 'POST';
-    fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(showEdit) })
+    fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(r => r.json())
       .then((savedDoc) => {
         fetchDocs();
@@ -217,17 +262,22 @@ export default function Knowledge() {
     setShowCategoryEdit(null);
   };
 
-  const handleAnalyzeImages = () => {
+  const handleAISummary = () => {
     if (!showDoc?.id) return;
     setAnalyzing(true);
-    fetch(`/api/documents/${showDoc.id}/analyze-images`, { method: 'POST' })
+    fetch(`/api/documents/${showDoc.id}/summarize`, { method: 'POST' })
       .then(r => r.json())
       .then(data => {
         if (data.error) { toast.error(data.error); return; }
-        setShowDoc(prev => prev ? { ...prev, imageDescriptions: data.imageDescriptions } : null);
-        toast.success('图片识别完成');
+        if (data.summary) {
+          setShowDoc(prev => prev ? { ...prev, content: (prev?.content || '') + '\n\n> **AI 总结**: ' + data.summary } : null);
+        }
+        if (data.imageDescriptions?.length > 0) {
+          setShowDoc(prev => prev ? { ...prev, imageDescriptions: data.imageDescriptions } : null);
+        }
+        toast.success('AI 分析完成');
       })
-      .catch(() => toast.error('图片识别失败'))
+      .catch(() => toast.error('AI 分析失败'))
       .finally(() => setAnalyzing(false));
   };
 
@@ -331,14 +381,17 @@ export default function Knowledge() {
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.md,.html,.txt,.jpg,.jpeg,.png,.gif,.bmp,.webp" />
 
           <div className="mt-4 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)' }}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-wiki-text3">存储空间</span>
-              <span className="text-xs text-wiki-text">{storageStats.usedBytes.toFixed(2)} GB</span>
+              <span className="text-xs text-wiki-text">1.00 GB</span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-wiki-text3">文件占用</span>
+              <span className="text-xs text-wiki-text">{storageStats.usedBytes < 0.001 ? (storageStats.usedBytes * 1024).toFixed(1) + ' MB' : storageStats.usedBytes.toFixed(2) + ' GB'}</span>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--wiki-border)' }}>
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: '100%', background: 'var(--wiki-text)' }} />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (storageStats.totalBytes > 0 ? (storageStats.usedBytes / storageStats.totalBytes) * 100 : 0))}%`, background: storageStats.usedBytes >= storageStats.totalBytes ? '#ef4444' : 'var(--wiki-text)' }} />
             </div>
-            <div className="text-xs text-wiki-text3 mt-1.5">知识库总文件占用 {storageStats.usedBytes.toFixed(2)} GB</div>
           </div>
         </div>
       </div>
@@ -351,16 +404,16 @@ export default function Knowledge() {
             <input className="bg-transparent flex-1 text-sm outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索文档、标签..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <button onClick={() => setViewMode('grid')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'var(--wiki-surface2)' : 'transparent' }}>
+            <button onClick={() => setViewMode('grid')} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'var(--wiki-surface2)' : 'transparent' }}>
               <GridIcon size={14} style={{ color: viewMode === 'grid' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
             </button>
-            <button onClick={() => setViewMode('list')} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'list' ? 'var(--wiki-surface2)' : 'transparent' }}>
+            <button onClick={() => setViewMode('list')} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'list' ? 'var(--wiki-surface2)' : 'transparent' }}>
               <ListIcon size={14} style={{ color: viewMode === 'list' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
             </button>
           </div>
-          <button onClick={() => setShowEdit({ category: 'guide', type: 'MD', tags: [], featured: false })} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-            <PlusIcon size={15} /><span>新建文档</span>
-          </button>
+            <button onClick={() => setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false })} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              <PlusIcon size={16} /><span>新建文档</span>
+            </button>
         </div>
 
         {/* Featured */}
@@ -376,7 +429,7 @@ export default function Knowledge() {
                 return (
                   <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex-1 p-4 rounded-xl cursor-pointer hover:opacity-90 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     <div className="flex items-start justify-between mb-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={14} style={{ color: 'var(--wiki-text)' }} /></div>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                       <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
                     </div>
                     <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
@@ -392,14 +445,14 @@ export default function Knowledge() {
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-wiki-text3">共 {documents.length} 篇文档</span>
         </div>
-        <div className={`overflow-y-auto scrollbar-thin ${viewMode === 'grid' ? 'flex flex-wrap gap-3' : 'flex flex-col gap-2'}`}>
+        <div className={`overflow-y-auto scrollbar-thin ${viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2'}`}>
           {documents.map((doc) => {
             const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
             if (viewMode === 'grid') {
               return (
-                <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="p-4 rounded-xl cursor-pointer hover:border-indigo-500/40 transition-all duration-200" style={{ width: 'calc(33.33% - 8px)', background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="p-4 rounded-xl cursor-pointer hover:border-indigo-500/40 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={16} style={{ color: 'var(--wiki-text)' }} /></div>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                     <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>删除</button>
                   </div>
                   <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
@@ -410,7 +463,7 @@ export default function Knowledge() {
             } else {
               return (
                 <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:border-indigo-500/30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><FileTextIcon size={14} style={{ color: 'var(--wiki-text)' }} /></div>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                   <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
                   <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
                   <span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span>
@@ -425,53 +478,86 @@ export default function Knowledge() {
         </div>
       </div>
 
-      {/* Document Detail Panel */}
-      {showDoc && !showEdit && (
-        <div className="flex-1 flex flex-col" style={{ borderLeft: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
-          <div className="flex items-center gap-3 p-4" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-            <div className="flex-1">
-              <div className="text-lg font-bold text-wiki-text">{showDoc.title}</div>
-              <div className="flex flex-wrap gap-2 mt-1.5">
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{showDoc.category}</span>
-                <span className="text-xs px-2 py-0.5 rounded" style={{ background: (typeColorMap[showDoc.type] || typeColorMap.MD).bg, color: (typeColorMap[showDoc.type] || typeColorMap.MD).color }}>{showDoc.type}</span>
-                {showDoc.tags?.map(tag => (<span key={tag} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}
-                <span className="text-xs text-wiki-text3 ml-2"><EyeIcon size={10} className="inline" /> {showDoc.views}</span>
-                <span className="text-xs" style={{ color: '#f59e0b' }}><StarIcon size={10} className="inline" /> {showDoc.stars}</span>
-                <span className="text-xs text-wiki-text3">{showDoc.date}</span>
+      {/* Document Detail Side Panel */}
+      {(showDoc && !showEdit) && (
+        <div className="fixed inset-0 z-50" style={{ background: 'rgba(0,0,0,0.3)' }} onClick={() => setShowDoc(null)}>
+          <div className="fixed inset-y-0 right-0 w-2/5 flex flex-col z-50" style={{ background: 'var(--wiki-surface)', borderLeft: '1px solid var(--wiki-border)', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-wiki-text truncate">{showDoc.title}</div>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{showDoc.category}</span>
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: (typeColorMap[showDoc.type] || typeColorMap.MD).bg, color: (typeColorMap[showDoc.type] || typeColorMap.MD).color }}>{showDoc.type}</span>
+                  {showDoc.tags?.map(tag => (<span key={tag} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}
+                  <span className="text-xs text-wiki-text3"><EyeIcon size={10} className="inline" /> {showDoc.views}</span>
+                  <span className="text-xs" style={{ color: '#f59e0b' }}><StarIcon size={10} className="inline" /> {showDoc.stars}</span>
+                  <span className="text-xs text-wiki-text3">{showDoc.date}</span>
+                </div>
               </div>
+              {!showDoc.file_path && (
+                <button onClick={() => setShowEdit(showDoc)} className="px-3 py-1.5 rounded-lg text-sm flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}><EditIcon size={13} className="inline" /> 编辑</button>
+              )}
+              <button onClick={() => setShowDoc(null)} className="p-1.5 rounded-lg hover:bg-wiki-surface2 flex-shrink-0"><XIcon size={18} style={{ color: 'var(--wiki-text3)' }} /></button>
             </div>
-            <button onClick={() => setShowEdit(showDoc)} className="px-3 py-1.5 rounded-lg text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}><EditIcon size={13} className="inline" /> 编辑</button>
-            <button onClick={() => setShowDoc(null)} className="p-1.5 rounded-lg hover:bg-wiki-surface2"><XIcon size={14} style={{ color: 'var(--wiki-text3)' }} /></button>
-          </div>
 
-          {showDoc.imageDescriptions && showDoc.imageDescriptions.length > 0 && (
-            <div className="mx-6 mt-4 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-              <div className="flex items-center gap-2 mb-2"><SparklesIcon size={12} style={{ color: 'var(--wiki-text)' }} /><span className="text-xs font-medium text-wiki-text">AI 图片识别</span></div>
-              {showDoc.imageDescriptions.map((desc, i) => (<div key={i} className="text-xs text-wiki-text2 mb-1">· {desc}</div>))}
-            </div>
-          )}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
+              {showDoc.imageDescriptions && showDoc.imageDescriptions.length > 0 && (
+                <div className="mb-4 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+                  <div className="flex items-center gap-2 mb-2"><SparklesIcon size={12} style={{ color: 'var(--wiki-text)' }} /><span className="text-xs font-medium text-wiki-text">AI 图片识别</span></div>
+                  {showDoc.imageDescriptions.map((desc, i) => (<div key={i} className="text-xs text-wiki-text2 mb-1">· {desc}</div>))}
+                </div>
+              )}
 
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-            {showDoc.content && (
-              <div className="max-w-3xl mx-auto">
+              {showDoc.file_path ? (
+                <div>
+                  {isImageFile(showDoc.file_path) ? (
+                    <img src={showDoc.file_path} alt={showDoc.title} className="max-w-full rounded-lg" />
+                  ) : isTextFile(showDoc.file_path) && fileContent && fileContent !== '__loading__' ? (
+                    <pre className="text-sm text-wiki-text2 whitespace-pre-wrap">{fileContent}</pre>
+                  ) : isTextFile(showDoc.file_path) && fileContent === '__loading__' ? (
+                    <div className="flex items-center justify-center py-16 text-sm text-wiki-text3">加载中...</div>
+                  ) : isTextFile(showDoc.file_path) && fileContent === null ? (
+                    <div className="flex items-center justify-center py-16 text-sm" style={{ color: '#ef4444' }}>内容加载失败</div>
+                  ) : /\.pdf$/i.test(showDoc.file_path) ? (
+                    <iframe src={showDoc.file_path} className="w-full min-h-[700px] rounded-xl" style={{ border: '1px solid var(--wiki-border)' }} />
+                  ) : /\.(docx?|xlsx?|pptx?)$/i.test(showDoc.file_path) ? (
+                    previewHtml ? (
+                      <div className="prose prose-sm max-w-none text-wiki-text2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-wiki-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-wiki-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-wiki-surface2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+                        <FileTextIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
+                        <p className="mt-3 text-sm font-medium text-wiki-text">{showDoc.title}</p>
+                        <p className="mt-1 text-xs text-wiki-text3">{showDoc.type} · {showDoc.size}</p>
+                        <div className="mt-2 text-xs text-wiki-text3">正在加载预览...</div>
+                      </div>
+                    )
+                  ) : (
+                    <iframe src={showDoc.file_path} className="w-full min-h-[500px] rounded-xl" style={{ border: '1px solid var(--wiki-border)', background: '#fff' }} />
+                  )}
+                </div>
+              ) : showDoc.content ? (
                 <div className="prose prose-sm max-w-none text-wiki-text2 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_p]:leading-relaxed [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-wiki-accent [&_blockquote]:pl-4 [&_code]:bg-wiki-surface2 [&_code]:px-1 [&_code]:rounded text-sm" dangerouslySetInnerHTML={{ __html: showDoc.content }} />
-              </div>
-            )}
-          </div>
+              ) : null}
+            </div>
 
-          <div className="p-4" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-            <button onClick={handleAnalyzeImages} disabled={analyzing} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: analyzing ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: analyzing ? 'var(--wiki-text2)' : 'var(--wiki-bg)' }}>
-              <SparklesIcon size={14} /><span>{analyzing ? '识别中...' : 'AI 识别图片'}</span>
-            </button>
+            {/* Bottom Action */}
+            <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+              <button onClick={handleAISummary} disabled={analyzing} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: analyzing ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: analyzing ? 'var(--wiki-text2)' : 'var(--wiki-bg)' }}>
+                <SparklesIcon size={14} /><span>{analyzing ? '分析中...' : 'AI 总结'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Full-panel Editor */}
+      {/* Modal Editor */}
       {showEdit && (
-        <div className="flex-1 flex flex-col" style={{ borderLeft: '1px solid var(--wiki-border)' }}>
+        <div className="fixed inset-0 z-50" style={{ background: 'rgba(0,0,0,0.3)' }} onClick={() => setShowEdit(null)}>
+          <div className="fixed inset-y-0 right-0 w-2/5 flex flex-col z-50" style={{ background: 'var(--wiki-surface)', borderLeft: '1px solid var(--wiki-border)', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
           {/* Editor Header */}
-          <div className="flex items-center gap-3 p-4" style={{ borderBottom: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
+          <div className="flex items-center gap-3 px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
             <div className="flex-1">
               <input
                 value={showEdit.title || ''}
@@ -540,13 +626,14 @@ export default function Knowledge() {
             </div>
           </div>
         </div>
+        </div>
       )}
 
       
       {/* Category Edit Modal */}
       {showCategoryEdit !== null && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-[400px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="w-[520px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-base font-semibold text-wiki-text">{showCategoryEdit.id ? '编辑分类' : '新增分类'}</span>
               <button onClick={() => setShowCategoryEdit(null)}><XIcon size={18} style={{ color: 'var(--wiki-text3)' }} /></button>
@@ -558,21 +645,28 @@ export default function Knowledge() {
               </div>
               <div>
                 <label className="text-xs text-wiki-text3 mb-1.5 block">图标</label>
-                <select value={showCategoryEdit.icon || 'FolderIcon'} onChange={(e) => setShowCategoryEdit(prev => ({ ...prev!, icon: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-                  <option value="FolderIcon">文件夹</option>
-                  <option value="FileTextIcon">文档</option>
-                  <option value="LinkIcon">链接</option>
-                  <option value="BookOpenIcon">书籍</option>
-                  <option value="BookmarkIcon">书签</option>
-                  <option value="GridIcon">网格</option>
-                </select>
+                <div className="flex gap-2">
+                  {[
+                    { icon: 'FolderIcon', label: '文件夹', el: FolderIcon },
+                    { icon: 'FileTextIcon', label: '文档', el: FileTextIcon },
+                    { icon: 'LinkIcon', label: '链接', el: LinkIcon },
+                    { icon: 'BookOpenIcon', label: '书籍', el: BookOpenIcon },
+                    { icon: 'BookmarkIcon', label: '书签', el: BookmarkIcon },
+                    { icon: 'GridIcon', label: '网格', el: GridIcon },
+                  ].map(({ icon, label, el: IconComp }) => (
+                    <button key={icon} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, icon }))} className="flex flex-col items-center gap-1 p-3 rounded-xl transition-all" style={{ background: showCategoryEdit.icon === icon ? 'var(--wiki-surface2)' : 'transparent', border: showCategoryEdit.icon === icon ? '1px solid var(--wiki-border)' : '1px solid transparent', width: 80 }}>
+                      <IconComp size={20} style={{ color: showCategoryEdit.icon === icon ? showCategoryEdit.color || 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+                      <span className="text-[10px]" style={{ color: 'var(--wiki-text3)' }}>{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="text-xs text-wiki-text3 mb-1.5 block">颜色</label>
                 <div className="flex gap-2">
-                  {['#333333', '#666666', '#999999', '#10b981', '#f59e0b', '#ef4444'].map(c => (
-                    <button key={c} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, color: c }))} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c, border: showCategoryEdit.color === c ? '2px solid var(--wiki-text)' : '2px solid transparent' }}>
-                      {showCategoryEdit.color === c && <span style={{ color: c === '#333333' || c === '#666666' || c === '#999999' ? '#fff' : 'var(--wiki-bg)', fontSize: 12 }}>✓</span>}
+                  {['var(--wiki-text)', '#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'].map(c => (
+                    <button key={c} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, color: c }))} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: c === 'var(--wiki-text)' ? 'var(--wiki-surface2)' : c, border: showCategoryEdit.color === c ? '2px solid var(--wiki-text)' : '2px solid transparent' }}>
+                      {showCategoryEdit.color === c && <span style={{ color: c === '#333333' || c === '#666666' || c === '#10b981' ? '#fff' : '#fff', fontSize: 12 }}>✓</span>}
                     </button>
                   ))}
                 </div>

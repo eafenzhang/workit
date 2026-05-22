@@ -7,10 +7,12 @@
     "start": "node src/index.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "sql.js": "^1.12.0",
     "cors": "^2.8.5",
-    "multer": "^1.4.5-lts.2"
+    "express": "^4.21.2",
+    "mammoth": "^1.12.0",
+    "multer": "^1.4.5-lts.2",
+    "sql.js": "^1.12.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.5"

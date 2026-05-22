@@ -11,52 +11,32 @@ export default function Settings() {
   const [latestVersion, setLatestVersion] = useState('');
   const [downloadProgress, setDownloadProgress] = useState(0);
 
-  const currentVersion = (window as any).electronAPI?.getVersion?.() || '1.0.0';
+  const api = (window as any).electronAPI;
+  const currentVersion = api?.getVersion?.() || '1.0.0';
+
+  useEffect(() => {
+    api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
+    api?.onUpdateReady?.(() => setUpdateStatus('ready'));
+  }, []);
 
   const checkForUpdate = async () => {
+    if (!api) return;
     setUpdateStatus('checking');
     try {
-      const res = await fetch('https://api.github.com/repos/eafenzhang/workit/releases/latest');
-      const data = await res.json();
-      const tag = data.tag_name?.replace('v', '') || '';
-      if (tag && tag !== currentVersion) {
-        setLatestVersion(tag);
-        setUpdateStatus('available');
-      } else {
-        setUpdateStatus('idle');
-      }
-    } catch {
-      setUpdateStatus('error');
-    }
+      const result = await api.checkForUpdate();
+      if (result?.available) { setLatestVersion(result.version); setUpdateStatus('available'); }
+      else setUpdateStatus('idle');
+    } catch { setUpdateStatus('error'); }
   };
 
   const downloadUpdate = async () => {
+    if (!api) return;
     setUpdateStatus('downloading');
     setDownloadProgress(0);
-    try {
-      const res = await fetch('https://api.github.com/repos/eafenzhang/workit/releases/latest');
-      const data = await res.json();
-      const asset = data.assets?.find((a: any) => a.name.endsWith('.exe'));
-      if (asset?.browser_download_url) {
-        // Simulate download progress for demo
-        for (let i = 0; i <= 100; i += 10) {
-          await new Promise(r => setTimeout(r, 200));
-          setDownloadProgress(i);
-        }
-        // In real implementation, trigger electron-builder update or direct download
-        window.open(asset.browser_download_url, '_blank');
-        setUpdateStatus('ready');
-      } else {
-        setUpdateStatus('error');
-      }
-    } catch {
-      setUpdateStatus('error');
-    }
+    try { await api.downloadUpdate(); } catch { setUpdateStatus('error'); }
   };
 
-  useEffect(() => {
-    checkForUpdate();
-  }, []);
+  const installUpdate = () => { api?.installUpdate(); };
 
   const toggleQuickCollect = (enabled: boolean) => {
     setQuickCollect(enabled);
@@ -99,7 +79,7 @@ export default function Settings() {
                     className="flex flex-col items-center gap-2 p-4 rounded-lg transition-all relative"
                     style={{
                       background: isActive ? 'var(--wiki-surface2)' : 'transparent',
-                      border: isActive ? '1px solid var(--wiki-accent)' : '1px solid var(--wiki-border)',
+                      border: '1px solid var(--wiki-border)',
                     }}
                   >
                     <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ background: isActive ? 'var(--wiki-accent)' : 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
@@ -151,7 +131,7 @@ export default function Settings() {
           <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/icon.png" alt="Workit" className="w-12 h-12" />
+                <img src="/icon.png" alt="Workit" className="w-12 h-12 object-contain" />
               </div>
               <div className="flex-1">
                 <div className="text-lg font-bold text-wiki-text">Workit</div>
@@ -182,8 +162,13 @@ export default function Settings() {
                 </div>
               )}
               {updateStatus === 'ready' && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-                  <CheckIcon size={12} /> 已下载
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                    <CheckIcon size={12} /> 已下载
+                  </div>
+                  <button onClick={installUpdate} className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                    立即安装
+                  </button>
                 </div>
               )}
               {updateStatus === 'error' && (

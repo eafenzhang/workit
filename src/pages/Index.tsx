@@ -64,7 +64,7 @@ export default function Index({ children = null }: IndexProps) {
   const tabLabel: Record<string, string> = {
     dashboard: `总览`,
     requirements: `需求采集`,
-    knowledge: `知识库`,
+    knowledge: `知识`,
     insights: `洞察分析`,
     mcp: `MCP工具`,
     model: `模型`,
@@ -93,7 +93,7 @@ export default function Index({ children = null }: IndexProps) {
         >
           <div className="flex items-center gap-2 text-xs text-wiki-text3">
             <span>Workit</span>
-            <span style={{ color: 'rgba(99,112,196,0.5)' }}>/</span>
+            <span style={{ color: 'var(--wiki-text3)' }}>/</span>
             <span style={{ color: 'var(--wiki-text2)' }}>{tabLabel[activeTab]}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function Index({ children = null }: IndexProps) {
                 }}
               />
               <span style={{ color: backendOnline ? '#10b981' : '#ef4444' }}>
-                {backendOnline ? '网络已连接' : '网络已断开'}
+                {backendOnline ? '连接中' : '已离线'}
               </span>
             </div>
           </div>

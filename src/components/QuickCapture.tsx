@@ -17,9 +17,10 @@ export default function QuickCapture() {
   const [module, setModule] = useState('用户端');
   const [priority, setPriority] = useState('中');
   const [enabled, setEnabled] = useState(false);
-  const lastPastedText = useRef<string>('');
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     try {
       const saved = localStorage.getItem('quick_collect_enabled');
       setEnabled(saved === 'true');
@@ -29,41 +30,62 @@ export default function QuickCapture() {
       setEnabled(customEvent.detail.enabled);
     };
     window.addEventListener('quick-collect-toggle', handler);
-    return () => window.removeEventListener('quick-collect-toggle', handler);
+    return () => { window.removeEventListener('quick-collect-toggle', handler); mountedRef.current = false; };
   }, []);
 
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
-      const text = e.clipboardData?.getData('text') || '';
-      const items = e.clipboardData?.items;
-      let hasImages = false;
+      const dt = e.clipboardData;
+      if (!dt) return;
 
+      // Safely read clipboard formats (some browsers throw on unsupported types)
+      let text = '', html = '';
+      try { text = dt.getData('text/plain') || ''; } catch {}
+      try { html = dt.getData('text/html') || ''; } catch {}
+
+      const items = dt.items;
+      const imagePromises: Promise<string>[] = [];
+
+      // 1. Raw image items (screenshots, file copies)
       if (items) {
         for (const item of Array.from(items)) {
           if (item.type.startsWith('image/')) {
-            hasImages = true;
             const file = item.getAsFile();
             if (file) {
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                const base64 = ev.target?.result as string;
-                setCaptured(prev => ({ text: prev?.text || text || '', images: [...(prev?.images || []), base64] }));
-              };
-              reader.readAsDataURL(file);
+              imagePromises.push(new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => { if (mountedRef.current) resolve(reader.result as string); };
+                reader.onerror = () => resolve('');
+                reader.readAsDataURL(file);
+              }));
             }
           }
         }
       }
 
-      if (text && text !== lastPastedText.current) {
-        lastPastedText.current = text;
-        setCaptured(prev => ({ ...prev, text, images: prev?.images || [] }));
-        setShowModal(true);
-        setDesc('');
-      } else if (hasImages) {
-        setShowModal(true);
-        setDesc('');
+      // 2. Image URLs from HTML (web page copies)
+      if (html) {
+        const imgRx = /<img[^>]+src\s*=\s*["']([^"']+?)["']/gi;
+        let m;
+        while ((m = imgRx.exec(html)) !== null) {
+          const s = m[1];
+          if (s && (s.startsWith('data:') || s.startsWith('http'))) {
+            imagePromises.push(Promise.resolve(s));
+          }
+        }
       }
+
+      if (!text && imagePromises.length === 0) return;
+
+      Promise.all(imagePromises).then(resolved => {
+        if (!mountedRef.current) return;
+        setCaptured(prev => ({
+          text: text || prev?.text || '',
+          images: [...new Set([...(prev?.images || []), ...resolved.filter(Boolean)])],
+        }));
+        setShowModal(true);
+        setDesc('');
+      });
     };
     document.addEventListener('paste', handler);
     return () => document.removeEventListener('paste', handler);
@@ -100,12 +122,13 @@ export default function QuickCapture() {
   };
 
   const handleSubmit = async () => {
+    const hasImages = captured?.images && captured.images.length > 0;
     const finalDesc = captured?.text ? (desc ? `${captured.text}\n${desc}` : captured.text) : desc;
-    if (!finalDesc.trim()) {
-      toast.error('请输入需求描述');
+    if (!finalDesc.trim() && !hasImages) {
+      toast.error('请输入需求描述或添加图片');
       return;
     }
-    const title = finalDesc.substring(0, 30) || '新建需求';
+    const title = finalDesc.substring(0, 30) || (hasImages ? '图片需求' : '新建需求');
     try {
       const res = await fetch('/api/requirements', {
         method: 'POST',
@@ -114,15 +137,22 @@ export default function QuickCapture() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('需求采集成功，正在分析...');
         setShowModal(false);
         setCaptured(null);
         setDesc('');
         if (data.id) {
-          fetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
-            .then(r => r.json())
-            .then(() => toast.success('AI 分析完成'))
-            .catch(() => {});
+          // Only auto-analyze if model is configured
+          fetch('/api/models').then(r => r.json()).then(models => {
+            if (Array.isArray(models) && models.length > 0) {
+              toast.success('需求采集成功，正在分析...');
+              fetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
+                .then(r => r.json())
+                .then(() => toast.success('AI 分析完成'))
+                .catch(() => {});
+            } else {
+              toast.success('需求采集成功');
+            }
+          }).catch(() => toast.success('需求采集成功'));
         }
       }
     } catch {

@@ -8,7 +8,7 @@
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/kill-port.cjs && vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
@@ -63,6 +63,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.3",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.555.0",
@@ -116,6 +117,7 @@
       "public/**/*",
       "backend/**/*"
     ],
+    "asar": false,
     "win": {
       "target": [
         {
@@ -132,6 +134,12 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "eafenzhang",
+      "repo": "workit",
+      "releaseType": "release"
     }
   }
 }

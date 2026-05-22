@@ -20,4 +20,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     electron: process.versions.electron,
   },
   getVersion,
+  checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateProgress: (cb) => ipcRenderer.on('update-download-progress', (_, p) => cb(p)),
+  onUpdateReady: (cb) => ipcRenderer.on('update-ready', () => cb()),
 });

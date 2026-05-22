@@ -11,7 +11,7 @@ interface SidebarProps {
 const navItems = [
   { id: 'dashboard', label: `总览`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
   { id: 'requirements', label: `需求`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
-  { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
+  { id: 'knowledge', label: `知识`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
   { id: 'insights', label: `洞察`, icon: LightbulbIcon, color: '#10b981', path: '/insights' },
   { id: 'model', label: `模型`, icon: CpuIcon, color: '#f59e0b', path: '/model' },
   { id: 'mcp', label: `MCP`, icon: ServerIcon, color: '#ef4444', path: '/mcp' },
@@ -65,13 +65,17 @@ export default function Sidebar({
         }}
       >
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0 overflow-hidden"
+          className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0"
         >
-          <img src="/icon.png" alt="Workit" className="w-8 h-8" />
+          <img src="/icon.png" alt="Workit" className="w-8 h-8 object-contain" />
         </div>
-        {!collapsed && (
-          <div className="text-sm font-bold text-wiki-text tracking-wide">Workit</div>
-        )}
+        <div className="text-sm font-bold text-wiki-text tracking-wide whitespace-nowrap overflow-hidden transition-all duration-300" style={{
+          width: collapsed ? '0px' : 'auto',
+          opacity: collapsed ? 0 : 1,
+          flexShrink: collapsed ? 1 : 0,
+          flexGrow: collapsed ? 0 : 1,
+          pointerEvents: collapsed ? 'none' : 'auto',
+        }}>Workit</div>
       </div>
 
       {/* Nav */}
@@ -170,9 +174,9 @@ export default function Sidebar({
         >
           {/* Avatar — clean geometric user silhouette */}
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
             style={{
-              background: 'var(--wiki-accent)',
+              background: 'color-mix(in srgb, var(--wiki-accent) 20%, var(--wiki-surface))',
               position: collapsed ? 'absolute' : 'relative',
               left: collapsed ? '50%' : 'auto',
               top: collapsed ? '50%' : 'auto',
@@ -180,7 +184,7 @@ export default function Sidebar({
               zIndex: 1,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-bg)' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }}>
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>

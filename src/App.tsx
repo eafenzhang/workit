@@ -11,6 +11,7 @@ import Model from './pages/Model';
 import Messages from './pages/Messages';
 import QuickCapture from './components/QuickCapture';
 import { useState, useEffect } from 'react';
+import { AuthProvider } from './context/AuthContext';
 
 const App = () => {
   const [quickCollectEnabled, setQuickCollectEnabled] = useState(false);
@@ -30,6 +31,7 @@ const App = () => {
   }, []);
 
   return (
+    <AuthProvider>
     <HashRouter>
       <Routes>
         <Route path="/" element={<Index><Dashboard /></Index>} />
@@ -44,6 +46,7 @@ const App = () => {
       <Toaster position="top-right" />
       {quickCollectEnabled && <QuickCapture />}
     </HashRouter>
+    </AuthProvider>
   );
 };
 
