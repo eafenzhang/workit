@@ -96,33 +96,23 @@ async function createWindow() {
   });
 }
 
-// Auto-updater (production only)
-if (!isDev) {
-  autoUpdater.autoDownload = false;
-  autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
+// Auto-updater (production only, configured after app ready)
+function setupAutoUpdater() {
+  try {
+    autoUpdater.autoDownload = false;
+    autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
 
-  ipcMain.handle('check-for-update', async () => {
-    const result = await autoUpdater.checkForUpdates();
-    return { available: result?.updateInfo?.version !== app.getVersion(), version: result?.updateInfo?.version };
-  });
-
-  ipcMain.handle('download-update', async () => {
-    autoUpdater.downloadUpdate();
-    return true;
-  });
-
-  ipcMain.handle('install-update', () => {
-    autoUpdater.quitAndInstall();
-    return true;
-  });
-
-  autoUpdater.on('download-progress', (p) => {
-    mainWindow?.webContents.send('update-download-progress', Math.round(p.percent));
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    mainWindow?.webContents.send('update-ready');
-  });
+    ipcMain.handle('check-for-update', async () => {
+      const result = await autoUpdater.checkForUpdates();
+      return { available: result?.updateInfo?.version !== app.getVersion(), version: result?.updateInfo?.version };
+    });
+    ipcMain.handle('download-update', async () => { autoUpdater.downloadUpdate(); return true; });
+    ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
+    autoUpdater.on('download-progress', (p) => mainWindow?.webContents.send('update-download-progress', Math.round(p.percent)));
+    autoUpdater.on('update-downloaded', () => mainWindow?.webContents.send('update-ready'));
+  } catch (e) {
+    console.error('[Workit] AutoUpdater init failed:', e.message);
+  }
 }
 
 // Security: Prevent new windows
@@ -134,7 +124,10 @@ app.on('web-contents-created', (_, contents) => {
   });
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  if (!isDev) setupAutoUpdater();
+  return createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
