@@ -39,7 +39,7 @@ function setupIPC() {
           stdio: ['ignore', 'pipe', 'pipe'],
           env: { ...process.env, PORT: '3001' },
         });
-        backendProcess.stderr?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
+        backendProcess.stderr?.on('data', (d) => { try { process.stdout.write(`[backend] ${d}`); } catch {} });
         backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
         backendProcess.on('exit', () => { backendProcess = null; });
 
