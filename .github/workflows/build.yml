@@ -55,26 +55,25 @@ jobs:
 
       - name: Upload Installer
         if: success()
+        shell: bash
         run: |
-          $RELEASE_ID = "${{ steps.create_release.outputs.id }}"
-          Write-Host "Release ID: $RELEASE_ID"
+          RELEASE_ID="${{ steps.create_release.outputs.id }}"
+          UPLOAD_URL="https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets"
+          echo "Upload URL: $UPLOAD_URL"
 
-          # Find .exe files in release root (not in subdirs like win-unpacked)
-          $exeFiles = Get-ChildItem "release" -Filter "*.exe" -File -Recurse | Where-Object { $_.FullName -notmatch "win-unpacked" }
-          Write-Host "Found: $($exeFiles.Count) installer file(s)"
-          foreach ($f in $exeFiles) {
-            $name = $f.Name
-            $size = $f.Length
-            Write-Host "Uploading $name ($size bytes)..."
-            $headers = @{ Authorization = "token $env:GITHUB_TOKEN"; Content-Type = "application/octet-stream" }
-            $fileBytes = [System.IO.File]::ReadAllBytes($f.FullName)
-            $uploadUrl = "https://uploads.github.com/repos/eafenzhang/workit/releases/$RELEASE_ID/assets?name=$name"
-            try {
-              Invoke-RestMethod -Uri $uploadUrl -Method POST -Headers $headers -Body $fileBytes
-              Write-Host "Uploaded: $name"
-            } catch {
-              Write-Host "Error uploading $name : $_"
-            }
-          }
+          # Find .exe files in release root (not in win-unpacked)
+          for f in release/*.exe; do
+            if [[ "$f" != *"win-unpacked"* ]]; then
+              BASENAME=$(basename "$f")
+              SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
+              echo "Uploading $BASENAME (${SIZE} bytes)..."
+              curl -s -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: application/octet-stream" \
+                --data-binary "@$f" \
+                "$UPLOAD_URL?name=$BASENAME"
+              echo "Uploaded: $BASENAME"
+            fi
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
