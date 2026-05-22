@@ -1,6 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
-import { spawn } from 'child_process';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { autoUpdater } from 'electron-updater';
@@ -35,31 +34,24 @@ function checkBackend() {
 }
 
 async function startBackend() {
-  const running = await checkBackend();
-  if (running) {
+  if (await checkBackend()) {
     console.log('[Workit] Backend already running');
     return true;
   }
 
-  console.log('[Workit] Starting backend...');
-  const appPath = app.getAppPath();
-  const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
-
+  console.log('[Workit] Starting backend in-process...');
   try {
-    bunProcess = spawn('node', [backendPath], {
-      cwd: path.join(appPath, 'backend'),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PORT: String(BACKEND_PORT) },
-    });
+    // Import and run the Express server directly in Electron's main process
+    const backendPath = path.join(app.getAppPath(), 'backend', 'src', 'index.js');
+    // Set PORT before importing so the backend listens on the right port
+    process.env.PORT = String(BACKEND_PORT);
+    await import(backendPath);
+    console.log('[Workit] Backend module loaded');
 
-    bunProcess.stdout?.on('data', (d) => process.stdout.write(`[backend] ${d}`));
-    bunProcess.stderr?.on('data', (d) => process.stderr.write(`[backend] ${d}`));
-    bunProcess.on('error', (e) => console.error('[Workit] Backend spawn error:', e.message));
-
-    // Wait up to 15s for backend to be ready
-    for (let i = 0; i < 30; i++) {
+    // Wait up to 10s for the server to be ready
+    for (let i = 0; i < 20; i++) {
       if (await checkBackend()) {
-        console.log('[Workit] Backend ready');
+        console.log('[Workit] Backend ready on port', BACKEND_PORT);
         return true;
       }
       await new Promise(r => setTimeout(r, 500));
@@ -67,7 +59,6 @@ async function startBackend() {
   } catch (e) {
     console.error('[Workit] Backend failed to start:', e.message);
   }
-
   return false;
 }
 
@@ -92,16 +83,15 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Load static files
-    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-    mainWindow.loadFile(indexPath);
-    // Start backend if node is available (silently skip if not found)
-    try {
-      const { execSync } = await import('child_process');
-      execSync('node --version', { stdio: 'ignore', windowsHide: true });
-      startBackend();
-    } catch {
-      // Node not available - backend won't start, app works without API
+    // Start backend in-process, then load UI from backend HTTP server
+    // (backend serves frontend static files + API on same origin)
+    const backendOk = await startBackend();
+    if (backendOk) {
+      mainWindow.loadURL(`${BACKEND_URL}/`);
+    } else {
+      // Fallback: load static files directly (no API access)
+      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+      mainWindow.loadFile(indexPath);
     }
   }
 
