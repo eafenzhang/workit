@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BotIcon, DatabaseIcon, LightbulbIcon, LayoutDashboardIcon, ChevronRightIcon, SparklesIcon, SettingsIcon, BellIcon, ChevronLeftIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
+import { APP_ICON } from '../constants/icon';
 
 interface SidebarProps {
   activeTab?: string;
@@ -65,13 +66,9 @@ export default function Sidebar({
         }}
       >
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0 overflow-hidden"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--wiki-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-            <line x1="12" y1="22.08" x2="12" y2="12" />
-          </svg>
+          <img src={APP_ICON} alt="Workit" className="w-8 h-8 object-contain" />
         </div>
         <div className="text-sm font-bold text-wiki-text tracking-wide whitespace-nowrap overflow-hidden transition-all duration-300" style={{
           width: collapsed ? '0px' : 'auto',

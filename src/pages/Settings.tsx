@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon, ServerIcon, WifiIcon, WifiOffIcon, LinkIcon, UnplugIcon, LoaderIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { APP_ICON } from '../constants/icon';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -170,7 +171,6 @@ export default function Settings() {
         </section>
 
         {/* Server Section */}
-        {isElectron && (
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <ServerIcon size={18} style={{ color: 'var(--wiki-accent)' }} />
@@ -270,7 +270,6 @@ export default function Settings() {
             )}
           </div>
         </section>
-        )}
 
         {/* About Section */}
         <section>
@@ -281,12 +280,8 @@ export default function Settings() {
 
           <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ background: 'var(--wiki-accent)' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--wiki-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                  <line x1="12" y1="22.08" x2="12" y2="12" />
-                </svg>
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src={APP_ICON} alt="Workit" className="w-12 h-12 object-contain" />
               </div>
               <div className="flex-1">
                 <div className="text-lg font-bold text-wiki-text">Workit</div>
