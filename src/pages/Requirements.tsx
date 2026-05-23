@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState, useRef } from 'react';
 import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, TagIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -75,7 +76,7 @@ export default function Requirements() {
   }, [search, filterStatus, filterPriority, filterCategory, filterAssignee, dateFrom, dateTo]);
 
   const fetchRequirements = () => {
-    fetch('/api/requirements')
+    apiFetch('/api/requirements')
       .then(r => r.json())
       .then(data => setRequirements(data));
   };
@@ -98,7 +99,7 @@ export default function Requirements() {
   const handleCreate = () => {
     if (!form.desc.trim()) { toast.error('请输入需求描述'); return; }
     const title = form.desc.substring(0, 30) || '新建需求';
-    fetch('/api/requirements', {
+    apiFetch('/api/requirements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, desc: form.desc, module: form.module, priority: form.priority, images, creator: user?.nickname || '' }),
@@ -108,7 +109,7 @@ export default function Requirements() {
       fetchRequirements();
       if (data.id) {
         // Auto-analyze only if model is configured
-        fetch('/api/models').then(r => r.json()).then(models => {
+        apiFetch('/api/models').then(r => r.json()).then(models => {
           if (Array.isArray(models) && models.length > 0) {
             toast.success('需求创建成功，正在分析...');
             fetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
@@ -163,7 +164,7 @@ export default function Requirements() {
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch('/api/requirements/upload-image', { method: 'POST', body: formData });
+      const res = await apiFetch('/api/requirements/upload-image', { method: 'POST', body: formData });
       const data = await res.json();
       setImages(prev => [...prev, data.url]);
       toast.success('图片上传成功');

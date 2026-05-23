@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState } from 'react';
 import { SparklesIcon, DatabaseIcon, LightbulbIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, AlertCircleIcon, ZapIcon, ArrowUpRightIcon, ActivityIcon } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -44,9 +45,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/dashboard/stats').then(r => r.json()),
-      fetch('/api/dashboard/activities').then(r => r.json()),
-      fetch('/api/dashboard/charts').then(r => r.json()),
+      apiFetch('/api/dashboard/stats').then(r => r.json()),
+      apiFetch('/api/dashboard/activities').then(r => r.json()),
+      apiFetch('/api/dashboard/charts').then(r => r.json()),
     ]).then(([statsData, activitiesData, chartsData]) => {
       setStats(statsData);
       setActivities(activitiesData);

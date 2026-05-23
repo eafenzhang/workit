@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useState, useEffect, useRef } from 'react';
 import { ClipboardIcon, XIcon, SparklesIcon, ClipboardPasteIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -106,7 +107,7 @@ export default function QuickCapture() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch('/api/documents/upload', { method: 'POST', body: formData });
+      const res = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.url) {
         setCaptured(prev => prev ? { ...prev, images: [...prev.images, data.url] } : null);
@@ -130,7 +131,7 @@ export default function QuickCapture() {
     }
     const title = finalDesc.substring(0, 30) || (hasImages ? '图片需求' : '新建需求');
     try {
-      const res = await fetch('/api/requirements', {
+      const res = await apiFetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, desc: finalDesc, module, priority, images: captured?.images || [] }),
@@ -142,7 +143,7 @@ export default function QuickCapture() {
         setDesc('');
         if (data.id) {
           // Only auto-analyze if model is configured
-          fetch('/api/models').then(r => r.json()).then(models => {
+          apiFetch('/api/models').then(r => r.json()).then(models => {
             if (Array.isArray(models) && models.length > 0) {
               toast.success('需求采集成功，正在分析...');
               fetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })

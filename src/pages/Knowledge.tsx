@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState, useRef } from 'react';
 import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, DownloadIcon, StarIcon, ClockIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, SaveIcon, BoldIcon, ItalicIcon, ListIcon as ListIcon2, HeadingIcon, Undo2Icon, Redo2Icon, QuoteIcon, CodeIcon, ImageIcon, Link2Icon, ImagePlusIcon, GlobeIcon, MonitorIcon, FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -120,14 +121,14 @@ export default function Knowledge() {
 
   // Fetch category counts + actual storage stats
   useEffect(() => {
-    fetch('/api/documents')
+    apiFetch('/api/documents')
       .then(r => r.json())
       .then(data => {
         const counts: Record<string, number> = {};
         data.forEach((d: Document) => { counts[d.category] = (counts[d.category] || 0) + 1; });
         setAllDocCounts(counts);
       });
-    fetch('/api/storage/stats')
+    apiFetch('/api/storage/stats')
       .then(r => r.json())
       .then(s => { const usedGB = (s.usedBytes || 0) / (1024 * 1024 * 1024); setStorageStats({ usedBytes: usedGB, totalBytes: 1.0 }); })
       .catch(() => setStorageStats({ usedBytes: 0, totalBytes: 1.0 }));
@@ -184,12 +185,12 @@ export default function Knowledge() {
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const res = await fetch('/api/documents/upload', { method: 'POST', body: formData });
+        const res = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.url) {
           const ext = file.name.split('.').pop()?.toUpperCase() || 'DOC';
           const docType = ['PDF','MD','HTML','DOC','DOCX','XLS','XLSX','CSV','PPT','PPTX','ODT','ODS','ODP','RTF','TXT','JPG','PNG','GIF','BMP','WEBP'].includes(ext) ? ext : 'DOC';
-          await fetch('/api/documents', {
+          await apiFetch('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -285,7 +286,7 @@ export default function Knowledge() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch('/api/documents/upload', { method: 'POST', body: formData });
+      const res = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.url) {
         editor?.chain().focus().setImage({ src: data.url, alt: file.name }).run();

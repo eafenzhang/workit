@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState } from 'react';
 import { ServerIcon, PlusIcon, TrashIcon, XIcon, KeyIcon, CheckCircleIcon, CircleIcon, PlugIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,7 +26,7 @@ export default function MCP() {
   }, []);
 
   const fetchServers = () => {
-    fetch('/api/mcp')
+    apiFetch('/api/mcp')
       .then(r => r.json())
       .then(data => setServers(data))
       .catch(() => {}); // 后端未就绪时静默处理
@@ -175,7 +176,7 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
 
   const handleSubmit = () => {
     if (!name || !command) return;
-    fetch('/api/mcp', {
+    apiFetch('/api/mcp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

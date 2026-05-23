@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
@@ -20,7 +21,7 @@ export default function Index({ children = null }: IndexProps) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
 
-      fetch('/api/requirements', { method: 'HEAD', signal: controller.signal })
+      apiFetch('/api/requirements', { method: 'HEAD', signal: controller.signal })
         .then(() => {
           clearTimeout(timeout);
           if (!cancelled) setBackendOnline(true);

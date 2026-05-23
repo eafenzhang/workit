@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.invoke('window-close'),
   onMaximizeChange: (cb) => ipcRenderer.on('window-maximized-change', (_, v) => cb(v)),
   isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  // Database operations
+  dbQuery: (method, table, args) => ipcRenderer.invoke('db-query', method, table, args),
+  dbUpload: (table, fileData) => ipcRenderer.invoke('db-upload', table, fileData),
   // Auto-update
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
@@ -29,8 +32,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateProgress: (cb) => ipcRenderer.on('update-download-progress', (_, p) => cb(p)),
   onUpdateReady: (cb) => ipcRenderer.on('update-ready', () => cb()),
   // Server connection
-  startLocalBackend: () => ipcRenderer.invoke('start-local-backend'),
-  stopLocalBackend: () => ipcRenderer.invoke('stop-local-backend'),
   connectServer: (url) => ipcRenderer.invoke('connect-server', url),
   disconnectServer: () => ipcRenderer.invoke('disconnect-server'),
 });

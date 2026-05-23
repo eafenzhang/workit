@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState } from 'react';
 import { CpuIcon, PlusIcon, TrashIcon, StarIcon, CheckCircleIcon, KeyIcon, RefreshCwIcon, XIcon, ChevronDownIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -48,7 +49,7 @@ export default function Model() {
 
   const fetchModels = () => {
     setLoading(true);
-    fetch('/api/models').then(r => r.json()).then(data => {
+    apiFetch('/api/models').then(r => r.json()).then(data => {
       setModels(Array.isArray(data) ? data : []);
       setLoading(false);
     }).catch(() => { setLoading(false); }); // 后端未就绪时静默处理

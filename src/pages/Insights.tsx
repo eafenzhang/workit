@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useEffect, useState } from 'react';
 import { LightbulbIcon, TrendingUpIcon, BarChart2Icon, PieChartIcon, RefreshCwIcon, DownloadIcon, SparklesIcon, ArrowUpRightIcon, ArrowDownRightIcon, BrainCircuitIcon, ZapIcon, AlertTriangleIcon } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
@@ -17,9 +18,9 @@ export default function Insights() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/insights/kpis').then(r => r.json()),
-      fetch('/api/insights/charts').then(r => r.json()),
-      fetch('/api/insights/ai-insights').then(r => r.json()),
+      apiFetch('/api/insights/kpis').then(r => r.json()),
+      apiFetch('/api/insights/charts').then(r => r.json()),
+      apiFetch('/api/insights/ai-insights').then(r => r.json()),
     ]).then(([kpisData, chartsData, insightsData]) => {
       setKpis(kpisData);
       setCharts(chartsData);

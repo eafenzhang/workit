@@ -1,9 +1,8 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'path';
-import { spawn } from 'child_process';
-import http from 'http';
 import fs from 'fs';
-import { fileURLToPath, pathToFileURL } from 'url';
+import http from 'http';
+import { fileURLToPath } from 'url';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -16,8 +15,7 @@ let logPath = '';
 function log(msg, err) {
   try {
     if (!logPath) logPath = path.join(app.getPath('userData'), 'workit.log');
-    const line = `[${new Date().toISOString()}] ${msg}${err ? ': ' + (err.message || err) : ''}\n`;
-    fs.appendFileSync(logPath, line);
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}${err ? ': ' + (err.message || err) : ''}\n`);
   } catch {}
 }
 
@@ -26,54 +24,80 @@ process.on('uncaughtException', (err) => {
   try { fs.appendFileSync(logPath, (err.stack || '') + '\n'); } catch {}
   app.exit(1);
 });
-process.on('unhandledRejection', (err) => {
-  log('UNHANDLED REJECTION', err);
-});
-
-const BACKEND_PORT = process.env.PORT || 3001;
-const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
+process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
 
 let mainWindow;
-let backendProcess = null;
+let db = null;
 
-async function startBackendInProcess() {
-  log('Starting backend in-process...');
-  try {
-    const appPath = app.getAppPath();
-    // Backend files are unpacked outside asar
-    const unpackedPath = appPath.endsWith('.asar') ? appPath + '.unpacked' : appPath;
-    const backendPath = path.join(unpackedPath, 'backend', 'src', 'index.js');
-    process.env.PORT = String(BACKEND_PORT);
-    log('Importing backend from: ' + backendPath);
-    await import(pathToFileURL(backendPath).href);
-    log('Backend module loaded');
-    // Wait for server to be ready
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 500));
-      try {
-        await new Promise((resolve, reject) => {
-          http.get(`${BACKEND_URL}/api/health`, () => resolve())
-            .on('error', reject).setTimeout(500, reject);
-        });
-        log('Backend ready on port', BACKEND_PORT);
-        return true;
-      } catch {}
-    }
-    log('Backend start timeout');
-    return false;
-  } catch (e) {
-    log('Backend start failed', e);
-    return false;
+// ========== Database ==========
+async function initDatabase() {
+  const SQL = await import('sql.js');
+  const initSqlJs = SQL.default || SQL;
+  const SQLJS = await initSqlJs();
+  const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
+
+  if (fs.existsSync(dbPath)) {
+    db = new SQLJS.Database(fs.readFileSync(dbPath));
+  } else {
+    db = new SQLJS.Database();
   }
+
+  db.run(`CREATE TABLE IF NOT EXISTS requirements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT DEFAULT '',
+    category TEXT DEFAULT '产品', module TEXT DEFAULT '用户端', priority TEXT DEFAULT '中',
+    status TEXT DEFAULT '待评估', assignee TEXT DEFAULT '', creator TEXT DEFAULT '',
+    due_date TEXT DEFAULT '', tags TEXT DEFAULT '[]', images TEXT DEFAULT '[]',
+    ai_summary TEXT DEFAULT '', ai_tags TEXT DEFAULT '[]', image_descriptions TEXT DEFAULT '[]',
+    workflow_handler TEXT DEFAULT '', workflow_history TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now','localtime')), updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT DEFAULT 'guide',
+    type TEXT DEFAULT 'MD', size TEXT DEFAULT '', views INTEGER DEFAULT 0, stars INTEGER DEFAULT 0,
+    date TEXT DEFAULT '', tags TEXT DEFAULT '[]', featured INTEGER DEFAULT 0,
+    file_path TEXT DEFAULT '', content TEXT DEFAULT '', image_descriptions TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now','localtime')), updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS mcp_servers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL,
+    command TEXT NOT NULL, args TEXT DEFAULT '[]', env TEXT DEFAULT '{}', enabled INTEGER DEFAULT 0,
+    config TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS models (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, provider TEXT NOT NULL,
+    base_url TEXT DEFAULT '', api_key TEXT DEFAULT '', model_id TEXT NOT NULL,
+    enabled INTEGER DEFAULT 0, is_default INTEGER DEFAULT 0, config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+
+  // Migrate old status
+  db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
+  saveDb();
+  log('Database initialized at ' + dbPath);
 }
 
-function setupWindowEvents(win) {
-  win.on('maximize', () => win.webContents?.send('window-maximized-change', true));
-  win.on('unmaximize', () => win.webContents?.send('window-maximized-change', false));
+function saveDb() {
+  if (!db) return;
+  const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
+  fs.writeFileSync(dbPath, db.export());
 }
 
+function query(sql, params = []) {
+  const stmt = db.prepare(sql);
+  if (params.length > 0) stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.get());
+  stmt.free();
+  return rows;
+}
+
+function run(sql, params = []) {
+  db.run(sql, params);
+  saveDb();
+}
+
+// ========== IPC Handlers ==========
 function setupIPC() {
-  // Window controls
   ipcMain.handle('window-minimize', () => mainWindow?.minimize());
   ipcMain.handle('window-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
@@ -81,149 +105,310 @@ function setupIPC() {
   ipcMain.handle('window-close', () => mainWindow?.close());
   ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() || false);
 
-  ipcMain.handle('start-local-backend', async () => {
-    if (backendProcess) return { success: true, message: 'Already running' };
-    const appPath = app.getAppPath();
-    const backendPath = path.join(appPath, 'backend', 'src', 'index.js');
-    return new Promise((resolve) => {
-      try {
-        backendProcess = spawn('node', [backendPath], {
-          cwd: path.join(appPath, 'backend'),
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, PORT: String(BACKEND_PORT) },
-        });
-        backendProcess.stderr?.on('data', (d) => { try { log('[backend] ' + d.toString().trim()); } catch {} });
-        backendProcess.on('error', (e) => { backendProcess = null; resolve({ success: false, error: e.message }); });
-        backendProcess.on('exit', () => { backendProcess = null; });
-
-        let attempts = 0;
-        const poll = () => {
-          attempts++;
-          if (attempts > 30) { resolve({ success: false, error: '启动超时' }); return; }
-          http.get('http://localhost:3001/api/health', () => resolve({ success: true }))
-            .on('error', () => setTimeout(poll, 500));
-        };
-        poll();
-      } catch (e) {
-        resolve({ success: false, error: e.message });
-      }
-    });
+  ipcMain.handle('db-query', (_, method, table, args) => {
+    try {
+      const { data, id } = args || {};
+      return handleDbQuery(method, table, data, id);
+    } catch (e) { return { error: e.message }; }
   });
 
-  ipcMain.handle('stop-local-backend', () => {
-    if (backendProcess) { backendProcess.kill(); backendProcess = null; }
-    return { success: true };
+  ipcMain.handle('db-upload', async (_, table, fileData) => {
+    try {
+      const uploadsDir = path.join(app.getPath('userData'), 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const filename = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = '.bin';
+      const filePath = path.join(uploadsDir, filename + ext);
+      fs.writeFileSync(filePath, Buffer.from(fileData));
+      const url = `/uploads/${filename}${ext}`;
+      return { url };
+    } catch (e) { return { error: e.message }; }
   });
 
   ipcMain.handle('connect-server', (_, url) => {
-    const targetUrl = url || 'http://localhost:3001';
-    if (mainWindow && mainWindow.webContents) mainWindow.loadURL(targetUrl);
+    if (mainWindow?.webContents) mainWindow.loadURL(url);
     return { success: true };
   });
-
   ipcMain.handle('disconnect-server', () => {
-    if (mainWindow && mainWindow.webContents) {
-      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-      mainWindow.loadFile(indexPath);
-    }
+    if (mainWindow?.webContents) mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
     return { success: true };
   });
+}
+
+function handleDbQuery(method, table, data, id) {
+  switch (table) {
+    case 'requirements':
+      return handleRequirements(method, data, id);
+    case 'documents':
+      return handleDocuments(method, data, id);
+    case 'mcp':
+      return handleMcp(method, data, id);
+    case 'models':
+      return handleModels(method, data, id);
+    case 'dashboard/stats': {
+      const allReq = query('SELECT status FROM requirements');
+      const total = allReq.length;
+      const statusCounts = {};
+      allReq.forEach(r => { const s = r[0] || ''; statusCounts[s] = (statusCounts[s] || 0) + 1; });
+      const docCount = query('SELECT COUNT(*) FROM documents')[0][0];
+      return { totalRequirements: total, statusCounts, totalDocuments: docCount };
+    }
+    case 'dashboard/activities': {
+      const rows = query("SELECT id, title, status, updated_at FROM requirements ORDER BY updated_at DESC LIMIT 10");
+      return rows.map(r => ({ id: r[0], title: r[1], status: r[2], time: r[3] }));
+    }
+    case 'insights/kpis': {
+      const total = query('SELECT COUNT(*) FROM requirements')[0][0];
+      const completed = query("SELECT COUNT(*) FROM requirements WHERE status='已完成'")[0][0];
+      const docCount = query('SELECT COUNT(*) FROM documents')[0][0];
+      return [
+        { label: '需求总数', value: String(total), change: '0', up: true },
+        { label: '完成率', value: total ? Math.round(completed/total*100) + '%' : '0%', change: '0%', up: true },
+        { label: '知识文档', value: String(docCount), change: '0', up: true },
+      ];
+    }
+    case 'insights/charts': {
+      const cats = query('SELECT category, COUNT(*) FROM documents GROUP BY category');
+      const types = query('SELECT type, COUNT(*) FROM documents GROUP BY type');
+      return {
+        barData: cats.map(r => ({ name: r[0]||'未分类', value: r[1] })),
+        pieData: types.map(r => ({ name: r[0]||'未知', value: r[1] })),
+      };
+    }
+    case 'insights/ai-insights':
+      return [];
+    case 'storage/stats': {
+      try {
+        const uploadsDir = path.join(app.getPath('userData'), 'uploads');
+        if (!fs.existsSync(uploadsDir)) return { usedBytes: 0 };
+        const files = fs.readdirSync(uploadsDir);
+        let usedBytes = 0;
+        // Only count files referenced by documents
+        const docPaths = new Set(query("SELECT file_path FROM documents WHERE file_path != ''").map(r => path.basename(r[0])));
+        for (const f of files) { if (docPaths.has(f)) usedBytes += fs.statSync(path.join(uploadsDir, f)).size; }
+        return { usedBytes };
+      } catch { return { usedBytes: 0 }; }
+    }
+    default: return { error: 'Unknown table: ' + table };
+  }
+}
+
+function handleRequirements(method, data, id) {
+  switch (method) {
+    case 'GET':
+      if (id) {
+        const r = query('SELECT * FROM requirements WHERE id = ?', [id]);
+        if (!r.length) return { error: 'Not found' };
+        return formatReq(r[0]);
+      }
+      const all = query('SELECT * FROM requirements ORDER BY created_at DESC');
+      return all.map(formatReq);
+    case 'POST': {
+      const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images } = data || {};
+      run(`INSERT INTO requirements (title, description, category, module, priority, assignee, creator, due_date, tags, images) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [title||'', desc||'', category||'', module||'用户端', priority||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[])]);
+      const id = query('SELECT last_insert_rowid()')[0][0];
+      return { success: true, id };
+    }
+    case 'PUT': {
+      if (!id) return { error: 'No id' };
+      const { title, desc, category, module, priority, status, assignee, creator, dueDate, tags, images, workflow_handler } = data || {};
+      // Workflow history
+      let workflowHistory = [];
+      try { workflowHistory = JSON.parse(query('SELECT workflow_history FROM requirements WHERE id = ?', [id])[0]?.[0] || '[]'); } catch {}
+      if (status) {
+        const old = query('SELECT status FROM requirements WHERE id = ?', [id])[0]?.[0];
+        if (old && old !== status) workflowHistory.push({ from: old, to: status, handler: workflow_handler || '', time: new Date().toLocaleString('zh-CN') });
+      }
+      run(`UPDATE requirements SET title=?, description=?, category=?, module=?, priority=?, status=?, assignee=?, creator=?, due_date=?, tags=?, images=?, workflow_history=?, updated_at=datetime('now','localtime') WHERE id=?`,
+        [title||'', desc||'', category||'', module||'用户端', priority||'', status||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]), JSON.stringify(workflowHistory), id]);
+      return { success: true };
+    }
+    case 'DELETE': {
+      if (id) run('DELETE FROM requirements WHERE id = ?', [id]);
+      return { success: true };
+    }
+    default: return { error: 'Unknown method' };
+  }
+}
+
+function handleDocuments(method, data, id) {
+  switch (method) {
+    case 'GET':
+      if (id) {
+        const r = query('SELECT * FROM documents WHERE id = ?', [id]);
+        if (!r.length) return { error: 'Not found' };
+        run('UPDATE documents SET views = views + 1 WHERE id = ?', [id]);
+        return formatDoc(r[0]);
+      }
+      return query('SELECT id, title, category, type, size, views, stars, date, tags, featured, created_at FROM documents ORDER BY created_at DESC').map(r => ({
+        id: r[0], title: r[1], category: r[2], type: r[3], size: r[4], views: r[5], stars: r[6], date: r[7], tags: JSON.parse(r[8] || '[]'), featured: r[9] === 1,
+      }));
+    case 'POST': {
+      const { title, category, type, size, date, tags, featured, content, file_path } = data || {};
+      run('INSERT INTO documents (title, category, type, size, date, tags, featured, content, file_path) VALUES (?,?,?,?,?,?,?,?,?)',
+        [title||'', category||'guide', type||'MD', size||'', date||'', JSON.stringify(tags||[]), featured ? 1 : 0, content||'', file_path||'']);
+      return { success: true, id: query('SELECT last_insert_rowid()')[0][0] };
+    }
+    case 'PUT': {
+      if (!id) return { error: 'No id' };
+      const { title, category, type, size, date, tags, featured, content } = data || {};
+      run("UPDATE documents SET title=?, category=?, type=?, size=?, date=?, tags=?, featured=?, content=?, updated_at=datetime('now','localtime') WHERE id=?",
+        [title||'', category||'', type||'', size||'', date||'', JSON.stringify(tags||[]), featured?1:0, content||'', id]);
+      return { success: true };
+    }
+    case 'DELETE': {
+      if (id) run('DELETE FROM documents WHERE id = ?', [id]);
+      return { success: true };
+    }
+    default: return { error: 'Unknown method' };
+  }
+}
+
+function handleMcp(method, data, id) {
+  switch (method) {
+    case 'GET':
+      return query('SELECT * FROM mcp_servers ORDER BY id DESC').map(r => ({
+        id: r[0], name: r[1], type: r[2], command: r[3], args: JSON.parse(r[4]||'[]'), env: JSON.parse(r[5]||'{}'),
+        enabled: !!r[6], config: JSON.parse(r[7]||'{}'), createdAt: r[8],
+      }));
+    case 'POST': {
+      const { name, type, command, args, env, config } = data || {};
+      run('INSERT INTO mcp_servers (name, type, command, args, env, config) VALUES (?,?,?,?,?,?)',
+        [name||'', type||'', command||'', JSON.stringify(args||[]), JSON.stringify(env||{}), JSON.stringify(config||{})]);
+      return { success: true };
+    }
+    case 'PUT': {
+      if (!id) return { error: 'No id' };
+      const { enabled, config, name, type, command, args, env } = data || {};
+      const fields = []; const vals = [];
+      if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
+      if (config !== undefined) { fields.push('config=?'); vals.push(JSON.stringify(config)); }
+      if (name !== undefined) { fields.push('name=?'); vals.push(name); }
+      if (type !== undefined) { fields.push('type=?'); vals.push(type); }
+      if (command !== undefined) { fields.push('command=?'); vals.push(command); }
+      if (args !== undefined) { fields.push('args=?'); vals.push(JSON.stringify(args)); }
+      if (env !== undefined) { fields.push('env=?'); vals.push(JSON.stringify(env)); }
+      if (fields.length) { vals.push(id); run(`UPDATE mcp_servers SET ${fields.join(',')} WHERE id=?`, vals); }
+      return { success: true };
+    }
+    case 'DELETE': { if (id) run('DELETE FROM mcp_servers WHERE id = ?', [id]); return { success: true }; }
+    default: return { error: 'Unknown method' };
+  }
+}
+
+function handleModels(method, data, id) {
+  switch (method) {
+    case 'GET':
+      return query('SELECT * FROM models ORDER BY is_default DESC, id DESC').map(r => ({
+        id: r[0], name: r[1], provider: r[2], baseUrl: r[3], apiKey: r[4] ? '******' + r[4].slice(-4) : '',
+        hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], createdAt: r[9],
+      }));
+    case 'POST': {
+      const { name, provider, baseUrl, apiKey, modelId } = data || {};
+      const displayName = name || (provider + ' - ' + modelId);
+      run('INSERT INTO models (name, provider, base_url, api_key, model_id) VALUES (?,?,?,?,?)',
+        [displayName, provider||'', baseUrl||'', apiKey||'', modelId||'']);
+      return { success: true, id: query('SELECT last_insert_rowid()')[0][0] };
+    }
+    case 'PUT': {
+      if (!id) return { error: 'No id' };
+      const { is_default, apiKey, modelId, name } = data || {};
+      if (is_default) run('UPDATE models SET is_default = 0');
+      const fields = []; const vals = [];
+      if (name !== undefined) { fields.push('name=?'); vals.push(name); }
+      if (apiKey !== undefined) { fields.push('api_key=?'); vals.push(apiKey); }
+      if (modelId !== undefined) { fields.push('model_id=?'); vals.push(modelId); }
+      if (is_default !== undefined) { fields.push('is_default=?'); vals.push(is_default?1:0); }
+      if (fields.length) { vals.push(id); run(`UPDATE models SET ${fields.join(',')} WHERE id=?`, vals); }
+      return { success: true };
+    }
+    case 'DELETE': { if (id) run('DELETE FROM models WHERE id = ?', [id]); return { success: true }; }
+    default: return { error: 'Unknown method' };
+  }
+}
+
+function formatReq(r) {
+  return {
+    id: r[0], title: r[1], desc: r[2], category: r[3], module: r[4]||'用户端', priority: r[5],
+    status: r[6], assignee: r[7], creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
+    images: JSON.parse(r[11]||'[]'), aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
+    imageDescriptions: JSON.parse(r[14]||'[]'), workflowHandler: r[15]||'',
+    workflowHistory: JSON.parse(r[16]||'[]'), createdAt: r[17], updatedAt: r[18],
+  };
+}
+
+function formatDoc(r) {
+  return {
+    id: r[0], title: r[1], category: r[2], type: r[3], size: r[4],
+    views: r[5]+1, stars: r[6], date: r[7], tags: JSON.parse(r[8]||'[]'),
+    featured: r[9]===1, file_path: r[10]||'', content: r[11]||'',
+    imageDescriptions: JSON.parse(r[12]||'[]'), createdAt: r[13],
+  };
+}
+
+function setupWindowEvents(win) {
+  win.on('maximize', () => win.webContents?.send('window-maximized-change', true));
+  win.on('unmaximize', () => win.webContents?.send('window-maximized-change', false));
 }
 
 async function createWindow() {
   log('Creating window...');
   try {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
+    width: 1200, height: 800, minWidth: 900, minHeight: 600,
     title: 'Workit',
     icon: path.join(app.getAppPath(), 'public', 'icon.ico'),
     frame: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true,
-      preload: path.join(app.getAppPath(), 'electron', 'preload.js'),
-    },
+    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: path.join(app.getAppPath(), 'electron', 'preload.js') },
   });
 
   setupWindowEvents(mainWindow);
+  setupIPC();
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    const backendOk = await startBackendInProcess();
-    if (backendOk) {
-      log('Loading from backend: ' + BACKEND_URL);
-      try { await mainWindow.loadURL(`${BACKEND_URL}/`); }
-      catch (e) { log('loadURL failed, falling back to file', e); await mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html')); }
-    } else {
-      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-      log('Loading file: ' + indexPath);
-      try { await mainWindow.loadFile(indexPath); }
-      catch (e) { log('loadFile failed', e); }
-    }
+    mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
   }
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   mainWindow.on('closed', () => { mainWindow = null; });
   log('Window created successfully');
   } catch (e) { log('Window creation failed', e); }
 }
 
-// Auto-updater (production only, configured after app ready)
-function setupAutoUpdater() {
+app.whenReady().then(async () => {
+  log('App ready');
   try {
-    autoUpdater.autoDownload = false;
-    autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
+    await initDatabase();
+    setupAutoUpdater();
+    return createWindow();
+  } catch (e) { log('App ready handler failed', e); }
+});
 
+function setupAutoUpdater() {
+  if (isDev) return;
+  try {
     ipcMain.handle('check-for-update', async () => {
-      const result = await autoUpdater.checkForUpdates();
-      return { available: result?.updateInfo?.version !== app.getVersion(), version: result?.updateInfo?.version };
+      const r = await autoUpdater.checkForUpdates();
+      return { available: r?.updateInfo?.version !== app.getVersion(), version: r?.updateInfo?.version };
     });
     ipcMain.handle('download-update', async () => { await autoUpdater.downloadUpdate(); return true; });
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
     autoUpdater.on('download-progress', (p) => mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent)));
     autoUpdater.on('update-downloaded', () => mainWindow?.webContents?.send('update-ready'));
-  } catch (e) {
-    console.error('[Workit] AutoUpdater init failed:', e.message);
-  }
+    autoUpdater.autoDownload = false;
+    autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
+  } catch (e) { log('AutoUpdater init failed', e); }
 }
 
-// Security: Prevent new windows
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith(BACKEND_URL)) {
-      event.preventDefault();
-    }
+    if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith('http://localhost')) event.preventDefault();
   });
 });
 
-app.whenReady().then(() => {
-  log('App ready');
-  try {
-    if (!isDev) setupAutoUpdater();
-    setupIPC();
-    return createWindow();
-  } catch (e) { log('App ready handler failed', e); }
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

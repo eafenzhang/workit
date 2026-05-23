@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon, ServerIcon, WifiIcon, WifiOffIcon, LinkIcon, UnplugIcon, LoaderIcon } from 'lucide-react';
@@ -25,7 +26,7 @@ export default function Settings() {
     api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
     api?.onUpdateReady?.(() => setUpdateStatus('ready'));
     // Check if backend is already running
-    fetch('/api/health').then(r => r.json()).then(() => setBackendStatus('running')).catch(() => {});
+    apiFetch('/api/health').then(r => r.json()).then(() => setBackendStatus('running')).catch(() => {});
   }, []);
 
   const startBackend = async () => {
