@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Auto-bump version
+        shell: bash
+        run: node -e "const p=require('./package.json'); p.version='1.0.'+process.env.GITHUB_RUN_NUMBER; require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+
       - name: Get version
         id: version
         shell: bash
@@ -50,7 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          tag_name: v${{ steps.version.outputs.version }}
           name: Workit v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
