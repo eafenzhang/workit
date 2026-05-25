@@ -60,7 +60,7 @@
   "build": {
     "appId": "ai.workit.app",
     "productName": "Workit",
-    "icon": "public/icon.png",
+    "icon": "public/icon.ico",
     "directories": {
       "output": "release"
     },
@@ -82,8 +82,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "installerIcon": "public/icon.png",
-      "uninstallerIcon": "public/icon.png"
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico"
     },
     "publish": {
       "provider": "github",
