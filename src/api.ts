@@ -3,11 +3,11 @@ const api = (window as any).electronAPI;
 let ipcLogged = false;
 let preloadWarned = false;
 
-async function call(method: string, table: string, data?: any, id?: number | string): Promise<any> {
+async function call(method: string, table: string, data?: any, id?: number | string, query?: Record<string, string>): Promise<any> {
   if (api) {
     // Electron mode: use IPC
     if (!ipcLogged) { console.log('[api] Using Electron IPC path (electronAPI detected)'); ipcLogged = true; }
-    return api.dbQuery(method, table, { data, id });
+    return api.dbQuery(method, table, { data, id, query });
   }
   // Dev mode: use fetch
   if (!preloadWarned) { console.warn('[api] electronAPI not found — preload may not be loaded, falling back to fetch'); preloadWarned = true; }
@@ -38,10 +38,20 @@ function uploadImage(formData: FormData): Promise<any> {
 // Returns a Response-like object so existing .json() calls work
 export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
   if (api) {
-    const parts = url.replace('/api/', '').split('/');
+    // Split off query string (?featured=true), only parse the path
+    const [urlPath, queryStr] = url.split('?');
+    const parts = urlPath.replace('/api/', '').split('/');
     const method = opts?.method || 'GET';
     let body = undefined;
     if (opts?.body && typeof opts.body === 'string') body = JSON.parse(opts.body);
+    // Parse query string into object
+    const query: Record<string, string> = {};
+    if (queryStr) {
+      for (const pair of queryStr.split('&')) {
+        const [k, v] = pair.split('=');
+        if (k) query[decodeURIComponent(k)] = v !== undefined ? decodeURIComponent(v) : 'true';
+      }
+    }
     // Build full table path (e.g. 'dashboard/stats', 'insights/kpis')
     let table = parts[0];
     let id: number | undefined = undefined;
@@ -52,7 +62,7 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
         table = parts.join('/');
       }
     }
-    const data = await call(method, table, body, id);
+    const data = await call(method, table, body, id, Object.keys(query).length ? query : undefined);
     return { json: () => Promise.resolve(data), data };
   }
   const res = await fetch(url, opts);

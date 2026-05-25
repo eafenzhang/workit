@@ -13,6 +13,7 @@ interface StatCard {
 }
 
 interface Activity {
+  id: number;
   icon: string;
   color: string;
   text: string;
@@ -36,7 +37,11 @@ const iconMap: Record<string, typeof SparklesIcon> = {
   CheckCircleIcon, ActivityIcon, ClockIcon, AlertCircleIcon, TrendingUpIcon,
 };
 
-export default function Dashboard() {
+interface DashboardProps {
+  onOpenSubTab?: (title: string, type: string, extra?: { reqId?: number }) => void;
+}
+
+export default function Dashboard({ onOpenSubTab }: DashboardProps) {
   const [stats, setStats] = useState<StatCard[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [areaData, setAreaData] = useState<AreaData[]>([]);
@@ -62,10 +67,10 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-wiki-text">智能体工作台</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">智能体工作台</h1>
           <p className="text-wiki-text2 text-sm mt-1">欢迎回来，今日数据一切正常</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
           <ClockIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
           <span style={{ color: 'var(--wiki-text2)' }}>最后同步：刚刚</span>
         </div>
@@ -78,11 +83,11 @@ export default function Dashboard() {
           return (
             <div
               key={card.label}
-              className="flex-1 p-5 rounded-2xl relative overflow-hidden"
+              className="flex-1 p-5 rounded-lg relative overflow-hidden"
               style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: card.bg }}>
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: card.bg }}>
                   <Icon size={18} style={{ color: card.color }} />
                 </div>
                 <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>
@@ -90,7 +95,7 @@ export default function Dashboard() {
                   <span>{card.change}</span>
                 </div>
               </div>
-              <div className="text-2xl font-bold text-wiki-text mb-1">{card.value}</div>
+              <div className="text-xl font-semibold text-wiki-text mb-1">{card.value}</div>
               <div className="text-xs text-wiki-text3">{card.label}</div>
               <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full opacity-10" style={{ background: card.color }} />
             </div>
@@ -101,7 +106,7 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="flex gap-4">
         {/* Area Chart */}
-        <div className="flex-1 p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex-1 p-6 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-sm font-semibold text-wiki-text">活动趋势</h3>
@@ -140,7 +145,7 @@ export default function Dashboard() {
         </div>
 
         {/* Bar Chart */}
-        <div className="w-[280px] p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="w-[280px] p-6 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <div className="mb-5">
             <h3 className="text-sm font-semibold text-wiki-text">需求分类</h3>
             <p className="text-xs text-wiki-text3 mt-0.5">按业务领域分布</p>
@@ -157,7 +162,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Activity */}
-      <div className="p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+      <div className="p-6 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-wiki-text">最近动态</h3>
           <button className="text-xs" style={{ color: 'var(--wiki-text2)' }}>查看全部</button>
@@ -166,8 +171,11 @@ export default function Dashboard() {
           {activities.map((activity, i) => {
             const Icon = iconMap[activity.icon] || SparklesIcon;
             return (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-wiki-surface2 transition-colors">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${activity.color}18` }}>
+              <div key={i}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-wiki-surface2 transition-colors cursor-pointer"
+                onClick={() => onOpenSubTab?.(activity.text.substring(0, 20), 'requirements-detail', { reqId: activity.id })}
+              >
+                <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: `${activity.color}18` }}>
                   <Icon size={13} style={{ color: activity.color }} />
                 </div>
                 <span className="text-sm text-wiki-text2 flex-1">{activity.text}</span>

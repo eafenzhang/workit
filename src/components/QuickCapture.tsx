@@ -146,7 +146,7 @@ export default function QuickCapture() {
           apiFetch('/api/models').then(r => r.json()).then(models => {
             if (Array.isArray(models) && models.length > 0) {
               toast.success('需求采集成功，正在分析...');
-              fetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
+              apiFetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
                 .then(r => r.json())
                 .then(() => toast.success('AI 分析完成'))
                 .catch(() => {});
@@ -166,7 +166,7 @@ export default function QuickCapture() {
       {enabled && (
       <button
         onClick={handleFloatClick}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40 transition-all duration-200 hover:scale-110"
+        className="fixed bottom-6 right-6 w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-40 transition-all duration-200 hover:scale-110 opacity-80 hover:opacity-100"
         style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
         title="快速采集"
       >
@@ -176,21 +176,21 @@ export default function QuickCapture() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-[520px] max-h-[85vh] overflow-y-auto p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="w-[400px] max-h-[85vh] overflow-y-auto p-5 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}>
+                <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}>
                   <SparklesIcon size={14} style={{ color: 'var(--wiki-bg)' }} />
                 </div>
                 <span className="text-sm font-semibold text-wiki-text">快速采集</span>
               </div>
-              <button onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
+              <button onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }} className="p-1 rounded-md hover:bg-wiki-surface2">
                 <XIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
 
             {captured?.text && (
-              <div className="mb-4 p-4 rounded-xl max-h-40 overflow-y-auto" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+              <div className="mb-4 p-4 rounded-lg max-h-40 overflow-y-auto" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                 <div className="text-xs text-wiki-text3 mb-1">剪贴板文本</div>
                 <div className="text-sm text-wiki-text leading-relaxed whitespace-pre-wrap">{captured.text}</div>
               </div>
@@ -213,7 +213,7 @@ export default function QuickCapture() {
             <div className="mb-4">
               <label className="text-xs text-wiki-text3 mb-1.5 block">上传图片</label>
               <input type="file" accept="image/*" className="hidden" id="capture-image-input" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUploadImage(file); e.target.value = ''; }} />
-              <button onClick={() => document.getElementById('capture-image-input')?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+              <button onClick={() => document.getElementById('capture-image-input')?.click()} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
                 <ClipboardIcon size={12} /> 添加图片
               </button>
             </div>
@@ -221,7 +221,7 @@ export default function QuickCapture() {
             <div className="mb-4">
               <label className="text-xs text-wiki-text3 mb-1.5 block">补充描述</label>
               <textarea
-                className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none resize-none"
+                className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none resize-none"
                 style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                 rows={3}
                 placeholder="补充更多信息..."
@@ -234,7 +234,7 @@ export default function QuickCapture() {
               <div className="flex-1">
                 <label className="text-xs text-wiki-text3 mb-1.5 block">模块</label>
                 <select
-                  className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none"
                   style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={module}
                   onChange={e => setModule(e.target.value)}
@@ -245,7 +245,7 @@ export default function QuickCapture() {
               <div className="flex-1">
                 <label className="text-xs text-wiki-text3 mb-1.5 block">优先级</label>
                 <select
-                  className="w-full px-3 py-2.5 rounded-xl text-sm text-wiki-text outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none"
                   style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={priority}
                   onChange={e => setPriority(e.target.value)}
@@ -258,14 +258,14 @@ export default function QuickCapture() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }}
-                className="flex-1 py-2.5 rounded-xl text-sm"
+                className="flex-1 py-2.5 rounded-lg text-sm"
                 style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
               >
                 取消
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium"
                 style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}
               >
                 提交需求

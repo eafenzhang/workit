@@ -1,6 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
-import { APP_ICON } from '../constants/icon';
 
 function getAPI() {
   return (window as any).electronAPI;
@@ -27,14 +26,14 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
   return (
     <div
-      className="flex items-center h-10 flex-shrink-0 select-none w-full"
-      style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}
+      className="flex items-center h-10 flex-shrink-0 select-none w-full group"
+      style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)', WebkitAppRegion: 'drag' } as any}
     >
       {/* Sidebar toggle button */}
       <button
         onClick={onToggleSidebar}
-        className="w-9 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors flex-shrink-0"
-        style={{ WebkitAppRegion: 'no-drag' } as any}
+        className="h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors flex-shrink-0"
+        style={{ width: '52px', WebkitAppRegion: 'no-drag' } as any}
       >
         {sidebarCollapsed
           ? <PanelLeftOpenIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
@@ -42,14 +41,8 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
         }
       </button>
 
-      {/* Drag region: Logo + name */}
-      <div className="flex items-center gap-2 pl-1 h-full flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>
-        <img src={APP_ICON} alt="Workit" className="w-4 h-4 object-contain" />
-        <span className="text-xs font-medium" style={{ color: 'var(--wiki-text2)' }}>Workit</span>
-      </div>
-
       {/* Tab bar slot — children render here */}
-      <div className="flex items-center h-full flex-1 overflow-hidden" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="flex items-center h-full flex-1 overflow-hidden">
         {children}
       </div>
 

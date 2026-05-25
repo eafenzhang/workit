@@ -1,5 +1,5 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import { BotIcon, DatabaseIcon, LightbulbIcon, LayoutDashboardIcon, SparklesIcon, SettingsIcon, BellIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { DatabaseIcon, LightbulbIcon, LayoutDashboardIcon, SparklesIcon, SettingsIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
 
 interface SidebarProps {
   activeTab?: string;
@@ -9,9 +9,9 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: `总览`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
-  { id: 'requirements', label: `需求`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
-  { id: 'knowledge', label: `知识`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
+  { id: 'dashboard', label: `首页`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
+  { id: 'requirements', label: `采集库`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
+  { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
   { id: 'insights', label: `洞察`, icon: LightbulbIcon, color: '#10b981', path: '/insights' },
   { id: 'model', label: `模型`, icon: CpuIcon, color: '#f59e0b', path: '/model' },
   { id: 'mcp', label: `MCP`, icon: ServerIcon, color: '#ef4444', path: '/mcp' },
@@ -25,11 +25,9 @@ export default function Sidebar({
   onCollapsedChange = () => {},
 }: SidebarProps) {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const isActive = (item: typeof navItems[0]) => {
-    if (item.id === 'dashboard') return location.pathname === '/';
-    return location.pathname.startsWith(item.path);
+    return item.id === activeTab;
   };
 
   const handleNavClick = (item: typeof navItems[0]) => {
@@ -42,22 +40,23 @@ export default function Sidebar({
     onTabChange('settings');
   };
 
-  const width = collapsed ? '72px' : '220px';
-  const minWidth = collapsed ? '72px' : '220px';
+  const width = collapsed ? '0px' : '52px';
+  const minWidth = collapsed ? '0px' : '52px';
 
   return (
     <aside
       data-cmp="Sidebar"
-      className="flex flex-col h-full relative transition-all duration-300 ease-in-out"
+      className="flex flex-col h-full relative transition-[width,min-width] duration-300 ease-in-out"
       style={{
         width,
         minWidth,
         background: 'var(--wiki-surface)',
-        borderRight: '1px solid var(--wiki-border)',
+        borderRight: collapsed ? 'none' : '1px solid var(--wiki-border)',
+        overflow: 'hidden',
       }}
     >
       {/* Nav */}
-      <nav className="flex flex-col gap-1 px-3 pt-6 flex-1 overflow-y-auto scrollbar-thin">
+      <nav className="flex flex-col gap-1 px-1.5 pt-6 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin" style={{ width: '52px', minWidth: '52px' }}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item);
@@ -65,35 +64,28 @@ export default function Sidebar({
             <button
               key={item.id}
               onClick={() => handleNavClick(item)}
-              className="flex items-center px-3 rounded-xl transition-all duration-200 w-full text-left relative group"
+              title={item.label}
+              className="flex items-center px-1.5 rounded-lg transition-all duration-200 text-left relative group"
               style={{
-                background: active ? 'var(--wiki-surface2)' : 'transparent',
-                border: active ? '1px solid var(--wiki-border)' : '1px solid transparent',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                gap: collapsed ? '0' : '0.75rem',
+                background: 'transparent',
+                border: '1px solid transparent',
+                justifyContent: 'center',
+                gap: '0',
                 height: '44px',
+                width: '100%',
               }}
             >
               <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
                 style={{
-                  background: active ? 'var(--wiki-text)' : 'var(--wiki-surface2)',
+                  background: active ? 'rgba(0,0,0,0.08)' : 'transparent',
                 }}
               >
-                <Icon size={14} style={{ color: active ? 'var(--wiki-bg)' : 'var(--wiki-text3)' }} />
+                <Icon size={14} style={{ color: active ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
               </div>
-              <span
-                className="text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300"
-                style={{
-                  color: active ? 'var(--wiki-text)' : 'var(--wiki-text2)',
-                  width: collapsed ? '0px' : 'auto',
-                  opacity: collapsed ? 0 : 1,
-                  flexShrink: collapsed ? 1 : 0,
-                  flexGrow: collapsed ? 0 : 1,
-                  pointerEvents: collapsed ? 'none' : 'auto',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              {/* Hover tooltip */}
+              <span className="absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
+                style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
                 {item.label}
               </span>
             </button>
@@ -103,83 +95,43 @@ export default function Sidebar({
         {/* Settings */}
         <button
           onClick={handleSettingsClick}
-          className="flex items-center px-3 rounded-xl transition-all duration-200 w-full text-left hover:bg-wiki-surface2 relative group"
+          title="设置"
+          className="flex items-center px-1.5 rounded-lg transition-all duration-200 text-left hover:bg-wiki-surface2 relative group"
           style={{
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            gap: collapsed ? '0' : '0.75rem',
-            background: location.pathname === '/settings'
-              ? 'var(--wiki-surface2)'
-              : 'transparent',
-            border: location.pathname === '/settings' ? '1px solid var(--wiki-border)' : '1px solid transparent',
+            justifyContent: 'center',
+            gap: '0',
+            background: 'transparent',
+            border: '1px solid transparent',
             height: '44px',
+            width: '100%',
           }}
         >
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
+            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
             style={{
-              background: location.pathname === '/settings' ? 'var(--wiki-text)' : 'var(--wiki-surface2)',
+              background: activeTab === 'settings' ? 'rgba(0,0,0,0.08)' : 'transparent',
             }}
           >
-            <SettingsIcon size={14} style={{ color: location.pathname === '/settings' ? 'var(--wiki-bg)' : 'var(--wiki-text3)' }} />
+            <SettingsIcon size={14} style={{ color: activeTab === 'settings' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
           </div>
-          <span
-            className="text-sm whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300"
-            style={{
-              color: location.pathname === '/settings' ? 'var(--wiki-text)' : 'var(--wiki-text2)',
-              width: collapsed ? '0px' : 'auto',
-              opacity: collapsed ? 0 : 1,
-              flexShrink: collapsed ? 1 : 0,
-              flexGrow: collapsed ? 0 : 1,
-              pointerEvents: collapsed ? 'none' : 'auto',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            设置
-          </span>
+          <span className="absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
+            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>设置</span>
         </button>
       </nav>
 
       {/* User */}
-      <div className="px-3 pb-4">
+      <div className="px-1.5 pb-4">
         <div
-          className="relative flex items-center gap-3 px-3 rounded-xl transition-all duration-200"
-          style={{
-            background: 'var(--wiki-surface2)',
-            border: '1px solid var(--wiki-border)',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            height: '44px',
-          }}
+          className="relative flex items-center justify-center px-1.5 rounded-lg transition-all duration-200"
+          style={{ height: '44px' }}
         >
-          {/* Avatar — clean geometric user silhouette */}
           <div
-            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{
-              background: 'color-mix(in srgb, var(--wiki-accent) 20%, var(--wiki-surface))',
-              position: collapsed ? 'absolute' : 'relative',
-              left: collapsed ? '50%' : 'auto',
-              top: collapsed ? '50%' : 'auto',
-              transform: collapsed ? 'translate(-50%, -50%)' : 'none',
-              zIndex: 1,
-            }}
+            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }}>
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>
-          </div>
-          <div
-            className="transition-all duration-300"
-            style={{
-              width: collapsed ? '0px' : 'auto',
-              maxWidth: collapsed ? '0px' : '80px',
-              overflow: 'hidden',
-              opacity: collapsed ? 0 : 1,
-              flexShrink: 1,
-              flexGrow: 0,
-              pointerEvents: collapsed ? 'none' : 'auto',
-            }}
-          >
-            <div className="text-xs font-medium text-wiki-text truncate">用户</div>
           </div>
         </div>
       </div>

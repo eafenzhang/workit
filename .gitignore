@@ -28,3 +28,10 @@ build/icon-256.png
 release4/
 backend/data/
 dist/
+backend/data/
+dist/
+auto-imports.d.ts
+*.jpg
+*.png
+!public/*.png
+!build/*.png

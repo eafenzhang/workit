@@ -20,9 +20,9 @@ interface GlobalTab {
 }
 
 export default function Index() {
-  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'dashboard', title: '总览', type: 'dashboard' }]);
+  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'dashboard', title: '首页', type: 'dashboard' }]);
   const [activeTabId, setActiveTabId] = useState('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Open a tab by type — if exists, switch to it; else create new
   const openTab = useCallback((type: string, title: string, extra?: Partial<GlobalTab>) => {
@@ -67,21 +67,28 @@ export default function Index() {
         const isActive = activeTabId === tab.id;
         return (
           <div key={tab.id} onClick={() => switchTab(tab.id)}
-            className="flex items-center gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer flex-shrink-0 select-none transition-colors"
+            className="flex items-center gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer flex-shrink-0 select-none transition-colors group"
             style={{
               background: isActive ? 'var(--wiki-surface2)' : 'transparent',
               color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text3)',
-            }}>
+              WebkitAppRegion: 'no-drag',
+            } as any}>
             <span className="truncate max-w-[100px]">{tab.title}</span>
             {tabs.length > 1 && (
               <button onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
-                className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0"><XIcon size={10} /></button>
+                className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0 transition-opacity duration-150"
+                style={{ opacity: isActive ? 1 : 0 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = '0'; }}>
+                <XIcon size={10} />
+              </button>
             )}
           </div>
         );
       })}
-      <button onClick={() => openTab('dashboard', '总览')}
-        className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-wiki-text hover:bg-wiki-surface2 flex-shrink-0 flex items-center">
+      <button onClick={() => openTab('dashboard', '首页')}
+        className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-wiki-text hover:bg-wiki-surface2 flex-shrink-0 flex items-center"
+        style={{ WebkitAppRegion: 'no-drag' } as any}>
         <PlusIcon size={12} />
       </button>
     </div>
@@ -92,7 +99,7 @@ export default function Index() {
     if (!activeTab) return null;
     switch (activeTab.type) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onOpenSubTab={(title, type, extra) => openTab(type, title, extra)} />;
       case 'requirements':
         return <Requirements
           key={activeTab.id}
@@ -163,8 +170,8 @@ export default function Index() {
                      activeTab?.type === 'settings' ? 'settings' : 'dashboard'}
           onTabChange={(menuType) => {
             const menuMap: Record<string, { type: string; title: string }> = {
-              dashboard: { type: 'dashboard', title: '总览' },
-              requirements: { type: 'requirements', title: '需求采集' },
+              dashboard: { type: 'dashboard', title: '首页' },
+              requirements: { type: 'requirements', title: '采集库' },
               knowledge: { type: 'knowledge', title: '知识库' },
               insights: { type: 'insights', title: '洞察分析' },
               mcp: { type: 'mcp', title: 'MCP工具' },
