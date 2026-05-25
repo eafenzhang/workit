@@ -441,10 +441,15 @@ function setupAutoUpdater() {
       try {
         const r = await autoUpdater.checkForUpdates();
         if (r?.updateInfo?.version) {
-          return { available: true, version: r.updateInfo.version };
+          log('check-for-update: found version=' + r.updateInfo.version + ' current=' + app.getVersion());
+          return { available: r.updateInfo.version !== app.getVersion(), version: r.updateInfo.version, current: app.getVersion() };
         }
-        return { available: false };
-      } catch { return { available: false }; }
+        log('check-for-update: no update available');
+        return { available: false, current: app.getVersion() };
+      } catch (e) {
+        log('check-for-update ERROR: ' + (e.message || e));
+        return { available: false, error: e.message || 'Unknown error', current: app.getVersion() };
+      }
     });
     ipcMain.handle('download-update', async () => { await autoUpdater.downloadUpdate(); return true; });
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });

@@ -12,6 +12,7 @@ export default function Settings() {
   const [latestVersion, setLatestVersion] = useState('');
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [currentVersion, setCurrentVersion] = useState('1.0.0');
+  const [updateError, setUpdateError] = useState('');
 
   const api = (window as any).electronAPI;
 
@@ -24,11 +25,13 @@ export default function Settings() {
   const checkForUpdate = async () => {
     if (!api) return;
     setUpdateStatus('checking');
+    setUpdateError('');
     try {
       const result = await api.checkForUpdate();
+      if (result?.error) { setUpdateError(result.error); setUpdateStatus('error'); return; }
       if (result?.available) { setLatestVersion(result.version); setUpdateStatus('available'); }
       else setUpdateStatus('idle');
-    } catch { setUpdateStatus('error'); }
+    } catch { setUpdateError('网络请求失败'); setUpdateStatus('error'); }
   };
 
   const downloadUpdate = async () => {
@@ -174,9 +177,12 @@ export default function Settings() {
                 </div>
               )}
               {updateStatus === 'error' && (
-                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-                  <RefreshCwIcon size={12} /> 重试
-                </button>
+                <div>
+                  <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                    <RefreshCwIcon size={12} /> 重试
+                  </button>
+                  {updateError && <div className="text-xs mt-1" style={{ color: '#ef4444' }}>{updateError}</div>}
+                </div>
               )}
             </div>
           </div>
