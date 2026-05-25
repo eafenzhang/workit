@@ -10,8 +10,15 @@ import MCP from './pages/MCP';
 import Model from './pages/Model';
 import Messages from './pages/Messages';
 import QuickCapture from './components/QuickCapture';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
+
+function wrap(el: React.ReactNode) {
+  return <ErrorBoundary><Index>{el}</Index></ErrorBoundary>;
+}
+
+function Hello() { return <div style={{padding:40,fontFamily:'monospace'}}>Hello World - 基础渲染正常</div>; }
 
 const App = () => {
   const [quickCollectEnabled, setQuickCollectEnabled] = useState(false);
@@ -34,14 +41,14 @@ const App = () => {
     <AuthProvider>
     <HashRouter>
       <Routes>
-        <Route path="/" element={<Index><Dashboard /></Index>} />
-        <Route path="/requirements" element={<Index><Requirements /></Index>} />
-        <Route path="/knowledge" element={<Index><Knowledge /></Index>} />
-        <Route path="/insights" element={<Index><Insights /></Index>} />
-        <Route path="/mcp" element={<Index><MCP /></Index>} />
-        <Route path="/model" element={<Index><Model /></Index>} />
-        <Route path="/messages" element={<Index><Messages /></Index>} />
-        <Route path="/settings" element={<Index><Settings /></Index>} />
+        <Route path="/" element={wrap(<Dashboard />)} />
+        <Route path="/requirements" element={wrap(<Requirements />)} />
+        <Route path="/knowledge" element={wrap(<Knowledge />)} />
+        <Route path="/insights" element={wrap(<Insights />)} />
+        <Route path="/mcp" element={wrap(<MCP />)} />
+        <Route path="/model" element={wrap(<Model />)} />
+        <Route path="/messages" element={wrap(<Messages />)} />
+        <Route path="/settings" element={wrap(<Settings />)} />
       </Routes>
       <Toaster position="top-right" />
       {quickCollectEnabled && <QuickCapture />}

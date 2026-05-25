@@ -1,13 +1,9 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
-import path from 'path';
-import fs from 'fs';
-import http from 'http';
-import { fileURLToPath } from 'url';
-import updaterPkg from 'electron-updater';
+const { app, BrowserWindow, shell, ipcMain, nativeImage } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const updaterPkg = require('electron-updater');
 const { autoUpdater } = updaterPkg;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
 let logPath = '';
@@ -31,15 +27,14 @@ let db = null;
 
 // ========== Database ==========
 async function initDatabase() {
-  const SQL = await import('sql.js');
-  const initSqlJs = SQL.default || SQL;
-  const SQLJS = await initSqlJs();
+  const sqlJsInit = require('sql.js');
+  const SQL = await sqlJsInit();
   const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
 
   if (fs.existsSync(dbPath)) {
-    db = new SQLJS.Database(fs.readFileSync(dbPath));
+    db = new SQL.Database(fs.readFileSync(dbPath));
   } else {
-    db = new SQLJS.Database();
+    db = new SQL.Database();
   }
 
   db.run(`CREATE TABLE IF NOT EXISTS requirements (
@@ -73,7 +68,7 @@ async function initDatabase() {
   // Migrate old status
   db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
   saveDb();
-  log('Database initialized at ' + dbPath);
+  log('initDatabase: success, path=' + dbPath);
 }
 
 function saveDb() {
@@ -98,6 +93,7 @@ function run(sql, params = []) {
 
 // ========== IPC Handlers ==========
 function setupIPC() {
+  ipcMain.handle('get-version', () => app.getVersion());
   ipcMain.handle('window-minimize', () => mainWindow?.minimize());
   ipcMain.handle('window-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
@@ -108,8 +104,11 @@ function setupIPC() {
   ipcMain.handle('db-query', (_, method, table, args) => {
     try {
       const { data, id } = args || {};
-      return handleDbQuery(method, table, data, id);
-    } catch (e) { return { error: e.message }; }
+      const result = handleDbQuery(method, table, data, id);
+      const rtype = Array.isArray(result) ? 'array[' + result.length + ']' : (typeof result) + '/' + Object.keys(result||{}).slice(0,3).join(',');
+      log('db-query: ' + method + ' ' + table + ' → ' + rtype);
+      return result;
+    } catch (e) { log('db-query ERROR', e); return { error: e.message }; }
   });
 
   ipcMain.handle('db-upload', async (_, table, fileData) => {
@@ -124,15 +123,6 @@ function setupIPC() {
       return { url };
     } catch (e) { return { error: e.message }; }
   });
-
-  ipcMain.handle('connect-server', (_, url) => {
-    if (mainWindow?.webContents) mainWindow.loadURL(url);
-    return { success: true };
-  });
-  ipcMain.handle('disconnect-server', () => {
-    if (mainWindow?.webContents) mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
-    return { success: true };
-  });
 }
 
 function handleDbQuery(method, table, data, id) {
@@ -146,16 +136,39 @@ function handleDbQuery(method, table, data, id) {
     case 'models':
       return handleModels(method, data, id);
     case 'dashboard/stats': {
-      const allReq = query('SELECT status FROM requirements');
-      const total = allReq.length;
-      const statusCounts = {};
-      allReq.forEach(r => { const s = r[0] || ''; statusCounts[s] = (statusCounts[s] || 0) + 1; });
+      const total = query('SELECT COUNT(*) FROM requirements')[0][0];
+      const completed = query("SELECT COUNT(*) FROM requirements WHERE status='已完成'")[0][0];
+      const inProgress = query("SELECT COUNT(*) FROM requirements WHERE status='实现中'")[0][0];
       const docCount = query('SELECT COUNT(*) FROM documents')[0][0];
-      return { totalRequirements: total, statusCounts, totalDocuments: docCount };
+      return [
+        { label: '需求总数', value: String(total), change: '+' + total, icon: 'SparklesIcon', color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
+        { label: '完成率', value: total ? Math.round(completed/total*100) + '%' : '0%', change: completed + ' 已完成', icon: 'CheckCircleIcon', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+        { label: '进行中', value: String(inProgress), change: inProgress + ' 项', icon: 'ZapIcon', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+        { label: '知识文档', value: String(docCount), change: docCount + ' 篇', icon: 'DatabaseIcon', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
+      ];
+    }
+    case 'dashboard/charts': {
+      const total = query('SELECT COUNT(*) FROM requirements')[0][0];
+      const docCount = query('SELECT COUNT(*) FROM documents')[0][0];
+      const cats = query('SELECT category, COUNT(*) FROM requirements GROUP BY category');
+      return {
+        areaData: [
+          { name: '1月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '2月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '3月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '4月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '5月', 需求: total, 知识: docCount, 洞察: 0 },
+          { name: '6月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '7月', 需求: 0, 知识: 0, 洞察: 0 },
+        ],
+        barData: cats.map(r => ({ name: r[0]||'未分类', value: r[1] })),
+      };
     }
     case 'dashboard/activities': {
       const rows = query("SELECT id, title, status, updated_at FROM requirements ORDER BY updated_at DESC LIMIT 10");
-      return rows.map(r => ({ id: r[0], title: r[1], status: r[2], time: r[3] }));
+      const iconMap = { '待评估': 'AlertCircleIcon', '设计中': 'EditIcon', '实现中': 'ArrowUpIcon', '测试中': 'SearchIcon', '已完成': 'CheckCircleIcon' };
+      const colorMap = { '待评估': '#f59e0b', '设计中': '#6366f1', '实现中': '#06b6d4', '测试中': '#8b5cf6', '已完成': '#10b981' };
+      return rows.map(r => ({ icon: iconMap[r[2]] || 'ClockIcon', color: colorMap[r[2]] || '#888', text: r[1] || '', time: r[3] }));
     }
     case 'insights/kpis': {
       const total = query('SELECT COUNT(*) FROM requirements')[0][0];
@@ -183,7 +196,6 @@ function handleDbQuery(method, table, data, id) {
         if (!fs.existsSync(uploadsDir)) return { usedBytes: 0 };
         const files = fs.readdirSync(uploadsDir);
         let usedBytes = 0;
-        // Only count files referenced by documents
         const docPaths = new Set(query("SELECT file_path FROM documents WHERE file_path != ''").map(r => path.basename(r[0])));
         for (const f of files) { if (docPaths.has(f)) usedBytes += fs.statSync(path.join(uploadsDir, f)).size; }
         return { usedBytes };
@@ -194,6 +206,7 @@ function handleDbQuery(method, table, data, id) {
 }
 
 function handleRequirements(method, data, id) {
+  try {
   switch (method) {
     case 'GET':
       if (id) {
@@ -213,7 +226,6 @@ function handleRequirements(method, data, id) {
     case 'PUT': {
       if (!id) return { error: 'No id' };
       const { title, desc, category, module, priority, status, assignee, creator, dueDate, tags, images, workflow_handler } = data || {};
-      // Workflow history
       let workflowHistory = [];
       try { workflowHistory = JSON.parse(query('SELECT workflow_history FROM requirements WHERE id = ?', [id])[0]?.[0] || '[]'); } catch {}
       if (status) {
@@ -230,9 +242,11 @@ function handleRequirements(method, data, id) {
     }
     default: return { error: 'Unknown method' };
   }
+  } catch (e) { log('handleRequirements ERROR', e); return []; }
 }
 
 function handleDocuments(method, data, id) {
+  try {
   switch (method) {
     case 'GET':
       if (id) {
@@ -263,9 +277,11 @@ function handleDocuments(method, data, id) {
     }
     default: return { error: 'Unknown method' };
   }
+  } catch (e) { log('handleDocuments ERROR', e); return []; }
 }
 
 function handleMcp(method, data, id) {
+  try {
   switch (method) {
     case 'GET':
       return query('SELECT * FROM mcp_servers ORDER BY id DESC').map(r => ({
@@ -295,9 +311,11 @@ function handleMcp(method, data, id) {
     case 'DELETE': { if (id) run('DELETE FROM mcp_servers WHERE id = ?', [id]); return { success: true }; }
     default: return { error: 'Unknown method' };
   }
+  } catch (e) { log('handleMcp ERROR', e); return []; }
 }
 
 function handleModels(method, data, id) {
+  try {
   switch (method) {
     case 'GET':
       return query('SELECT * FROM models ORDER BY is_default DESC, id DESC').map(r => ({
@@ -326,6 +344,7 @@ function handleModels(method, data, id) {
     case 'DELETE': { if (id) run('DELETE FROM models WHERE id = ?', [id]); return { success: true }; }
     default: return { error: 'Unknown method' };
   }
+  } catch (e) { log('handleModels ERROR', e); return []; }
 }
 
 function formatReq(r) {
@@ -355,34 +374,60 @@ function setupWindowEvents(win) {
 async function createWindow() {
   log('Creating window...');
   try {
+  const preloadPath = path.join(app.getAppPath(), 'electron', 'preload.cjs');
+  log('createWindow: preload path = ' + preloadPath);
+  log('createWindow: preload exists = ' + fs.existsSync(preloadPath));
+
   mainWindow = new BrowserWindow({
     width: 1200, height: 800, minWidth: 900, minHeight: 600,
     title: 'Workit',
-    icon: path.join(app.getAppPath(), 'public', 'icon.ico'),
+    icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'public', 'icon.png')),
     frame: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: path.join(app.getAppPath(), 'electron', 'preload.js') },
+    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
   });
 
   setupWindowEvents(mainWindow);
   setupIPC();
 
+  try {
+    await initDatabase();
+  } catch (dbErr) {
+    log('createWindow: initDatabase FAILED', dbErr);
+    console.error('initDatabase failed:', dbErr);
+  }
+
+  mainWindow.center();
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+    const htmlPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    log('createWindow: loading HTML = ' + htmlPath);
+    mainWindow.loadFile(htmlPath);
   }
+  mainWindow.show();
+  mainWindow.focus();
+
+  // 渲染进程错误监听
+  mainWindow.webContents.on('did-fail-load', (_, code, desc) => {
+    log('createWindow: renderer load FAILED, code=' + code + ', desc=' + desc);
+  });
+  mainWindow.webContents.on('console-message', (_, level, message) => {
+    log('Renderer [' + level + ']: ' + message);
+  });
+  mainWindow.webContents.on('render-process-gone', (_, details) => {
+    log('createWindow: render-process-gone, reason=' + details.reason + ', exitCode=' + details.exitCode);
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   mainWindow.on('closed', () => { mainWindow = null; });
-  log('Window created successfully');
-  } catch (e) { log('Window creation failed', e); }
+  log('createWindow: success');
+  } catch (e) { log('createWindow: FAILED', e); }
 }
 
 app.whenReady().then(async () => {
   log('App ready');
   try {
-    await initDatabase();
     setupAutoUpdater();
     return createWindow();
   } catch (e) { log('App ready handler failed', e); }

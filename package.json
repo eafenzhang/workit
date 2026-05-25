@@ -5,7 +5,7 @@
   "description": "Workit 需求管理应用",
   "author": "Eafenzhang",
   "private": true,
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "node scripts/kill-port.cjs && vite",
@@ -106,28 +106,17 @@
     "directories": {
       "output": "release"
     },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "public/**/*"
-    ],
     "asar": true,
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "signAndEditExecutable": false
+      "target": "nsis"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico"
     },
     "publish": {
       "provider": "github",

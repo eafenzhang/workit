@@ -1,8 +1,6 @@
-import { apiFetch } from '../api';
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon, ServerIcon, WifiIcon, WifiOffIcon, LinkIcon, UnplugIcon, LoaderIcon } from 'lucide-react';
-import { toast } from 'sonner';
+import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
 
 export default function Settings() {
@@ -13,61 +11,15 @@ export default function Settings() {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
   const [latestVersion, setLatestVersion] = useState('');
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const [serverMode, setServerMode] = useState<'local' | 'remote'>('local');
-  const [remoteUrl, setRemoteUrl] = useState('http://100.95.196.33:3001');
-  const [backendStatus, setBackendStatus] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped');
-  const [backendError, setBackendError] = useState('');
+  const [currentVersion, setCurrentVersion] = useState('1.0.0');
 
   const api = (window as any).electronAPI;
-  const currentVersion = api?.getVersion?.() || '1.0.0';
-  const isElectron = !!api;
 
   useEffect(() => {
+    api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
     api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
     api?.onUpdateReady?.(() => setUpdateStatus('ready'));
-    // Check if backend is already running
-    apiFetch('/api/health').then(r => r.json()).then(() => setBackendStatus('running')).catch(() => {});
   }, []);
-
-  const startBackend = async () => {
-    if (!api) { toast.error('仅在桌面应用中可用'); return; }
-    setBackendStatus('starting');
-    setBackendError('');
-    const result = await api.startLocalBackend();
-    if (result.success) {
-      setBackendStatus('running');
-      toast.success('后端已启动');
-    } else {
-      setBackendStatus('error');
-      setBackendError(result.error || '启动失败');
-    }
-  };
-
-  const stopBackend = async () => {
-    if (!api) return;
-    await api.stopLocalBackend();
-    setBackendStatus('stopped');
-  };
-
-  const connectRemote = async () => {
-    if (!api) { toast.error('仅在桌面应用中可用'); return; }
-    setBackendStatus('starting');
-    try {
-      const res = await fetch(remoteUrl + '/api/health');
-      if (!res.ok) throw new Error('无法连接');
-      await api.connectServer(remoteUrl);
-      setBackendStatus('running');
-    } catch {
-      setBackendStatus('error');
-      setBackendError('无法连接到服务器');
-    }
-  };
-
-  const disconnectServer = async () => {
-    if (!api) return;
-    await api.disconnectServer();
-    setBackendStatus('stopped');
-  };
 
   const checkForUpdate = async () => {
     if (!api) return;
@@ -168,107 +120,6 @@ export default function Settings() {
                 />
               </button>
             </div>
-          </div>
-        </section>
-
-        {/* Server Section */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <ServerIcon size={18} style={{ color: 'var(--wiki-accent)' }} />
-            <h2 className="text-base font-semibold text-wiki-text">服务器连接</h2>
-          </div>
-
-          <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            {/* Connection status */}
-            <div className="flex items-center gap-3 mb-5 p-3 rounded-xl" style={{ background: 'var(--wiki-surface2)' }}>
-              {backendStatus === 'running' ? (
-                <WifiIcon size={18} style={{ color: '#10b981' }} />
-              ) : backendStatus === 'starting' ? (
-                <LoaderIcon size={18} className="animate-spin" style={{ color: 'var(--wiki-text3)' }} />
-              ) : (
-                <WifiOffIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
-              )}
-              <div className="flex-1">
-                <div className="text-sm font-medium text-wiki-text">
-                  {backendStatus === 'running' ? '已连接' : backendStatus === 'starting' ? '连接中...' : '未连接'}
-                </div>
-                <div className="text-xs text-wiki-text3">
-                  {backendStatus === 'running' ? (serverMode === 'local' ? '本地后端' : `远程: ${remoteUrl}`) : '数据存储在本地'}
-                </div>
-              </div>
-              {backendStatus === 'error' && <div className="text-xs" style={{ color: '#ef4444' }}>{backendError}</div>}
-            </div>
-
-            {/* Mode selector */}
-            <div className="flex gap-3 mb-4">
-              <button onClick={() => { if (backendStatus === 'running') stopBackend(); setServerMode('local'); }}
-                className="flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all text-sm"
-                style={{ background: serverMode === 'local' ? 'var(--wiki-surface2)' : 'transparent', border: '1px solid var(--wiki-border)', color: serverMode === 'local' ? 'var(--wiki-text)' : 'var(--wiki-text2)' }}>
-                <ServerIcon size={20} />
-                <span className="font-medium">本地后端</span>
-                <span className="text-xs text-wiki-text3">启动内置服务器</span>
-              </button>
-              <button onClick={() => setServerMode('remote')}
-                className="flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all text-sm"
-                style={{ background: serverMode === 'remote' ? 'var(--wiki-surface2)' : 'transparent', border: '1px solid var(--wiki-border)', color: serverMode === 'remote' ? 'var(--wiki-text)' : 'var(--wiki-text2)' }}>
-                <GlobeIcon size={20} />
-                <span className="font-medium">远程服务器</span>
-                <span className="text-xs text-wiki-text3">连接外部服务器</span>
-              </button>
-            </div>
-
-            {/* Local mode */}
-            {serverMode === 'local' && (
-              <div>
-                {backendStatus === 'stopped' && (
-                  <button onClick={startBackend} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                    <ServerIcon size={14} /> 启动本地后端
-                  </button>
-                )}
-                {backendStatus === 'starting' && (
-                  <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>
-                    <LoaderIcon size={14} className="animate-spin" /> 启动中...
-                  </div>
-                )}
-                {backendStatus === 'running' && (
-                  <div className="flex gap-2">
-                    <button onClick={stopBackend} className="flex-1 py-2.5 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
-                      停止后端
-                    </button>
-                    <button onClick={() => api?.connectServer('http://localhost:3001')} className="flex-1 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                      <LinkIcon size={13} className="inline" /> 连接
-                    </button>
-                  </div>
-                )}
-                {backendStatus === 'error' && (
-                  <button onClick={startBackend} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-                    <RefreshCwIcon size={14} /> 重试
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Remote mode */}
-            {serverMode === 'remote' && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-                  <GlobeIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
-                  <input value={remoteUrl} onChange={e => setRemoteUrl(e.target.value)}
-                    placeholder="http://100.95.196.33:3001"
-                    className="flex-1 bg-transparent text-sm text-wiki-text outline-none" />
-                </div>
-                {backendStatus === 'stopped' && (
-                  <button onClick={connectRemote} className="w-full py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                    <LinkIcon size={13} className="inline" /> 连接远程服务器
-                  </button>
-                )}
-                {backendStatus === 'running' && (
-                  <button onClick={disconnectServer} className="w-full py-2.5 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
-                    <UnplugIcon size={13} className="inline" /> 断开连接
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </section>
 

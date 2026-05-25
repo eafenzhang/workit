@@ -1,12 +1,16 @@
 // Unified API layer - uses IPC in Electron, fetch in dev
 const api = (window as any).electronAPI;
+let ipcLogged = false;
+let preloadWarned = false;
 
 async function call(method: string, table: string, data?: any, id?: number | string): Promise<any> {
   if (api) {
     // Electron mode: use IPC
+    if (!ipcLogged) { console.log('[api] Using Electron IPC path (electronAPI detected)'); ipcLogged = true; }
     return api.dbQuery(method, table, { data, id });
   }
   // Dev mode: use fetch
+  if (!preloadWarned) { console.warn('[api] electronAPI not found — preload may not be loaded, falling back to fetch'); preloadWarned = true; }
   let url = `/api/${table}`;
   const opts: RequestInit = { headers: { 'Content-Type': 'application/json' } };
   if (id !== undefined) url += `/${id}`;
@@ -33,23 +37,27 @@ function uploadImage(formData: FormData): Promise<any> {
 // Drop-in replacement for fetch('/api/...') for existing pages
 // Returns a Response-like object so existing .json() calls work
 export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
-  let data: any;
   if (api) {
     const parts = url.replace('/api/', '').split('/');
     const method = opts?.method || 'GET';
     let body = undefined;
     if (opts?.body && typeof opts.body === 'string') body = JSON.parse(opts.body);
-    // Parse /api/requirements/{id}/action pattern
+    // Build full table path (e.g. 'dashboard/stats', 'insights/kpis')
     let table = parts[0];
     let id: number | undefined = undefined;
-    if (parts.length >= 2 && /^\d+$/.test(parts[1])) { id = parseInt(parts[1]); table += '/' + id; }
-    data = await call(method, parts[0], body, id);
-  } else {
-    const res = await fetch(url, opts);
-    data = await res.json();
+    if (parts.length >= 2) {
+      if (/^\d+$/.test(parts[1])) {
+        id = parseInt(parts[1]);
+      } else {
+        table = parts.join('/');
+      }
+    }
+    const data = await call(method, table, body, id);
+    return { json: () => Promise.resolve(data), data };
   }
-  // Wrap in Response-like object for backward compat with .json()
-  return { json: () => Promise.resolve(data), data, ...data };
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  return { json: () => Promise.resolve(data), data };
 }
 
 export const db = {
