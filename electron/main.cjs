@@ -438,15 +438,23 @@ function setupAutoUpdater() {
   if (isDev) return;
   try {
     ipcMain.handle('check-for-update', async () => {
-      const r = await autoUpdater.checkForUpdates();
-      return { available: r?.updateInfo?.version !== app.getVersion(), version: r?.updateInfo?.version };
+      try {
+        const r = await autoUpdater.checkForUpdatesAndNotify();
+        if (r?.updateInfo?.version) {
+          const latest = r.updateInfo.version.replace(/^v/, '');
+          const current = app.getVersion();
+          return { available: latest !== current, version: latest };
+        }
+        return { available: false };
+      } catch { return { available: false }; }
     });
     ipcMain.handle('download-update', async () => { await autoUpdater.downloadUpdate(); return true; });
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
     autoUpdater.on('download-progress', (p) => mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent)));
     autoUpdater.on('update-downloaded', () => mainWindow?.webContents?.send('update-ready'));
     autoUpdater.autoDownload = false;
-    autoUpdater.setFeedURL({ provider: 'github', repo: 'workit', owner: 'eafenzhang' });
+    // GitHub provider config read from package.json "publish" field
+    autoUpdater.logger = { debug: () => {}, info: (m) => log('Updater: ' + m), warn: (m) => log('Updater warn: ' + m), error: (m) => log('Updater error: ' + m) };
   } catch (e) { log('AutoUpdater init failed', e); }
 }
 
