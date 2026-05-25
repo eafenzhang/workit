@@ -39,16 +39,16 @@ export default function Insights() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-wiki-text">洞察分析</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">洞察分析</h1>
           <p className="text-wiki-text2 text-sm mt-1">智能体运行数据与知识质量深度分析</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             {reports.map((r) => (
               <button
                 key={r.id}
                 onClick={() => setActiveReport(r.id)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
                 style={{
                   background: activeReport === r.id ? 'var(--wiki-text)' : 'transparent',
                   color: activeReport === r.id ? 'var(--wiki-bg)' : 'var(--wiki-text2)',
@@ -58,11 +58,11 @@ export default function Insights() {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
             <RefreshCwIcon size={12} />
             <span>刷新</span>
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
             <DownloadIcon size={12} />
             <span>导出报告</span>
           </button>
@@ -72,7 +72,7 @@ export default function Insights() {
       {/* KPI Cards */}
       <div className="flex gap-4 mb-6">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="flex-1 p-4 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div key={kpi.label} className="flex-1 p-4 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="text-xs text-wiki-text3 mb-2">{kpi.label}</div>
             <div className="text-xl font-bold text-wiki-text mb-1">{kpi.value}</div>
             <div className="flex items-center gap-1 text-xs" style={{ color: kpi.up ? '#10b981' : '#ef4444' }}>
@@ -86,7 +86,7 @@ export default function Insights() {
       {/* Charts Row 1 */}
       <div className="flex gap-4 mb-4">
         {/* Bar Chart - 需求分类 */}
-        <div className="flex-1 p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex-1 p-6 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-wiki-text">需求分类分布</h3>
@@ -104,7 +104,7 @@ export default function Insights() {
         </div>
 
         {/* Pie Chart */}
-        <div className="w-[280px] p-6 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="w-[280px] p-6 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <div className="mb-2">
             <h3 className="text-sm font-semibold text-wiki-text">文档类型分布</h3>
             <p className="text-xs text-wiki-text3 mt-0.5">按文档类型统计</p>
@@ -146,11 +146,11 @@ export default function Insights() {
             return (
               <div
                 key={i}
-                className="p-5 rounded-2xl transition-all duration-200 hover:border-indigo-500/30 cursor-pointer"
+                className="p-5 rounded-lg transition-all duration-200 hover:border-indigo-500/30 cursor-pointer"
                 style={{ width: 'calc(50% - 6px)', background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}
               >
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: insight.bg }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: insight.bg }}>
                     <Icon size={16} style={{ color: insight.color }} />
                   </div>
                   <div className="flex-1">

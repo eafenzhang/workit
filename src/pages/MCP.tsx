@@ -33,7 +33,7 @@ export default function MCP() {
   };
 
   const toggleServer = (server: MCPServer) => {
-    fetch(`/api/mcp/${server.id}`, {
+    apiFetch(`/api/mcp/${server.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...server, enabled: !server.enabled }),
@@ -45,13 +45,13 @@ export default function MCP() {
 
   const deleteServer = (id: number) => {
     if (!confirm('确定删除？')) return;
-    fetch(`/api/mcp/${id}`, { method: 'DELETE' })
+    apiFetch(`/api/mcp/${id}`, { method: 'DELETE' })
       .then(() => { fetchServers(); toast.success('已删除'); });
   };
 
   const saveToken = (serverId: number) => {
     if (!tokenInput.trim()) return;
-    fetch(`/api/mcp/${serverId}/token`, {
+    apiFetch(`/api/mcp/${serverId}/token`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: tokenInput }),
@@ -66,18 +66,18 @@ export default function MCP() {
     <div className="flex flex-col gap-6 p-8 h-full overflow-y-auto scrollbar-thin">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-wiki-text">MCP 工具</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">MCP 工具</h1>
           <p className="text-sm text-wiki-text2 mt-1">管理和配置 MCP 服务器</p>
         </div>
         <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium"
           style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <PlusIcon size={16} />添加服务
         </button>
       </div>
 
       {servers.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <ServerIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-wiki-text2 text-sm">暂无 MCP 服务</p>
           <p className="mt-1 text-wiki-text3 text-xs">点击「添加服务」开始配置</p>
@@ -86,9 +86,9 @@ export default function MCP() {
 
       <div className="flex flex-col gap-4">
         {servers.map((server) => (
-          <div key={server.id} className="rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div key={server.id} className="rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: server.enabled ? 'var(--wiki-surface2)' : 'var(--wiki-surface)' }}>
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: server.enabled ? 'var(--wiki-surface2)' : 'var(--wiki-surface)' }}>
                 {server.enabled ? <CheckCircleIcon size={24} style={{ color: '#10b981' }} /> : <PlugIcon size={24} style={{ color: 'var(--wiki-text3)' }} />}
               </div>
               <div className="flex-1">
@@ -104,7 +104,7 @@ export default function MCP() {
                 {server.type === 'tapd' && (
                   <button
                     onClick={() => setShowToken(showToken === server.id ? null : server.id)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
                     style={{ background: 'var(--wiki-surface2)', color: server.config.token ? '#10b981' : 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
                   >
                     <KeyIcon size={12} />
@@ -113,12 +113,12 @@ export default function MCP() {
                 )}
                 <button
                   onClick={() => toggleServer(server)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium"
+                  className="px-4 py-2 rounded-lg text-xs font-medium"
                   style={{ background: server.enabled ? 'rgba(239,68,68,0.1)' : 'var(--wiki-surface2)', color: server.enabled ? '#ef4444' : '#10b981' }}
                 >
                   {server.enabled ? '禁用' : '启用'}
                 </button>
-                <button onClick={() => deleteServer(server.id)} className="p-2 rounded-xl hover:bg-wiki-surface2 transition-colors">
+                <button onClick={() => deleteServer(server.id)} className="p-2 rounded-lg hover:bg-wiki-surface2 transition-colors">
                   <TrashIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
                 </button>
               </div>
@@ -130,13 +130,13 @@ export default function MCP() {
       {/* Token Input Modal */}
       {showToken !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="w-[480px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <KeyIcon size={18} style={{ color: 'var(--wiki-text)' }} />
                 <h2 className="text-lg font-semibold text-wiki-text">设置 TAPD Token</h2>
               </div>
-              <button onClick={() => { setShowToken(null); setTokenInput(''); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
+              <button onClick={() => { setShowToken(null); setTokenInput(''); }} className="p-1 rounded-md hover:bg-wiki-surface2">
                 <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
@@ -148,15 +148,15 @@ export default function MCP() {
                 placeholder="输入 TAPD 个人令牌..."
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-sm"
+                className="w-full px-3 py-2 rounded-lg text-xs"
                 style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
               />
             </div>
             <div className="flex gap-3 justify-end">
               <button onClick={() => { setShowToken(null); setTokenInput(''); }}
-                className="px-4 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+                className="px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
               <button onClick={() => saveToken(showToken!)}
-                className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存 Token</button>
+                className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存 Token</button>
             </div>
           </div>
         </div>
@@ -193,10 +193,10 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="w-[480px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+      <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-wiki-text">添加 MCP 服务器</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-wiki-surface2">
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-wiki-surface2">
             <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
           </button>
         </div>
@@ -205,12 +205,12 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>名称</label>
           <input value={name} onChange={(e) => setName(e.target.value)}
             placeholder="TAPD"
-            className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+            className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
         </div>
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>类型</label>
           <select value={type} onChange={(e) => setType(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
+            className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
             <option value="tapd">TAPD</option>
             <option value="custom">自定义</option>
           </select>
@@ -219,17 +219,17 @@ function AddServerModal({ onClose, onAdd }: { onClose: () => void; onAdd: () => 
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>命令</label>
           <input value={command} onChange={(e) => setCommand(e.target.value)}
             placeholder="node"
-            className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+            className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
         </div>
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>参数（用空格分隔）</label>
           <input value={args} onChange={(e) => setArgs(e.target.value)}
             placeholder="path/to/script.js"
-            className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+            className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
         </div>
 
         <button onClick={handleSubmit}
-          className="w-full py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          className="w-full py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           添加
         </button>
       </div>

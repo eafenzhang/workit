@@ -78,7 +78,7 @@ export default function Model() {
       body.apiKey = form.apiKey;
     }
 
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.success) {
       toast.success(editingId ? '已更新' : '添加成功');
@@ -98,7 +98,7 @@ export default function Model() {
   };
 
   const setDefault = async (id: number) => {
-    const res = await fetch(`/api/models/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_default: true }) });
+    const res = await apiFetch(`/api/models/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_default: true }) });
     const data = await res.json();
     if (data.success) { toast.success('已设为默认'); fetchModels(); }
     else toast.error(data.error || '设置失败');
@@ -106,7 +106,7 @@ export default function Model() {
 
   const deleteModel = async (id: number) => {
     if (!confirm('确定删除该模型配置？')) return;
-    const res = await fetch(`/api/models/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/models/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) { toast.success('已删除'); fetchModels(); }
   };
@@ -118,18 +118,18 @@ export default function Model() {
     <div className="flex flex-col gap-6 p-8 h-full overflow-y-auto scrollbar-thin">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-wiki-text">模型配置</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">模型配置</h1>
           <p className="text-sm text-wiki-text2 mt-1">支持国内主流大模型供应商</p>
         </div>
         <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <PlusIcon size={16} />添加配置
         </button>
       </div>
 
       {/* Default Banner */}
       {models.find(m => m.isDefault) && (
-        <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center gap-3 p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
           <StarIcon size={18} style={{ color: 'var(--wiki-text)' }} />
           <span className="text-sm text-wiki-text">默认模型：</span>
           <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>{models.find(m => m.isDefault)?.name}</span>
@@ -137,7 +137,7 @@ export default function Model() {
       )}
 
       {models.length === 0 && !loading && (
-        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <CpuIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-wiki-text2 text-sm">暂无模型配置</p>
           <p className="mt-1 text-wiki-text3 text-xs">点击「添加配置」添加你的第一个模型</p>
@@ -146,9 +146,9 @@ export default function Model() {
 
       <div className="flex flex-col gap-4">
         {models.map(m => (
-          <div key={m.id} className="rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div key={m.id} className="rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: m.hasApiKey ? 'var(--wiki-surface2)' : 'rgba(239,68,68,0.1)' }}>
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: m.hasApiKey ? 'var(--wiki-surface2)' : 'rgba(239,68,68,0.1)' }}>
                 {m.hasApiKey ? <CheckCircleIcon size={24} style={{ color: '#10b981' }} /> : <CircleIcon size={24} style={{ color: '#ef4444' }} />}
               </div>
               <div className="flex-1">
@@ -169,17 +169,17 @@ export default function Model() {
                 {/* Model Selector */}
                 <div className="relative">
                   <button onClick={() => setModelDropdown(modelDropdown === m.id ? null : m.id)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
                     <span>{currentModels.find(x => x.id === m.modelId)?.name || m.modelId}</span>
                     <ChevronDownIcon size={14} />
                   </button>
                   {modelDropdown === m.id && (
-                    <div className="absolute top-full mt-1 right-0 w-56 rounded-xl py-1 z-50" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                    <div className="absolute top-full mt-1 right-0 w-56 rounded-lg py-1 z-50" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
                       {currentModels.map(pm => (
                         <button key={pm.id} onClick={async () => {
                           setModelDropdown(null);
                           if (pm.id !== m.modelId) {
-                            await fetch(`/api/models/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: pm.id }) });
+                            await apiFetch(`/api/models/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: pm.id }) });
                             toast.success(`已切换到 ${pm.name}`);
                             fetchModels();
                           }
@@ -192,10 +192,10 @@ export default function Model() {
                   )}
                 </div>
                 {!m.isDefault && (
-                  <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
+                  <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
                 )}
-                <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
-                <button onClick={() => deleteModel(m.id)} className="p-2 rounded-xl hover:bg-wiki-surface2 transition-colors">
+                <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
+                <button onClick={() => deleteModel(m.id)} className="p-2 rounded-lg hover:bg-wiki-surface2 transition-colors">
                   <TrashIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
                 </button>
               </div>
@@ -209,10 +209,10 @@ export default function Model() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="w-[480px] rounded-2xl p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-wiki-text">{editingId ? '编辑模型配置' : '添加模型配置'}</h2>
-              <button onClick={() => { setShowModal(false); setEditingId(null); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
+              <button onClick={() => { setShowModal(false); setEditingId(null); }} className="p-1 rounded-md hover:bg-wiki-surface2">
                 <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
@@ -223,7 +223,7 @@ export default function Model() {
               <div className="grid grid-cols-3 gap-2">
                 {PROVIDER_LIST.map(p => (
                   <button key={p.id} onClick={() => handleProviderChange(p.id)}
-                    className="px-3 py-2 rounded-xl text-sm text-left" style={{
+                    className="px-3 py-2 rounded-lg text-xs text-left" style={{
                       background: form.provider === p.id ? 'var(--wiki-surface2)' : 'var(--wiki-surface)',
                       border: `1px solid ${form.provider === p.id ? 'var(--wiki-border)' : 'var(--wiki-border)'}`,
                       color: 'var(--wiki-text)',
@@ -238,7 +238,7 @@ export default function Model() {
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>模型</label>
               <select value={form.modelId} onChange={e => setForm(f => ({ ...f, modelId: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
+                className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
                 {currentModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
@@ -248,11 +248,11 @@ export default function Model() {
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>API Key</label>
               <input type="password" value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
                 placeholder={editingId ? '不修改请留空' : '输入 API Key'}
-                className="w-full px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+                className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
             </div>
 
             <button onClick={handleSubmit}
-              className="w-full py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              className="w-full py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
               {editingId ? '保存修改' : '添加'}
             </button>
           </div>

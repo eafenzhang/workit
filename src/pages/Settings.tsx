@@ -55,18 +55,18 @@ export default function Settings() {
   return (
     <div data-cmp="Settings" className="h-full p-8 overflow-y-auto overflow-x-hidden scrollbar-thin">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-wiki-text mb-1">设置</h1>
+        <h1 className="text-xl font-semibold text-wiki-text mb-1">设置</h1>
         <p className="text-wiki-text2 text-sm mb-8">配置 Workit 的外观和行为</p>
 
         {/* Appearance Section */}
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <PaletteIcon size={18} style={{ color: 'var(--wiki-accent)' }} />
+            <PaletteIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">外观</h2>
           </div>
 
           {/* Light/Dark/System */}
-          <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="text-sm font-medium text-wiki-text mb-1">色彩模式</div>
             <div className="text-xs text-wiki-text3 mb-4">选择浅色或深色模式</div>
 
@@ -78,14 +78,14 @@ export default function Settings() {
                   <button
                     key={opt.id}
                     onClick={() => setTheme(opt.id)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-lg transition-all relative"
+                    className="flex flex-col items-center gap-2 p-4 rounded-md transition-all relative"
                     style={{
                       background: isActive ? 'var(--wiki-surface2)' : 'transparent',
                       border: '1px solid var(--wiki-border)',
                     }}
                   >
                     <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ background: isActive ? 'var(--wiki-accent)' : 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-                      <Icon size={18} style={{ color: isActive ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }} />
+                      <Icon size={18} strokeWidth={1.5} style={{ color: isActive ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }} />
                     </div>
                     <div className="text-sm font-medium" style={{ color: isActive ? 'var(--wiki-accent)' : 'var(--wiki-text2)' }}>{opt.label}</div>
                     <div className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{opt.desc}</div>
@@ -99,11 +99,11 @@ export default function Settings() {
         {/* Quick Collect Section */}
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <GlobeIcon size={18} style={{ color: 'var(--wiki-accent)' }} />
+            <GlobeIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">快速采集</h2>
           </div>
 
-          <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-wiki-text mb-1">采集浮窗</div>
@@ -126,13 +126,13 @@ export default function Settings() {
         {/* About Section */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <InfoIcon size={18} style={{ color: 'var(--wiki-accent)' }} />
+            <InfoIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">关于</h2>
           </div>
 
-          <div className="rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden">
+              <div className="w-14 h-14 rounded-lg flex items-center justify-center overflow-hidden">
                 <img src={APP_ICON} alt="Workit" className="w-12 h-12 object-contain" />
               </div>
               <div className="flex-1">
@@ -141,17 +141,17 @@ export default function Settings() {
                 <div className="text-xs text-wiki-text3 mt-1">版本 {currentVersion}</div>
               </div>
               {updateStatus === 'idle' && (
-                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
+                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
                   <RefreshCwIcon size={12} /> 检查更新
                 </button>
               )}
               {updateStatus === 'checking' && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>
                   <RefreshCwIcon size={12} className="animate-spin" /> 检查中...
                 </div>
               )}
               {updateStatus === 'available' && (
-                <button onClick={downloadUpdate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                <button onClick={downloadUpdate} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
                   <DownloadIcon size={14} /> 更新 v{latestVersion}
                 </button>
               )}
@@ -165,16 +165,16 @@ export default function Settings() {
               )}
               {updateStatus === 'ready' && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
                     <CheckIcon size={12} /> 已下载
                   </div>
-                  <button onClick={installUpdate} className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                  <button onClick={installUpdate} className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
                     立即安装
                   </button>
                 </div>
               )}
               {updateStatus === 'error' && (
-                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
                   <RefreshCwIcon size={12} /> 重试
                 </button>
               )}

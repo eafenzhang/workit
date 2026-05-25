@@ -126,6 +126,7 @@ function setupIPC() {
 }
 
 function handleDbQuery(method, table, data, id) {
+  table = String(table || '').split('?')[0];
   switch (table) {
     case 'requirements':
       return handleRequirements(method, data, id);
@@ -168,7 +169,7 @@ function handleDbQuery(method, table, data, id) {
       const rows = query("SELECT id, title, status, updated_at FROM requirements ORDER BY updated_at DESC LIMIT 10");
       const iconMap = { '待评估': 'AlertCircleIcon', '设计中': 'EditIcon', '实现中': 'ArrowUpIcon', '测试中': 'SearchIcon', '已完成': 'CheckCircleIcon' };
       const colorMap = { '待评估': '#f59e0b', '设计中': '#6366f1', '实现中': '#06b6d4', '测试中': '#8b5cf6', '已完成': '#10b981' };
-      return rows.map(r => ({ icon: iconMap[r[2]] || 'ClockIcon', color: colorMap[r[2]] || '#888', text: r[1] || '', time: r[3] }));
+      return rows.map(r => ({ id: r[0], icon: iconMap[r[2]] || 'ClockIcon', color: colorMap[r[2]] || '#888', text: r[1] || '', time: r[3] }));
     }
     case 'insights/kpis': {
       const total = query('SELECT COUNT(*) FROM requirements')[0][0];
