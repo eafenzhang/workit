@@ -40,6 +40,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Convert icon PNG to ICO
+        run: npx png-to-ico public/icon.png > public/icon.ico
+
       - name: Build installer
         run: npx electron-builder --win --publish never
 
