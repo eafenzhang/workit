@@ -76,7 +76,14 @@ const DocTypeIcon = ({ type, size, style }: { type: string; size: number; style?
   return <Icon size={size} strokeWidth={1.5} style={style} />;
 };
 
-export default function Knowledge() {
+interface KnowledgeProps {
+  initialView?: string;
+  docId?: number;
+  onOpenSubTab?: (title: string, type: string, extra?: { docId?: number }) => void;
+  onCloseSelf?: () => void;
+}
+
+export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSelf }: KnowledgeProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
@@ -118,6 +125,21 @@ export default function Knowledge() {
       .then(r => r.json())
       .then(data => setDocuments(data));
   }, [activeCategory, search]);
+
+  // Handle initial view from parent tab system
+  useEffect(() => {
+    if (!initialView || initialView === 'knowledge') return;
+    if (initialView === 'knowledge-create') { setShowEdit({}); return; }
+    if (docId && (initialView === 'knowledge-detail' || initialView === 'knowledge-edit')) {
+      apiFetch('/api/documents').then(r => r.json()).then(data => {
+        const doc = data.find((d: any) => d.id === docId);
+        if (doc) {
+          if (initialView === 'knowledge-edit') setShowEdit(doc);
+          else setShowDoc(doc);
+        }
+      });
+    }
+  }, [initialView, docId]);
 
   // Fetch category counts + actual storage stats
   useEffect(() => {
@@ -412,7 +434,7 @@ export default function Knowledge() {
               <ListIcon size={14} style={{ color: viewMode === 'list' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
             </button>
           </div>
-            <button onClick={() => setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false })} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+            <button onClick={() => { if (onOpenSubTab) onOpenSubTab('新建文档','knowledge-create'); else setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false }); }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
               <PlusIcon size={16} /><span>新建文档</span>
             </button>
         </div>
@@ -428,7 +450,7 @@ export default function Knowledge() {
               {featuredDocs.map((doc) => {
                 const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
                 return (
-                  <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex-1 p-4 rounded-xl cursor-pointer hover:opacity-90 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                  <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else fetch(`/api/documents/${doc.id}`).then(r=>r.json()).then(setShowDoc); }} className="flex-1 p-4 rounded-xl cursor-pointer hover:opacity-90 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                       <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
@@ -451,7 +473,7 @@ export default function Knowledge() {
             const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
             if (viewMode === 'grid') {
               return (
-                <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="p-4 rounded-xl cursor-pointer hover:border-indigo-500/40 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else fetch(`/api/documents/${doc.id}`).then(r=>r.json()).then(setShowDoc); }} className="p-4 rounded-xl cursor-pointer hover:border-indigo-500/40 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                     <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>删除</button>
@@ -463,7 +485,7 @@ export default function Knowledge() {
               );
             } else {
               return (
-                <div key={doc.id} onClick={() => { fetch(`/api/documents/${doc.id}`).then(r => r.json()).then(setShowDoc); }} className="flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:border-indigo-500/30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else fetch(`/api/documents/${doc.id}`).then(r=>r.json()).then(setShowDoc); }} className="flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:border-indigo-500/30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                   <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
                   <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>

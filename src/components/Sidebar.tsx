@@ -1,6 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BotIcon, DatabaseIcon, LightbulbIcon, LayoutDashboardIcon, ChevronRightIcon, SparklesIcon, SettingsIcon, BellIcon, ChevronLeftIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
-import { APP_ICON } from '../constants/icon';
+import { BotIcon, DatabaseIcon, LightbulbIcon, LayoutDashboardIcon, SparklesIcon, SettingsIcon, BellIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
 
 interface SidebarProps {
   activeTab?: string;
@@ -49,7 +48,7 @@ export default function Sidebar({
   return (
     <aside
       data-cmp="Sidebar"
-      className="flex flex-col h-screen relative transition-all duration-300 ease-in-out"
+      className="flex flex-col h-full relative transition-all duration-300 ease-in-out"
       style={{
         width,
         minWidth,
@@ -57,28 +56,6 @@ export default function Sidebar({
         borderRight: '1px solid var(--wiki-border)',
       }}
     >
-      {/* Logo */}
-      <div
-        className="flex items-center gap-3 px-4 py-6 transition-all duration-300"
-        style={{
-          borderBottom: '1px solid var(--wiki-border)',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-        }}
-      >
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center wiki-glow flex-shrink-0 overflow-hidden"
-        >
-          <img src={APP_ICON} alt="Workit" className="w-8 h-8 object-contain" />
-        </div>
-        <div className="text-sm font-bold text-wiki-text tracking-wide whitespace-nowrap overflow-hidden transition-all duration-300" style={{
-          width: collapsed ? '0px' : 'auto',
-          opacity: collapsed ? 0 : 1,
-          flexShrink: collapsed ? 1 : 0,
-          flexGrow: collapsed ? 0 : 1,
-          pointerEvents: collapsed ? 'none' : 'auto',
-        }}>Workit</div>
-      </div>
-
       {/* Nav */}
       <nav className="flex flex-col gap-1 px-3 pt-6 flex-1 overflow-y-auto scrollbar-thin">
         {navItems.map((item) => {
@@ -206,26 +183,6 @@ export default function Sidebar({
           </div>
         </div>
       </div>
-
-      {/* Collapse Toggle */}
-      <button
-        onClick={() => onCollapsedChange(!collapsed)}
-        className="absolute w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 z-10"
-        style={{
-          background: 'var(--wiki-surface)',
-          border: '1px solid var(--wiki-border)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          right: '-12px',
-        }}
-      >
-        {collapsed ? (
-          <ChevronRightIcon size={12} style={{ color: 'var(--wiki-text2)' }} />
-        ) : (
-          <ChevronLeftIcon size={12} style={{ color: 'var(--wiki-text2)' }} />
-        )}
-      </button>
     </aside>
   );
 }

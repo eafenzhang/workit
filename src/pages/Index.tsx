@@ -1,86 +1,191 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import TitleBar from '../components/TitleBar';
+import Dashboard from './Dashboard';
+import Requirements from './Requirements';
+import Knowledge from './Knowledge';
+import Insights from './Insights';
+import MCP from './MCP';
+import Model from './Model';
+import Messages from './Messages';
+import Settings from './Settings';
+import { PlusIcon, XIcon } from 'lucide-react';
 
-interface IndexProps {
-  children?: React.ReactNode;
+interface GlobalTab {
+  id: string;
+  title: string;
+  type: string; // 'dashboard' | 'requirements' | 'requirements-detail' | 'requirements-create' | 'knowledge' | ...
+  reqId?: number; // for requirement detail tabs
+  params?: Record<string, any>;
 }
 
-export default function Index({ children = null }: IndexProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+export default function Index() {
+  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'dashboard', title: '总览', type: 'dashboard' }]);
+  const [activeTabId, setActiveTabId] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
-  const pathToTab: Record<string, string> = {
-    '/': 'dashboard',
-    '/requirements': 'requirements',
-    '/knowledge': 'knowledge',
-    '/insights': 'insights',
-    '/mcp': 'mcp',
-    '/model': 'model',
-    '/settings': 'settings',
+  // Open a tab by type — if exists, switch to it; else create new
+  const openTab = useCallback((type: string, title: string, extra?: Partial<GlobalTab>) => {
+    setTabs(prev => {
+      const existing = prev.find(t => t.type === type && t.reqId === extra?.reqId);
+      if (existing) {
+        setActiveTabId(existing.id);
+        return prev;
+      }
+      const newTab: GlobalTab = { id: type + '-' + Date.now(), title, type, ...extra };
+      setActiveTabId(newTab.id);
+      return [...prev, newTab];
+    });
+  }, []);
+
+  const closeTab = useCallback((tabId: string) => {
+    setTabs(prev => {
+      if (prev.length <= 1) return prev;
+      const idx = prev.findIndex(t => t.id === tabId);
+      const next = prev.filter(t => t.id !== tabId);
+      if (activeTabId === tabId) {
+        const newIdx = Math.min(idx, next.length - 1);
+        setActiveTabId(next[newIdx]?.id || 'dashboard');
+      }
+      return next;
+    });
+  }, [activeTabId]);
+
+  const switchTab = useCallback((tabId: string) => setActiveTabId(tabId), []);
+
+  // Sidebar menu click → open tab
+  const handleMenuClick = useCallback((menuType: string, menuTitle: string) => {
+    openTab(menuType, menuTitle);
+  }, [openTab]);
+
+  const activeTab = tabs.find(t => t.id === activeTabId);
+
+  // Build tab bar content for TitleBar
+  const tabBar = useMemo(() => (
+    <div className="flex items-center h-full overflow-x-auto scrollbar-thin gap-0.5">
+      {tabs.map(tab => {
+        const isActive = activeTabId === tab.id;
+        return (
+          <div key={tab.id} onClick={() => switchTab(tab.id)}
+            className="flex items-center gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer flex-shrink-0 select-none transition-colors"
+            style={{
+              background: isActive ? 'var(--wiki-surface2)' : 'transparent',
+              color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text3)',
+            }}>
+            <span className="truncate max-w-[100px]">{tab.title}</span>
+            {tabs.length > 1 && (
+              <button onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
+                className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0"><XIcon size={10} /></button>
+            )}
+          </div>
+        );
+      })}
+      <button onClick={() => openTab('dashboard', '总览')}
+        className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-wiki-text hover:bg-wiki-surface2 flex-shrink-0 flex items-center">
+        <PlusIcon size={12} />
+      </button>
+    </div>
+  ), [tabs, activeTabId, closeTab, switchTab, openTab]);
+
+  // Render page content based on active tab
+  const renderPage = () => {
+    if (!activeTab) return null;
+    switch (activeTab.type) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'requirements':
+        return <Requirements
+          key={activeTab.id}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+        />;
+      case 'requirements-detail':
+      case 'requirements-create':
+      case 'requirements-edit':
+        return <Requirements
+          key={activeTab.id}
+          initialTab={{ type: activeTab.type, reqId: activeTab.reqId, params: activeTab.params }}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+          onCloseSelf={() => closeTab(activeTab.id)}
+        />;
+      case 'knowledge':
+        return <Knowledge
+          key={activeTab.id}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+        />;
+      case 'knowledge-detail':
+      case 'knowledge-create':
+      case 'knowledge-edit':
+        return <Knowledge
+          key={activeTab.id}
+          initialView={activeTab.type}
+          docId={activeTab.docId}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+          onCloseSelf={() => closeTab(activeTab.id)}
+        />;
+      case 'insights':
+        return <Insights />;
+      case 'mcp':
+        return <MCP />;
+      case 'model':
+        return <Model />;
+      case 'messages':
+        return <Messages />;
+      case 'settings':
+        return <Settings />;
+      default:
+        return <Dashboard />;
+    }
   };
 
-  const activeTab = pathToTab[location.pathname] || 'dashboard';
-
-  const tabToPath: Record<string, string> = {
-    'dashboard': '/',
-    'requirements': '/requirements',
-    'knowledge': '/knowledge',
-    'insights': '/insights',
-    'mcp': '/mcp',
-    'model': '/model',
-    'settings': '/settings',
-  };
-
-  const handleTabChange = (tab: string) => {
-    navigate(tabToPath[tab] || '/');
-  };
-
-  const tabLabel: Record<string, string> = {
-    dashboard: `总览`,
-    requirements: `需求采集`,
-    knowledge: `知识`,
-    insights: `洞察分析`,
-    mcp: `MCP工具`,
-    model: `模型`,
-    settings: `设置`,
-  };
+  // Close inner tabs when closing a parent tab
+  // (handled automatically by React unmounting)
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-wiki-bg">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        collapsed={sidebarCollapsed}
-        onCollapsedChange={setSidebarCollapsed}
-      />
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-wiki-bg">
+      {/* Title bar spans full width */}
+      <TitleBar
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
+      >
+        {tabBar}
+      </TitleBar>
 
-      {/* Main content */}
-      <main className="flex-1 h-screen overflow-hidden flex flex-col">
-        <TitleBar />
-        {/* Top bar - breadcrumb only */}
-        <div
-          className="flex items-center px-8 py-3 flex-shrink-0 transition-all duration-300"
-          style={{
-            background: 'var(--wiki-surface)',
-            backdropFilter: `blur(12px)`,
-            borderBottom: '1px solid var(--wiki-border)',
+      {/* Below: Sidebar + Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          activeTab={activeTab?.type === 'requirements' ? 'requirements' :
+                     activeTab?.type === 'dashboard' ? 'dashboard' :
+                     activeTab?.type === 'knowledge' ? 'knowledge' :
+                     activeTab?.type === 'insights' ? 'insights' :
+                     activeTab?.type === 'mcp' ? 'mcp' :
+                     activeTab?.type === 'model' ? 'model' :
+                     activeTab?.type === 'messages' ? 'messages' :
+                     activeTab?.type === 'settings' ? 'settings' : 'dashboard'}
+          onTabChange={(menuType) => {
+            const menuMap: Record<string, { type: string; title: string }> = {
+              dashboard: { type: 'dashboard', title: '总览' },
+              requirements: { type: 'requirements', title: '需求采集' },
+              knowledge: { type: 'knowledge', title: '知识库' },
+              insights: { type: 'insights', title: '洞察分析' },
+              mcp: { type: 'mcp', title: 'MCP工具' },
+              model: { type: 'model', title: '模型' },
+              messages: { type: 'messages', title: '消息' },
+              settings: { type: 'settings', title: '设置' },
+            };
+            const item = menuMap[menuType];
+            if (item) handleMenuClick(item.type, item.title);
           }}
-        >
-          <div className="flex items-center gap-2 text-xs text-wiki-text3">
-            <span>Workit</span>
-            <span style={{ color: 'var(--wiki-text3)' }}>/</span>
-            <span style={{ color: 'var(--wiki-text2)' }}>{tabLabel[activeTab]}</span>
-          </div>
-        </div>
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
+        />
 
-        {/* Page content */}
-        <div className="flex-1 overflow-hidden" data-px-slot>
-          {children}
-        </div>
-      </main>
+        {/* Main content area */}
+        <main className="flex-1 overflow-hidden">
+          <div className="h-full">
+            {renderPage()}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
