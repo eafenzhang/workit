@@ -439,11 +439,9 @@ function setupAutoUpdater() {
   try {
     ipcMain.handle('check-for-update', async () => {
       try {
-        const r = await autoUpdater.checkForUpdatesAndNotify();
+        const r = await autoUpdater.checkForUpdates();
         if (r?.updateInfo?.version) {
-          const latest = r.updateInfo.version.replace(/^v/, '');
-          const current = app.getVersion();
-          return { available: latest !== current, version: latest };
+          return { available: true, version: r.updateInfo.version };
         }
         return { available: false };
       } catch { return { available: false }; }
