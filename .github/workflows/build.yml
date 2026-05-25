@@ -39,6 +39,7 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
       - name: Build installer
         run: npx electron-builder --win --publish never
 
