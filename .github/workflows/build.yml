@@ -15,6 +15,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clean test data
+        shell: bash
+        run: |
+          rm -rf backend/data/ backend/api_*.txt backend/api_*.json backend/test_* backend/*.sh
+          echo "Test data cleared"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
