@@ -1,7 +1,7 @@
 {
   "name": "workit",
   "productName": "Workit",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Workit 需求管理应用",
   "author": "Eafenzhang",
   "private": true,
