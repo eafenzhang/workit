@@ -7,6 +7,18 @@ import { AuthProvider } from './context/AuthContext';
 import { useState, useEffect } from 'react';
 
 const App = () => {
+  const isQCPopup = window.location.hash === '#qc-popup';
+
+  if (isQCPopup) {
+    return (
+      <AuthProvider>
+        <ErrorBoundary label="QC">
+          <QuickCapture />
+        </ErrorBoundary>
+      </AuthProvider>
+    );
+  }
+
   const [quickCollectEnabled, setQuickCollectEnabled] = useState(false);
 
   useEffect(() => {
