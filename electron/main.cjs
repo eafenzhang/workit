@@ -437,36 +437,42 @@ app.whenReady().then(async () => {
 function setupAutoUpdater() {
   if (isDev) return;
   try {
-    // Silent auto-download: on startup, check & download in background
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 
+    // Manual check: just report what's available, don't trigger download
     ipcMain.handle('check-for-update', async () => {
       try {
         const r = await autoUpdater.checkForUpdates();
+        const current = app.getVersion();
         if (r?.updateInfo?.version) {
-          const updateVersion = r.updateInfo.version;
-          log('Updater: found ' + updateVersion + ' current=' + app.getVersion());
-          return { available: updateVersion !== app.getVersion(), version: updateVersion, current: app.getVersion() };
+          const v = r.updateInfo.version;
+          log('Updater check: found v' + v + ' current=' + current);
+          return { available: v !== current, version: v, current };
         }
-        return { available: false, current: app.getVersion() };
+        return { available: false, current };
       } catch (e) {
         log('Updater check error: ' + (e.message || e));
         return { available: false, error: e.message || 'Unknown error', current: app.getVersion() };
       }
     });
 
+    ipcMain.handle('download-update', async () => {
+      try { await autoUpdater.downloadUpdate(); return { ok: true }; }
+      catch (e) { return { ok: false, error: e.message }; }
+    });
+
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
 
     autoUpdater.on('update-available', (info) => {
-      log('Updater: update available v' + info.version + ' — downloading...');
+      log('Updater: v' + info.version + ' available, auto-downloading...');
       mainWindow?.webContents?.send('update-available', info.version);
     });
     autoUpdater.on('download-progress', (p) => {
       mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent));
     });
     autoUpdater.on('update-downloaded', () => {
-      log('Updater: downloaded, will install on quit');
+      log('Updater: downloaded, install on quit');
       mainWindow?.webContents?.send('update-downloaded');
     });
     autoUpdater.on('error', (e) => log('Updater error: ' + e.message));
@@ -476,8 +482,8 @@ function setupAutoUpdater() {
       warn: (m) => log('Updater warn: ' + m), error: (m) => log('Updater error: ' + m)
     };
 
-    // Delayed startup check (background)
-    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+    // Startup: auto-check & download in background
+    setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 10000);
   } catch (e) { log('AutoUpdater init failed', e); }
 }
 

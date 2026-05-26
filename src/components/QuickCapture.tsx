@@ -221,7 +221,7 @@ export default function QuickCapture() {
             <div className="mb-4">
               <label className="text-xs text-wiki-text3 mb-1.5 block">补充描述</label>
               <textarea
-                className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none resize-none"
+                className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none"
                 style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                 rows={3}
                 placeholder="补充更多信息..."
@@ -234,7 +234,7 @@ export default function QuickCapture() {
               <div className="flex-1">
                 <label className="text-xs text-wiki-text3 mb-1.5 block">模块</label>
                 <select
-                  className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none"
                   style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={module}
                   onChange={e => setModule(e.target.value)}
@@ -245,7 +245,7 @@ export default function QuickCapture() {
               <div className="flex-1">
                 <label className="text-xs text-wiki-text3 mb-1.5 block">优先级</label>
                 <select
-                  className="w-full px-3 py-2.5 rounded-lg text-sm text-wiki-text outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none"
                   style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
                   value={priority}
                   onChange={e => setPriority(e.target.value)}
@@ -258,14 +258,14 @@ export default function QuickCapture() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }}
-                className="flex-1 py-2.5 rounded-lg text-sm"
+                className="flex-1 py-2 rounded-lg text-xs"
                 style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
               >
                 取消
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium"
+                className="flex-1 py-2 rounded-lg text-xs font-medium"
                 style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}
               >
                 提交需求

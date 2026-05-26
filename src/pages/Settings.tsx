@@ -18,7 +18,7 @@ export default function Settings() {
 
   useEffect(() => {
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
-    // Silent auto-download events
+    // Auto-download events from background check
     api?.onUpdateAvailable?.((v: string) => { setLatestVersion(v); setUpdateStatus('downloading'); setDownloadProgress(0); });
     api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
     api?.onUpdateDownloaded?.(() => setUpdateStatus('ready'));
@@ -31,8 +31,15 @@ export default function Settings() {
     try {
       const result = await api.checkForUpdate();
       if (result?.error) { setUpdateError(result.error); setUpdateStatus('error'); return; }
-      if (result?.available) { setLatestVersion(result.version); setUpdateStatus('available'); }
-      else { setUpdateError('已是最新版本'); setUpdateStatus('idle'); setTimeout(() => setUpdateError(''), 3000); }
+      if (result?.available) {
+        setLatestVersion(result.version);
+        setUpdateStatus('downloading');
+        setDownloadProgress(0);
+        await api.downloadUpdate(); // triggers progress events
+      } else {
+        setUpdateError('已是最新版本'); setUpdateStatus('idle');
+        setTimeout(() => setUpdateError(''), 3000);
+      }
     } catch { setUpdateError('网络请求失败'); setUpdateStatus('error'); }
   };
 
@@ -144,21 +151,21 @@ export default function Settings() {
                 </button>
               )}
               {updateStatus === 'checking' && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--wiki-text3)' }}>
                   <RefreshCwIcon size={12} className="animate-spin" /> 检查中...
                 </div>
               )}
-              {updateStatus === 'available' && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>
-                  <DownloadIcon size={12} /> v{latestVersion} 可用，下载中...
-                </div>
-              )}
               {updateStatus === 'downloading' && (
-                <div className="flex items-center gap-3">
-                  <div className="w-32 h-2 rounded-full bg-wiki-surface2 overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${downloadProgress}%`, background: 'var(--wiki-text)' }} />
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs" style={{ color: 'var(--wiki-text)' }}>
+                    正在下载 v{latestVersion}...
                   </div>
-                  <span className="text-xs text-wiki-text3">{downloadProgress}%</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-44 h-2 rounded-full overflow-hidden" style={{ background: 'var(--wiki-surface2)' }}>
+                      <div className="h-full rounded-full transition-all duration-300" style={{ width: `${downloadProgress}%`, background: 'var(--wiki-text)' }} />
+                    </div>
+                    <span className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{downloadProgress}%</span>
+                  </div>
                 </div>
               )}
               {updateStatus === 'ready' && (

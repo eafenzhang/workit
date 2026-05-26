@@ -48,7 +48,7 @@ export default function Insights() {
               <button
                 key={r.id}
                 onClick={() => setActiveReport(r.id)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+                className="px-3 py-2 rounded-md text-xs font-medium transition-all"
                 style={{
                   background: activeReport === r.id ? 'var(--wiki-text)' : 'transparent',
                   color: activeReport === r.id ? 'var(--wiki-bg)' : 'var(--wiki-text2)',

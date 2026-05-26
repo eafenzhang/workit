@@ -127,7 +127,7 @@
   /* Pure black background, white text */
   --wiki-bg: #000000;
   --wiki-surface: #0a0a0a;
-  --wiki-surface2: #141414;
+  --wiki-surface2: #222222;
   --wiki-border: rgba(255, 255, 255, 0.1);
   --wiki-accent: #ffffff;
   --wiki-accent2: rgba(255, 255, 255, 0.8);

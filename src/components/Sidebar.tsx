@@ -76,12 +76,12 @@ export default function Sidebar({
               }}
             >
               <div
-                className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
                 style={{
-                  background: active ? 'rgba(0,0,0,0.08)' : 'transparent',
+                  background: active ? 'var(--wiki-surface2)' : 'transparent',
                 }}
               >
-                <Icon size={14} style={{ color: active ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+                <Icon size={18} style={{ color: active ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
               </div>
               {/* Hover tooltip */}
               <span className="absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
@@ -107,12 +107,12 @@ export default function Sidebar({
           }}
         >
           <div
-            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
+            className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-200"
             style={{
-              background: activeTab === 'settings' ? 'rgba(0,0,0,0.08)' : 'transparent',
+              background: activeTab === 'settings' ? 'var(--wiki-surface2)' : 'transparent',
             }}
           >
-            <SettingsIcon size={14} style={{ color: activeTab === 'settings' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+            <SettingsIcon size={18} style={{ color: activeTab === 'settings' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
           </div>
           <span className="absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
             style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>设置</span>
@@ -126,9 +126,9 @@ export default function Sidebar({
           style={{ height: '44px' }}
         >
           <div
-            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+            className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }}>
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>
