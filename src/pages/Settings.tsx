@@ -54,6 +54,7 @@ export default function Settings() {
     setQuickCollect(enabled);
     localStorage.setItem('quick_collect_enabled', String(enabled));
     window.dispatchEvent(new CustomEvent('quick-collect-toggle', { detail: { enabled } }));
+    api?.toggleQCWindow?.(enabled);
   };
 
   const appearanceOptions = [

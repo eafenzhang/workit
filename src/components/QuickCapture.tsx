@@ -161,9 +161,11 @@ export default function QuickCapture() {
     }
   };
 
+  const isStandalone = window.location.hash === '#qc-popup';
+
   return (
     <>
-      {enabled && (
+      {!isStandalone && enabled && (
       <button
         onClick={handleFloatClick}
         className="fixed bottom-6 right-6 w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-40 transition-all duration-200 hover:scale-110 opacity-80 hover:opacity-100"
@@ -174,8 +176,8 @@ export default function QuickCapture() {
       </button>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+      {(showModal || isStandalone) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: isStandalone ? 'transparent' : 'rgba(0,0,0,0.6)', backdropFilter: isStandalone ? 'none' : 'blur(4px)' }}>
           <div className="w-[672px] max-h-[85vh] overflow-y-auto p-5 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
@@ -184,9 +186,11 @@ export default function QuickCapture() {
                 </div>
                 <span className="text-sm font-semibold text-wiki-text">快速采集</span>
               </div>
+              {!isStandalone && (
               <button onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }} className="p-1 rounded-md hover:bg-wiki-surface2">
                 <XIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
               </button>
+              )}
             </div>
 
             {captured?.text && (
@@ -257,7 +261,7 @@ export default function QuickCapture() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }}
+                onClick={() => { if (isStandalone) window.close(); else { setShowModal(false); setCaptured(null); setDesc(''); } }}
                 className="flex-1 py-2 rounded-lg text-xs"
                 style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
               >

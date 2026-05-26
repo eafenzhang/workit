@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setMinimizeToTray: (enabled) => ipcRenderer.invoke('set-minimize-to-tray', enabled),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke('set-open-at-login', enabled),
+  toggleQCWindow: (enabled) => ipcRenderer.invoke('toggle-qc-window', enabled),
 });

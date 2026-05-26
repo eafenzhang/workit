@@ -473,6 +473,30 @@ app.whenReady().then(async () => {
       return enabled;
     });
 
+    // QuickCapture external popup
+    ipcMain.handle('toggle-qc-window', (_, enabled) => {
+      if (enabled) {
+        if (!qcWindow) {
+          const { screen } = require('electron');
+          const disp = screen.getPrimaryDisplay();
+          const { width, height } = disp.workAreaSize;
+          qcWindow = new BrowserWindow({
+            width: 420, height: 520,
+            x: width - 440, y: height - 540,
+            frame: false, resizable: false, alwaysOnTop: true,
+            skipTaskbar: true, transparent: true,
+            webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false }
+          });
+          qcWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: 'qc-popup' });
+          qcWindow.on('closed', () => { qcWindow = null; });
+        }
+        qcWindow.show();
+      } else {
+        qcWindow?.close();
+      }
+      return enabled;
+    });
+
   } catch (e) { log('App ready handler failed', e); }
 });
 
