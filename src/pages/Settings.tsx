@@ -18,8 +18,10 @@ export default function Settings() {
 
   useEffect(() => {
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
+    // Silent auto-download events
+    api?.onUpdateAvailable?.((v: string) => { setLatestVersion(v); setUpdateStatus('downloading'); setDownloadProgress(0); });
     api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
-    api?.onUpdateReady?.(() => setUpdateStatus('ready'));
+    api?.onUpdateDownloaded?.(() => setUpdateStatus('ready'));
   }, []);
 
   const checkForUpdate = async () => {
@@ -30,15 +32,8 @@ export default function Settings() {
       const result = await api.checkForUpdate();
       if (result?.error) { setUpdateError(result.error); setUpdateStatus('error'); return; }
       if (result?.available) { setLatestVersion(result.version); setUpdateStatus('available'); }
-      else setUpdateStatus('idle');
+      else { setUpdateError('已是最新版本'); setUpdateStatus('idle'); setTimeout(() => setUpdateError(''), 3000); }
     } catch { setUpdateError('网络请求失败'); setUpdateStatus('error'); }
-  };
-
-  const downloadUpdate = async () => {
-    if (!api) return;
-    setUpdateStatus('downloading');
-    setDownloadProgress(0);
-    try { await api.downloadUpdate(); } catch { setUpdateStatus('error'); }
   };
 
   const installUpdate = () => { api?.installUpdate(); };
@@ -154,9 +149,9 @@ export default function Settings() {
                 </div>
               )}
               {updateStatus === 'available' && (
-                <button onClick={downloadUpdate} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                  <DownloadIcon size={14} /> 更新 v{latestVersion}
-                </button>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>
+                  <DownloadIcon size={12} /> v{latestVersion} 可用，下载中...
+                </div>
               )}
               {updateStatus === 'downloading' && (
                 <div className="flex items-center gap-3">
@@ -171,7 +166,7 @@ export default function Settings() {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
                     <CheckIcon size={12} /> 已下载
                   </div>
-                  <button onClick={installUpdate} className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                  <button onClick={installUpdate} className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
                     立即安装
                   </button>
                 </div>

@@ -15,8 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbUpload: (table, fileData) => ipcRenderer.invoke('db-upload', table, fileData),
   // Auto-update
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
-  downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, v) => cb(v)),
   onUpdateProgress: (cb) => ipcRenderer.on('update-download-progress', (_, p) => cb(p)),
-  onUpdateReady: (cb) => ipcRenderer.on('update-ready', () => cb()),
+  onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
 });

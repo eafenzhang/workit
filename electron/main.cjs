@@ -437,27 +437,47 @@ app.whenReady().then(async () => {
 function setupAutoUpdater() {
   if (isDev) return;
   try {
+    // Silent auto-download: on startup, check & download in background
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
     ipcMain.handle('check-for-update', async () => {
       try {
         const r = await autoUpdater.checkForUpdates();
         if (r?.updateInfo?.version) {
-          log('check-for-update: found version=' + r.updateInfo.version + ' current=' + app.getVersion());
-          return { available: r.updateInfo.version !== app.getVersion(), version: r.updateInfo.version, current: app.getVersion() };
+          const updateVersion = r.updateInfo.version;
+          log('Updater: found ' + updateVersion + ' current=' + app.getVersion());
+          return { available: updateVersion !== app.getVersion(), version: updateVersion, current: app.getVersion() };
         }
-        log('check-for-update: no update available');
         return { available: false, current: app.getVersion() };
       } catch (e) {
-        log('check-for-update ERROR: ' + (e.message || e));
+        log('Updater check error: ' + (e.message || e));
         return { available: false, error: e.message || 'Unknown error', current: app.getVersion() };
       }
     });
-    ipcMain.handle('download-update', async () => { await autoUpdater.downloadUpdate(); return true; });
+
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
-    autoUpdater.on('download-progress', (p) => mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent)));
-    autoUpdater.on('update-downloaded', () => mainWindow?.webContents?.send('update-ready'));
-    autoUpdater.autoDownload = false;
-    // GitHub provider config read from package.json "publish" field
-    autoUpdater.logger = { debug: () => {}, info: (m) => log('Updater: ' + m), warn: (m) => log('Updater warn: ' + m), error: (m) => log('Updater error: ' + m) };
+
+    autoUpdater.on('update-available', (info) => {
+      log('Updater: update available v' + info.version + ' — downloading...');
+      mainWindow?.webContents?.send('update-available', info.version);
+    });
+    autoUpdater.on('download-progress', (p) => {
+      mainWindow?.webContents?.send('update-download-progress', Math.round(p.percent));
+    });
+    autoUpdater.on('update-downloaded', () => {
+      log('Updater: downloaded, will install on quit');
+      mainWindow?.webContents?.send('update-downloaded');
+    });
+    autoUpdater.on('error', (e) => log('Updater error: ' + e.message));
+
+    autoUpdater.logger = {
+      debug: () => {}, info: (m) => log('Updater: ' + m),
+      warn: (m) => log('Updater warn: ' + m), error: (m) => log('Updater error: ' + m)
+    };
+
+    // Delayed startup check (background)
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
   } catch (e) { log('AutoUpdater init failed', e); }
 }
 
