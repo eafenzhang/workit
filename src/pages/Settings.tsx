@@ -13,11 +13,16 @@ export default function Settings() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [currentVersion, setCurrentVersion] = useState('1.0.0');
   const [updateError, setUpdateError] = useState('');
+  const [minimizeToTray, setMinimizeToTray] = useState(false);
+  const [openAtLogin, setOpenAtLogin] = useState(false);
 
   const api = (window as any).electronAPI;
 
   useEffect(() => {
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
+    api?.getSettings?.().then((s: any) => {
+      if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
+    }).catch(() => {});
     // Auto-download events from background check
     api?.onUpdateAvailable?.((v: string) => { setLatestVersion(v); setUpdateStatus('downloading'); setDownloadProgress(0); });
     api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
@@ -125,6 +130,33 @@ export default function Settings() {
                 />
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* System Section */}
+        <section className="mb-8">
+          <h2 className="text-base font-semibold text-wiki-text mb-4">系统</h2>
+          <div className="flex flex-col gap-3 rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+            {[{
+              label: '开机启动', desc: '系统启动时自动运行 Workit',
+              value: openAtLogin, set: (v: boolean) => { setOpenAtLogin(v); api?.setOpenAtLogin(v); }
+            }, {
+              label: '最小化到托盘', desc: '关闭窗口时隐藏到系统托盘而非退出',
+              value: minimizeToTray, set: (v: boolean) => { setMinimizeToTray(v); api?.setMinimizeToTray(v); }
+            }].map((item, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-wiki-text">{item.label}</div>
+                  <div className="text-xs text-wiki-text3 mt-0.5">{item.desc}</div>
+                </div>
+                <button onClick={() => item.set(!item.value)}
+                  className="relative w-12 h-6 rounded-full transition-colors"
+                  style={{ background: item.value ? 'var(--wiki-text)' : 'var(--wiki-surface2)' }}>
+                  <span className="absolute top-0.5 w-5 h-5 rounded-full shadow transition-all"
+                    style={{ left: item.value ? '26px' : '4px', transition: 'left 0.2s', background: item.value ? 'var(--wiki-bg)' : 'var(--wiki-text3)' }} />
+                </button>
+              </div>
+            ))}
           </div>
         </section>
 

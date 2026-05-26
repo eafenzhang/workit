@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -430,7 +430,49 @@ app.whenReady().then(async () => {
   log('App ready');
   try {
     setupAutoUpdater();
-    return createWindow();
+    await createWindow();
+
+    // Tray + QC window + settings
+    let tray = null;
+    let minimizeToTray = false;
+    let qcWindow = null;
+
+    function createTray() {
+      if (tray) return;
+      const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'public', 'icon.png')).resize({ width: 16, height: 16 });
+      tray = new Tray(icon);
+      tray.setToolTip('Workit');
+      tray.setContextMenu(Menu.buildFromTemplate([
+        { label: '显示窗口', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+        { type: 'separator' },
+        { label: '退出', click: () => { app.isQuitting = true; app.quit(); } }
+      ]));
+      tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+    }
+
+    mainWindow.on('close', (event) => {
+      if (minimizeToTray && !app.isQuitting) {
+        event.preventDefault();
+        mainWindow.hide();
+      }
+    });
+
+    ipcMain.handle('get-settings', () => ({
+      minimizeToTray,
+      openAtLogin: app.getLoginItemSettings().openAtLogin
+    }));
+
+    ipcMain.handle('set-minimize-to-tray', (_, enabled) => {
+      minimizeToTray = enabled;
+      if (enabled) createTray(); else { tray?.destroy(); tray = null; }
+      return enabled;
+    });
+
+    ipcMain.handle('set-open-at-login', (_, enabled) => {
+      app.setLoginItemSettings({ openAtLogin: enabled });
+      return enabled;
+    });
+
   } catch (e) { log('App ready handler failed', e); }
 });
 
@@ -487,7 +529,6 @@ function setupAutoUpdater() {
   } catch (e) { log('AutoUpdater init failed', e); }
 }
 
-app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith('http://localhost')) event.preventDefault();
   });

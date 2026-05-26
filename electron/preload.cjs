@@ -20,4 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, v) => cb(v)),
   onUpdateProgress: (cb) => ipcRenderer.on('update-download-progress', (_, p) => cb(p)),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setMinimizeToTray: (enabled) => ipcRenderer.invoke('set-minimize-to-tray', enabled),
+  setOpenAtLogin: (enabled) => ipcRenderer.invoke('set-open-at-login', enabled),
 });
