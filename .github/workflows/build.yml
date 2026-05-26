@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+          fetch-depth: 0
           lfs: false
 
       - name: Clean test data
@@ -52,7 +52,7 @@ jobs:
         run: npx electron-builder --win --publish never
 
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.2
         if: success()
         with:
           tag_name: v${{ steps.version.outputs.version }}
