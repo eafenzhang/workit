@@ -10,7 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
   close: () => ipcRenderer.invoke('window-close'),
-  onMaximizeChange: (cb) => ipcRenderer.on('window-maximized-change', (_, v) => cb(v)),
+  // P1-05: onMaximizeChange returns unsubscribe function
+  onMaximizeChange: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on('window-maximized-change', handler);
+    return () => ipcRenderer.removeListener('window-maximized-change', handler);
+  },
   isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   // Database operations
   dbQuery: (method, table, args) => ipcRenderer.invoke('db-query', method, table, args),
@@ -19,9 +24,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, v) => cb(v)),
-  onUpdateProgress: (cb) => ipcRenderer.on('update-download-progress', (_, p) => cb(p)),
-  onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
+  // P1-06: Update event listeners return unsubscribe functions
+  onUpdateAvailable: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on('update-available', handler);
+    return () => ipcRenderer.removeListener('update-available', handler);
+  },
+  onUpdateProgress: (cb) => {
+    const handler = (_, p) => cb(p);
+    ipcRenderer.on('update-download-progress', handler);
+    return () => ipcRenderer.removeListener('update-download-progress', handler);
+  },
+  onUpdateDownloaded: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('update-downloaded', handler);
+    return () => ipcRenderer.removeListener('update-downloaded', handler);
+  },
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setMinimizeToTray: (enabled) => ipcRenderer.invoke('set-minimize-to-tray', enabled),
@@ -32,4 +50,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifyRequirementsChanged: () => ipcRenderer.invoke('notify-requirements-changed'),
   testModelConnection: (baseUrl, apiKey, modelId) => ipcRenderer.invoke('test-model-connection', baseUrl, apiKey, modelId),
   resizeQC: (width, height) => ipcRenderer.invoke('resize-qc-window', width, height),
+  // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
+  onRequirementsChanged: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('requirements-changed', handler);
+    return () => ipcRenderer.removeListener('requirements-changed', handler);
+  },
 });

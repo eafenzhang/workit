@@ -9,7 +9,7 @@ import MCP from './MCP';
 import Model from './Model';
 import Messages from './Messages';
 import Settings from './Settings';
-import { PlusIcon, XIcon } from 'lucide-react';
+import { XIcon, Trash2Icon } from 'lucide-react';
 
 interface GlobalTab {
   id: string;
@@ -62,18 +62,20 @@ export default function Index() {
 
   // Build tab bar content for TitleBar
   const tabBar = useMemo(() => (
-    <div className="flex items-center h-full  gap-0.5">
+    <div className="flex items-center h-full gap-0.5 w-full overflow-hidden">
       {tabs.map(tab => {
         const isActive = activeTabId === tab.id;
         return (
           <div key={tab.id} onClick={() => switchTab(tab.id)}
-            className="flex items-center gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer min-w-0 flex-shrink select-none transition-colors group"
+            className="flex items-center justify-between gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer select-none transition-colors group flex-shrink"
             style={{
+              width: '88px',
+              minWidth: '80px',
               background: isActive ? 'var(--wiki-surface2)' : 'transparent',
               color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text3)',
               WebkitAppRegion: 'no-drag',
             } as any}>
-            <span className="truncate max-w-[80px]">{tab.title}</span>
+            <span className="truncate">{tab.title}</span>
             {tabs.length > 1 && (
               <button onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
                 className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0 transition-opacity duration-150"
@@ -86,18 +88,15 @@ export default function Index() {
           </div>
         );
       })}
-      <button onClick={() => openTab('dashboard', '首页')}
-        className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-wiki-text hover:bg-wiki-surface2 flex-shrink-0 flex items-center"
-        style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <PlusIcon size={12} />
-      </button>
-      <button onClick={() => setTabs([{ id: 'dashboard', title: '首页', type: 'dashboard' }])}
-        className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-red-500 hover:bg-wiki-surface2 flex-shrink-0 flex items-center ml-0.5"
-        style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <XIcon size={12} />
-      </button>
+      {tabs.length > 1 && (
+        <button onClick={() => { setTabs([{ id: 'dashboard', title: '首页', type: 'dashboard' }]); setActiveTabId('dashboard'); }}
+          className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-red-500 hover:bg-wiki-surface2 flex-shrink-0 flex items-center ml-0.5"
+          style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <Trash2Icon size={12} />
+        </button>
+      )}
     </div>
-  ), [tabs, activeTabId, closeTab, switchTab, openTab]);
+  ), [tabs, activeTabId, closeTab, switchTab]);
 
   // Render page content based on active tab
   const renderPage = () => {

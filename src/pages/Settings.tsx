@@ -26,10 +26,21 @@ export default function Settings() {
     api?.getSettings?.().then((s: any) => {
       if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
     }).catch(() => {});
-    // Auto-download events from background check
-    api?.onUpdateAvailable?.((v: string) => { setLatestVersion(v); setUpdateStatus('downloading'); setDownloadProgress(0); });
-    api?.onUpdateProgress?.((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
-    api?.onUpdateDownloaded?.(() => setUpdateStatus('ready'));
+    // P1-06: Store unsubscribe functions for cleanup
+    const unsubs: (() => void)[] = [];
+    if (api?.onUpdateAvailable) {
+      const unsub = api.onUpdateAvailable((v: string) => { setLatestVersion(v); setUpdateStatus('available'); });
+      if (unsub) unsubs.push(unsub);
+    }
+    if (api?.onUpdateProgress) {
+      const unsub = api.onUpdateProgress((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
+      if (unsub) unsubs.push(unsub);
+    }
+    if (api?.onUpdateDownloaded) {
+      const unsub = api.onUpdateDownloaded(() => setUpdateStatus('ready'));
+      if (unsub) unsubs.push(unsub);
+    }
+    return () => { unsubs.forEach(fn => fn()); };
   }, []);
 
   const checkForUpdate = async () => {

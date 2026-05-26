@@ -74,9 +74,10 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
 
   useEffect(() => {
     fetchRequirements();
-    const listener = () => fetchRequirements();
-    window.addEventListener('requirements-changed', listener);
-    return () => window.removeEventListener('requirements-changed', listener);
+    // P0-06: Use electronAPI forwarding instead of window.addEventListener
+    const api = (window as any).electronAPI;
+    const unsub = api?.onRequirementsChanged?.(() => fetchRequirements());
+    return () => { if (unsub) unsub(); };
   }, []);
 
   const fetchRequirements = () => {
@@ -333,7 +334,7 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
             <SparklesIcon size={13} /><span>{analyzing ? '分析中...' : 'AI分析'}</span>
           </button>
           {detailReq.status !== '已完成' && (
-            <button onClick={() => { const so = ['待评估','设计中','实现中','测试中','已完成']; const ni = so.indexOf(detailReq.status)+1; if (ni < so.length) apiFetch(`/api/requirements/${detailReq.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:detailReq.title,desc:detailReq.desc,module:detailReq.module,priority:detailReq.priority,status:so[ni],assignee:detailReq.assignee,workflow_handler:detailReq.assignee,images:detailReq.images})}).then(()=>{fetchRequirements();toast.success(`已推进到「${so[ni]}」`);});}}
+            <button onClick={() => { const so = ['待评估','设计中','实现中','测试中','已完成']; const ni = so.indexOf(detailReq.status)+1; if (ni < so.length) { if (!confirm(`确定推进到「${so[ni]}」？`)) return; apiFetch(`/api/requirements/${detailReq.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:detailReq.title,desc:detailReq.desc,module:detailReq.module,priority:detailReq.priority,status:so[ni],assignee:detailReq.assignee,workflow_handler:detailReq.assignee,images:detailReq.images})}).then(()=>{fetchRequirements();toast.success(`已推进到「${so[ni]}」`);}); }}}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0 font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
               <CheckCircleIcon size={13} /> 推进
             </button>

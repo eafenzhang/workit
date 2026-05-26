@@ -188,12 +188,14 @@ export default function Model() {
                 <div className="relative">
                   <button onClick={() => setModelDropdown(modelDropdown === m.id ? null : m.id)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
-                    <span>{currentModels.find(x => x.id === m.modelId)?.name || m.modelId}</span>
+                    {/* P0-08: Use model's own provider for dropdown, not form.provider */}
+                    <span>{(PROVIDER_LIST.find(p => p.id === m.provider)?.models || []).find(x => x.id === m.modelId)?.name || m.modelId}</span>
                     <ChevronDownIcon size={14} />
                   </button>
                   {modelDropdown === m.id && (
                     <div className="absolute top-full mt-1 right-0 w-56 rounded-lg py-1 z-50" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                      {currentModels.map(pm => (
+                      {/* P0-08: Use model's own provider for dropdown list */}
+                      {(PROVIDER_LIST.find(p => p.id === m.provider)?.models || []).map(pm => (
                         <button key={pm.id} onClick={async () => {
                           setModelDropdown(null);
                           if (pm.id !== m.modelId) {

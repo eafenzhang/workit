@@ -16,8 +16,10 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
   useEffect(() => {
     const api = getAPI();
-    api?.onMaximizeChange?.((v: boolean) => setMaximized(v));
+    // P1-05: Store unsubscribe function and clean up on unmount
+    const unsub = api?.onMaximizeChange?.((v: boolean) => setMaximized(v));
     api?.isMaximized?.().then(setMaximized);
+    return () => { if (unsub) unsub(); };
   }, []);
 
   const handleMinimize = () => { getAPI()?.minimize?.(); };

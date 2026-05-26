@@ -6,6 +6,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
+// P0-05: Import DOMPurify for XSS protection
+import DOMPurify from 'dompurify';
 
 interface Category {
   id: string;
@@ -405,7 +407,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                 <iframe src={showDoc.file_path} className="w-full min-h-[700px] rounded-lg" style={{ border: '1px solid var(--wiki-border)' }} />
               ) : /\.(docx?|xlsx?|pptx?)$/i.test(showDoc.file_path) ? (
                 previewHtml ? (
-                  <div className="prose prose-sm max-w-none text-wiki-text2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-wiki-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-wiki-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-wiki-surface2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  <div className="prose prose-sm max-w-none text-wiki-text2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-wiki-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-wiki-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-wiki-surface2" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml || '') }} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                     <FileTextIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
@@ -419,7 +421,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
               )}
             </div>
           ) : showDoc.content ? (
-            <div className="prose prose-sm max-w-none text-wiki-text2 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_p]:leading-relaxed [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-wiki-accent [&_blockquote]:pl-4 [&_code]:bg-wiki-surface2 [&_code]:px-1 [&_code]:rounded text-sm" dangerouslySetInnerHTML={{ __html: showDoc.content }} />
+            <div className="prose prose-sm max-w-none text-wiki-text2 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_p]:leading-relaxed [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-wiki-accent [&_blockquote]:pl-4 [&_code]:bg-wiki-surface2 [&_code]:px-1 [&_code]:rounded text-sm" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(showDoc.content || '') }} />
           ) : null}
         </div>
         <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
@@ -672,7 +674,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                     <iframe src={showDoc.file_path} className="w-full min-h-[700px] rounded-lg" style={{ border: '1px solid var(--wiki-border)' }} />
                   ) : /\.(docx?|xlsx?|pptx?)$/i.test(showDoc.file_path) ? (
                     previewHtml ? (
-                      <div className="prose prose-sm max-w-none text-wiki-text2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-wiki-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-wiki-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-wiki-surface2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                      <div className="prose prose-sm max-w-none text-wiki-text2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-wiki-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-wiki-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-wiki-surface2" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml || '') }} />
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                         <FileTextIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
@@ -686,7 +688,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                   )}
                 </div>
               ) : showDoc.content ? (
-                <div className="prose prose-sm max-w-none text-wiki-text2 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_p]:leading-relaxed [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-wiki-accent [&_blockquote]:pl-4 [&_code]:bg-wiki-surface2 [&_code]:px-1 [&_code]:rounded text-sm" dangerouslySetInnerHTML={{ __html: showDoc.content }} />
+                <div className="prose prose-sm max-w-none text-wiki-text2 [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_p]:leading-relaxed [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-wiki-accent [&_blockquote]:pl-4 [&_code]:bg-wiki-surface2 [&_code]:px-1 [&_code]:rounded text-sm" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(showDoc.content || '') }} />
               ) : null}
             </div>
 

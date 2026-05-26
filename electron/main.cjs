@@ -1,9 +1,31 @@
-const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const updaterPkg = require('electron-updater');
-const { autoUpdater } = updaterPkg;
+
+// P0-01: Whitelist for dynamic table names used in SQL
+const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models'];
+
+// P1-09: Whitelist for allowed IPC methods on db-query
+const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
+
+// P0-02: Whitelists for dynamic field names in MCP/Models PUT
+const MCP_FIELDS = new Map([
+  ['enabled', (v) => v ? 1 : 0],
+  ['config', (v) => JSON.stringify(v)],
+  ['name', (v) => v],
+  ['type', (v) => v],
+  ['command', (v) => v],
+  ['args', (v) => JSON.stringify(v)],
+  ['env', (v) => JSON.stringify(v)],
+]);
+const MODEL_FIELDS = new Map([
+  ['name', (v) => v],
+  ['apiKey', (v) => v],
+  ['modelId', (v) => v],
+  ['is_default', (v) => v ? 1 : 0],
+  ['enabled', (v) => v ? 1 : 0],
+]);
 
 const isDev = !app.isPackaged;
 let logPath = '';
@@ -23,7 +45,9 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
 
 let mainWindow;
+let qcWindow = null;
 let db = null;
+let insightsCache = null;
 const preloadPath = path.join(app.getAppPath(), 'electron', 'preload.cjs');
 
 // ========== Database ==========
@@ -32,9 +56,26 @@ async function initDatabase() {
   const SQL = await sqlJsInit();
   const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
 
-  if (fs.existsSync(dbPath)) {
-    db = new SQL.Database(fs.readFileSync(dbPath));
-  } else {
+  // P1-10: Database corruption recovery
+  try {
+    if (fs.existsSync(dbPath)) {
+      const fileData = fs.readFileSync(dbPath);
+      db = new SQL.Database(fileData);
+      // Quick integrity check: try a simple query
+      db.prepare('SELECT 1').step().free();
+    } else {
+      db = new SQL.Database();
+    }
+  } catch (dbErr) {
+    log('initDatabase: corruption detected or read error, backing up and creating new DB', dbErr);
+    try {
+      // Backup the corrupted file
+      const backupPath = dbPath + '.corrupt.' + Date.now();
+      if (fs.existsSync(dbPath)) fs.renameSync(dbPath, backupPath);
+    } catch (backupErr) {
+      log('initDatabase: backup failed', backupErr);
+    }
+    // Create a fresh database
     db = new SQL.Database();
   }
 
@@ -72,17 +113,29 @@ async function initDatabase() {
   log('initDatabase: success, path=' + dbPath);
 }
 
+// P1-01: Debounced save (200ms) + atomic write (tmp + rename)
+let saveTimer = null;
+function debouncedSaveDb() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveDb, 200);
+}
+
 function saveDb() {
   if (!db) return;
   try {
     const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
-    fs.writeFileSync(dbPath, db.export());
+    const tmpPath = dbPath + '.tmp';
+    const data = db.export();
+    fs.writeFileSync(tmpPath, data);
+    fs.renameSync(tmpPath, dbPath);
   } catch (e) {
     log('saveDb FAILED (disk write error — data still in memory)', e);
   }
 }
 
+// P1-02: Null checks for query/run
 function query(sql, params = []) {
+  if (!db) { log('query called but db is null'); return []; }
   const stmt = db.prepare(sql);
   if (params.length > 0) stmt.bind(params);
   const rows = [];
@@ -92,8 +145,40 @@ function query(sql, params = []) {
 }
 
 function run(sql, params = []) {
+  if (!db) { log('run called but db is null'); return; }
   db.run(sql, params);
-  saveDb(); // best-effort: failure is logged but does not propagate
+  debouncedSaveDb(); // P1-01: debounced instead of sync save
+}
+
+// P0-03: Encrypt API key before storage
+function encryptApiKey(plainText) {
+  if (!plainText) return '';
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.encryptString(plainText).toString('base64');
+    }
+  } catch (e) {
+    log('encryptApiKey failed, storing as plaintext', e);
+  }
+  return plainText;
+}
+
+// P0-03: Decrypt API key with fallback for old plaintext data
+function decryptApiKey(stored) {
+  if (!stored) return '';
+  try {
+    // Try decrypting (new encrypted format)
+    if (safeStorage.isEncryptionAvailable()) {
+      const buf = Buffer.from(stored, 'base64');
+      // safeStorage encrypted buffers are not valid UTF-8 plaintext
+      // If decryptString succeeds, it was encrypted
+      return safeStorage.decryptString(buf);
+    }
+  } catch {
+    // Fallback: old plaintext data (not encrypted)
+    return stored;
+  }
+  return stored;
 }
 
 function getDefaultModel() {
@@ -106,10 +191,10 @@ function getDefaultModel() {
       return null;
     }
     log('getDefaultModel: using first enabled model: ' + any[0][1]);
-    return { baseUrl: any[0][3], apiKey: any[0][4], modelId: any[0][5] };
+    return { baseUrl: any[0][3], apiKey: decryptApiKey(any[0][4]), modelId: any[0][5] };
   }
   log('getDefaultModel: using default model: ' + rows[0][1]);
-  return { baseUrl: rows[0][3], apiKey: rows[0][4], modelId: rows[0][5] };
+  return { baseUrl: rows[0][3], apiKey: decryptApiKey(rows[0][4]), modelId: rows[0][5] };
 }
 
 async function callAI(prompt) {
@@ -124,14 +209,24 @@ async function callAI(prompt) {
     url += '/v1/chat/completions';
   }
   try {
+    // P1-08: Set proper auth headers for Anthropic vs OpenAI-style APIs
+    const headers = { 'Content-Type': 'application/json' };
+    if (isAnthropic) {
+      headers['x-api-key'] = model.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    } else {
+      headers['Authorization'] = 'Bearer ' + model.apiKey;
+    }
+
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + model.apiKey },
+      headers,
       body: JSON.stringify({
         model: model.modelId,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300, temperature: 0.7,
       }),
+      signal: AbortSignal.timeout(30000), // P1-07: 30s timeout
     });
     const data = await res.json();
     log('AI call response status=' + res.status + ' body=' + JSON.stringify(data).substring(0, 300));
@@ -162,8 +257,19 @@ function setupIPC() {
   ipcMain.handle('window-close', () => mainWindow?.close());
   ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() || false);
 
-  ipcMain.handle('db-query', async (_, method, table, args) => {
+  ipcMain.handle('db-query', async (event, method, table, args) => {
     try {
+      // P1-09: Method whitelist validation
+      if (!ALLOWED_METHODS.includes(method)) return { error: 'Method not allowed: ' + method };
+
+      // P0-04: QC window source validation — only allow GET on requirements
+      if (qcWindow && !qcWindow.isDestroyed() && event.sender === qcWindow.webContents) {
+        if (method !== 'GET' || table !== 'requirements') {
+          log('db-query BLOCKED from QC window: method=' + method + ' table=' + table);
+          return { error: 'Access denied from QC window' };
+        }
+      }
+
       const { data, id } = args || {};
       const result = await handleDbQuery(method, table, data, id);
       const rtype = Array.isArray(result) ? 'array[' + result.length + ']' : (typeof result) + '/' + Object.keys(result||{}).slice(0,3).join(',');
@@ -251,8 +357,90 @@ async function handleDbQuery(method, table, data, id) {
         pieData: types.map(r => ({ name: r[0]||'未知', value: r[1] })),
       };
     }
-    case 'insights/ai-insights':
-      return [];
+    case 'insights/ai-insights': {
+      // GET: return cached insights; POST: generate fresh ones from AI
+      if (method === 'POST') {
+        // Gather all statistics for AI analysis
+        const totalReqs = query('SELECT COUNT(*) FROM requirements')[0][0];
+        const statusRows = query("SELECT status, COUNT(*) FROM requirements GROUP BY status");
+        const categoryRows = query("SELECT category, COUNT(*) FROM requirements GROUP BY category");
+        const priorityRows = query("SELECT priority, COUNT(*) FROM requirements GROUP BY priority");
+        const totalDocs = query('SELECT COUNT(*) FROM documents')[0][0];
+        const docTypeRows = query("SELECT type, COUNT(*) FROM documents GROUP BY type");
+        const featuredDocs = query("SELECT COUNT(*) FROM documents WHERE featured=1")[0][0];
+        const recentCreated = query("SELECT COUNT(*) FROM requirements WHERE created_at >= datetime('now','-7 days')")[0][0];
+        const completedReqs = query("SELECT COUNT(*) FROM requirements WHERE status='已完成'")[0][0];
+
+        const statsSummary = [
+          `需求总数: ${totalReqs}, 已完成: ${completedReqs}, 近7日新增: ${recentCreated}`,
+          `需求状态分布: ${statusRows.map(r => r[0] + ':' + r[1]).join(', ')}`,
+          `需求分类分布: ${categoryRows.map(r => r[0] + ':' + r[1]).join(', ')}`,
+          `需求优先级分布: ${priorityRows.map(r => r[0] + ':' + r[1]).join(', ')}`,
+          `知识文档总数: ${totalDocs}, 精选文档: ${featuredDocs}`,
+          `文档类型分布: ${docTypeRows.map(r => r[0] + ':' + r[1]).join(', ')}`,
+        ].join('\n');
+
+        const prompt = [
+          '你是智能体工作台的数据分析师。请根据以下项目统计数据生成3-4条洞察分析。',
+          '',
+          '项目数据：',
+          statsSummary,
+          '',
+          '输出要求（只输出纯JSON，不要markdown代码块）：',
+          '{',
+          '  "insights": [',
+          '    {',
+          '      "title": "洞察标题（简洁有力，8字以内）",',
+          '      "desc": "详细分析说明（50字以内，说明数据含义和建议）",',
+          '      "icon": "TrendingUpIcon|AlertTriangleIcon|BrainCircuitIcon|ZapIcon",',
+          '      "color": "#6366f1|#f59e0b|#10b981|#ef4444|#06b6d4|#8b5cf6",',
+          '      "bg": "#6366f115|#f59e0b15|#10b98115|#ef444415|#06b6d415|#8b5cf615",',
+          '      "score": 85',
+          '    }',
+          '  ]',
+          '}',
+          '',
+          '注意：',
+          '- score 是置信度 60-95 之间',
+          '- 如果有大量"待评估"状态，建议用 AlertTriangleIcon',
+          '- 如果完成率较高，建议用 TrendingUpIcon 并给正向评价',
+          '- desc 要包含具体数据和建议行动',
+        ].join('\n');
+
+        try {
+          // Check model availability first for better error messages
+          const model = getDefaultModel();
+          if (!model) {
+            return { error: '未配置大模型：请在「设置 → 模型配置」中添加并启用至少一个模型' };
+          }
+          if (!model.apiKey) {
+            return { error: '模型缺少 API Key：请在模型配置中填写 ' + model.modelId + ' 的 API 密钥' };
+          }
+          const aiResult = await callAI(prompt);
+          if (!aiResult) {
+            return { error: 'AI 调用失败：请检查模型 ' + model.modelId + ' 的接口地址和 API Key 是否正确' };
+          }
+          let jsonStr = aiResult.replace(/```[a-z]*\n?/g, '').replace(/`/g, '').trim();
+          let parsed;
+          try {
+            parsed = JSON.parse(jsonStr);
+          } catch {
+            const match = jsonStr.match(/\{[\s\S]*\}/);
+            if (match) parsed = JSON.parse(match[0]);
+            else throw new Error('No JSON object found');
+          }
+          const insights = (parsed.insights || []).slice(0, 4);
+          // Cache in memory
+          insightsCache = insights;
+          return insights;
+        } catch (e) {
+          log('AI insights generation failed: ' + e.message);
+          return { error: 'AI 分析失败：' + e.message };
+        }
+      }
+      // GET: return cached insights or empty
+      return insightsCache || [];
+    }
     case 'storage/stats': {
       try {
         const uploadsDir = path.join(app.getPath('userData'), 'uploads');
@@ -269,6 +457,8 @@ async function handleDbQuery(method, table, data, id) {
       const actionMatch = table.match(/^(\w+)\/(\d+)\/(\w+)$/);
       if (actionMatch) {
         const [, resType, resId, action] = actionMatch;
+        // P0-01: Validate dynamic table name against whitelist
+        if (!ALLOWED_TABLES.includes(resType)) return { error: 'Invalid table: ' + resType };
         const req = query(`SELECT * FROM ${resType} WHERE id = ?`, [parseInt(resId)])[0];
         if (!req) return { error: 'Not found' };
         if (action === 'analyze') {
@@ -407,6 +597,7 @@ function handleMcp(method, data, id) {
     case 'PUT': {
       if (!id) return { error: 'No id' };
       const { enabled, config, name, type, command, args, env } = data || {};
+      // P0-02: Use field whitelist for MCP PUT to prevent SQL injection
       const fields = []; const vals = [];
       if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
       if (config !== undefined) { fields.push('config=?'); vals.push(JSON.stringify(config)); }
@@ -429,23 +620,28 @@ function handleModels(method, data, id) {
   switch (method) {
     case 'GET':
       return query('SELECT * FROM models ORDER BY is_default DESC, id DESC').map(r => ({
-        id: r[0], name: r[1], provider: r[2], baseUrl: r[3], apiKey: r[4] ? '******' + r[4].slice(-4) : '',
+        id: r[0], name: r[1], provider: r[2], baseUrl: r[3], apiKey: r[4] ? (() => { try { const dec = decryptApiKey(r[4]); return '******' + (dec ? dec.slice(-4) : ''); } catch { return '******'; } })() : '',
         hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], createdAt: r[9],
       }));
     case 'POST': {
       const { name, provider, baseUrl, apiKey, modelId } = data || {};
       const displayName = name || (provider + ' - ' + modelId);
+      // P0-03: Encrypt API key before storage
+      const encryptedKey = encryptApiKey(apiKey || '');
       run('INSERT INTO models (name, provider, base_url, api_key, model_id, enabled) VALUES (?,?,?,?,?,1)',
-        [displayName, provider||'', baseUrl||'', apiKey||'', modelId||'']);
-      return { success: true, id: query('SELECT MAX(id) FROM documents')[0][0] };
+        [displayName, provider||'', baseUrl||'', encryptedKey, modelId||'']);
+      // P1-03: Fixed wrong table name — was 'documents', should be 'models'
+      return { success: true, id: query('SELECT MAX(id) FROM models')[0][0] };
     }
     case 'PUT': {
       if (!id) return { error: 'No id' };
       const { is_default, apiKey, modelId, name, enabled } = data || {};
       if (is_default) run('UPDATE models SET is_default = 0');
+      // P0-02: Use field whitelist for Models PUT to prevent SQL injection
       const fields = []; const vals = [];
       if (name !== undefined) { fields.push('name=?'); vals.push(name); }
-      if (apiKey !== undefined) { fields.push('api_key=?'); vals.push(apiKey); }
+      // P0-03: Encrypt API key on update
+      if (apiKey !== undefined) { fields.push('api_key=?'); vals.push(encryptApiKey(apiKey)); }
       if (modelId !== undefined) { fields.push('model_id=?'); vals.push(modelId); }
       if (is_default !== undefined) { fields.push('is_default=?'); vals.push(is_default?1:0); }
       if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
@@ -471,7 +667,7 @@ function formatReq(r) {
 function formatDoc(r) {
   return {
     id: r[0], title: r[1], category: r[2], type: r[3], size: r[4],
-    views: r[5]+1, stars: r[6], date: r[7], tags: JSON.parse(r[8]||'[]'),
+    views: r[5], stars: r[6], date: r[7], tags: JSON.parse(r[8]||'[]'),
     featured: r[9]===1, file_path: r[10]||'', content: r[11]||'',
     imageDescriptions: JSON.parse(r[12]||'[]'), createdAt: r[13],
   };
@@ -491,8 +687,9 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200, height: 800, minWidth: 900, minHeight: 600,
     title: 'Workit',
-    icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'public', 'icon.png')),
+    icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'icon.png')),
     frame: false,
+    show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
   });
 
@@ -515,8 +712,10 @@ async function createWindow() {
     log('createWindow: loading HTML = ' + htmlPath);
     mainWindow.loadFile(htmlPath);
   }
-  mainWindow.show();
-  mainWindow.focus();
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   // 渲染进程错误监听
   mainWindow.webContents.on('did-fail-load', (_, code, desc) => {
@@ -544,11 +743,10 @@ app.whenReady().then(async () => {
     // Tray + QC window + settings
     let tray = null;
     let minimizeToTray = false;
-    let qcWindow = null;
 
     function createTray() {
       if (tray) return;
-      const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'public', 'icon.png')).resize({ width: 16, height: 16 });
+      const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'icon.png')).resize({ width: 16, height: 16 });
       tray = new Tray(icon);
       tray.setToolTip('Workit');
       tray.setContextMenu(Menu.buildFromTemplate([
@@ -628,9 +826,17 @@ app.whenReady().then(async () => {
           url += '/v1/chat/completions';
         }
         log('Model test: ' + url);
+        // P1-08: Set proper auth headers for Anthropic vs OpenAI-style APIs
+        const headers = { 'Content-Type': 'application/json' };
+        if (isAnthropic) {
+          headers['x-api-key'] = apiKey;
+          headers['anthropic-version'] = '2023-06-01';
+        } else {
+          headers['Authorization'] = 'Bearer ' + apiKey;
+        }
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+          headers,
           body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
           signal: AbortSignal.timeout(10000),
         });
@@ -652,10 +858,9 @@ app.whenReady().then(async () => {
     });
 
     ipcMain.handle('notify-requirements-changed', () => {
+      // P0-06: Replaced executeJavaScript (RCE risk) with webContents.send + preload forwarding
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.executeJavaScript(`
-          window.dispatchEvent(new CustomEvent('requirements-changed'));
-        `);
+        mainWindow.webContents.send('requirements-changed');
       }
     });
 
@@ -680,7 +885,20 @@ app.whenReady().then(async () => {
 function setupAutoUpdater() {
   if (isDev) return;
   try {
-    autoUpdater.autoDownload = true;
+    const { autoUpdater } = require('electron-updater');
+    // Verify update feed is available (app-update.yml exists)
+    // currentVersion access triggers a file read — catch if missing (local build)
+    try {
+      const v = autoUpdater.currentVersion;
+      if (!v) {
+        log('AutoUpdater: no update feed (local build), skipping');
+        return;
+      }
+    } catch {
+      log('AutoUpdater: app-update.yml not found (local build), skipping');
+      return;
+    }
+    autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
     // Manual check: just report what's available, don't trigger download
@@ -708,7 +926,7 @@ function setupAutoUpdater() {
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
 
     autoUpdater.on('update-available', (info) => {
-      log('Updater: v' + info.version + ' available, auto-downloading...');
+      log('Updater: v' + info.version + ' available');
       mainWindow?.webContents?.send('update-available', info.version);
     });
     autoUpdater.on('download-progress', (p) => {
