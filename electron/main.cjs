@@ -24,6 +24,7 @@ process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
 
 let mainWindow;
 let db = null;
+const preloadPath = path.join(app.getAppPath(), 'electron', 'preload.cjs');
 
 // ========== Database ==========
 async function initDatabase() {
@@ -73,8 +74,12 @@ async function initDatabase() {
 
 function saveDb() {
   if (!db) return;
-  const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
-  fs.writeFileSync(dbPath, db.export());
+  try {
+    const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
+    fs.writeFileSync(dbPath, db.export());
+  } catch (e) {
+    log('saveDb FAILED (disk write error — data still in memory)', e);
+  }
 }
 
 function query(sql, params = []) {
@@ -88,7 +93,63 @@ function query(sql, params = []) {
 
 function run(sql, params = []) {
   db.run(sql, params);
-  saveDb();
+  saveDb(); // best-effort: failure is logged but does not propagate
+}
+
+function getDefaultModel() {
+  const rows = query('SELECT * FROM models WHERE enabled = 1 AND is_default = 1 LIMIT 1');
+  if (!rows.length) {
+    const any = query('SELECT * FROM models WHERE enabled = 1 LIMIT 1');
+    if (!any.length) {
+      const all = query('SELECT * FROM models');
+      log('getDefaultModel: no enabled model found. Total models: ' + all.length);
+      return null;
+    }
+    log('getDefaultModel: using first enabled model: ' + any[0][1]);
+    return { baseUrl: any[0][3], apiKey: any[0][4], modelId: any[0][5] };
+  }
+  log('getDefaultModel: using default model: ' + rows[0][1]);
+  return { baseUrl: rows[0][3], apiKey: rows[0][4], modelId: rows[0][5] };
+}
+
+async function callAI(prompt) {
+  const model = getDefaultModel();
+  if (!model || !model.apiKey) return null;
+  // Detect API style from baseUrl
+  const isAnthropic = model.baseUrl.includes('anthropic');
+  let url = model.baseUrl.replace(/\/+$/, '');
+  if (isAnthropic) {
+    url += '/v1/messages';
+  } else {
+    url += '/v1/chat/completions';
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + model.apiKey },
+      body: JSON.stringify({
+        model: model.modelId,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300, temperature: 0.7,
+      }),
+    });
+    const data = await res.json();
+    log('AI call response status=' + res.status + ' body=' + JSON.stringify(data).substring(0, 300));
+    // OpenAI format: { choices: [{ message: { content: "..." } }] }
+    if (data.choices?.[0]?.message?.content) {
+      return data.choices[0].message.content.trim();
+    }
+    // Anthropic/Minimax format: { content: [{ type: "thinking", thinking: "..." }, { type: "text", text: "..." }] }
+    if (data.content && Array.isArray(data.content)) {
+      const textBlock = data.content.find((c) => c.type === 'text');
+      if (textBlock?.text) return textBlock.text.trim();
+    }
+    log('AI call unexpected response format: ' + JSON.stringify(data).substring(0, 200));
+    return null;
+  } catch (e) {
+    log('AI call failed', e);
+    return null;
+  }
 }
 
 // ========== IPC Handlers ==========
@@ -101,12 +162,13 @@ function setupIPC() {
   ipcMain.handle('window-close', () => mainWindow?.close());
   ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() || false);
 
-  ipcMain.handle('db-query', (_, method, table, args) => {
+  ipcMain.handle('db-query', async (_, method, table, args) => {
     try {
       const { data, id } = args || {};
-      const result = handleDbQuery(method, table, data, id);
+      const result = await handleDbQuery(method, table, data, id);
       const rtype = Array.isArray(result) ? 'array[' + result.length + ']' : (typeof result) + '/' + Object.keys(result||{}).slice(0,3).join(',');
-      log('db-query: ' + method + ' ' + table + ' → ' + rtype);
+      const extra = (result && result.id !== undefined) ? ' id=' + result.id : '';
+      log('db-query: ' + method + ' ' + table + ' → ' + rtype + extra);
       return result;
     } catch (e) { log('db-query ERROR', e); return { error: e.message }; }
   });
@@ -125,7 +187,7 @@ function setupIPC() {
   });
 }
 
-function handleDbQuery(method, table, data, id) {
+async function handleDbQuery(method, table, data, id) {
   table = String(table || '').split('?')[0];
   switch (table) {
     case 'requirements':
@@ -202,7 +264,43 @@ function handleDbQuery(method, table, data, id) {
         return { usedBytes };
       } catch { return { usedBytes: 0 }; }
     }
-    default: return { error: 'Unknown table: ' + table };
+    default: {
+      // Handle /analyze, /summarize, /preview sub-routes
+      const actionMatch = table.match(/^(\w+)\/(\d+)\/(\w+)$/);
+      if (actionMatch) {
+        const [, resType, resId, action] = actionMatch;
+        const req = query(`SELECT * FROM ${resType} WHERE id = ?`, [parseInt(resId)])[0];
+        if (!req) return { error: 'Not found' };
+        if (action === 'analyze') {
+          const desc = (req[2] || '').trim();
+          if (!desc) return { error: 'No description to analyze' };
+          const aiResult = await callAI(
+            `你是需求分析助手。请分析以下需求描述，输出JSON格式（不要markdown代码块，只输出纯JSON）：\n{"summary":"一段简洁的中文摘要（50字以内，抽象式总结核心意图）","tags":["标签1","标签2","标签3"]}\n\n需求描述：${desc}`
+          );
+          if (!aiResult) return { error: 'AI analysis failed: model not configured or API error' };
+          let aiSummary = ''; let aiTags = [];
+          try {
+            const parsed = JSON.parse(aiResult.replace(/```[a-z]*\n?/g, '').replace(/`/g, '').trim());
+            aiSummary = parsed.summary || '';
+            aiTags = Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5) : [];
+          } catch {
+            return { error: 'AI analysis failed: invalid response format' };
+          }
+          if (!aiSummary) return { error: 'AI analysis failed: empty summary' };
+          run(`UPDATE ${resType} SET ai_summary = ?, ai_tags = ?, image_descriptions = ? WHERE id = ?`,
+            [aiSummary, JSON.stringify(aiTags), JSON.stringify([]), parseInt(resId)]);
+          return { success: true, aiSummary, aiTags, imageDescriptions: [] };
+        }
+        if (action === 'summarize') {
+          const title = req[1] || '';
+          const content = (req[11] || '').substring(0, 500);
+          const summary = content ? generateAISummary(content) : title;
+          run(`UPDATE documents SET content = ? WHERE id = ?`, [summary, parseInt(resId)]);
+          return { success: true, summary };
+        }
+      }
+      return { error: 'Unknown table: ' + table };
+    }
   }
 }
 
@@ -221,8 +319,10 @@ function handleRequirements(method, data, id) {
       const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images } = data || {};
       run(`INSERT INTO requirements (title, description, category, module, priority, assignee, creator, due_date, tags, images) VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [title||'', desc||'', category||'', module||'用户端', priority||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[])]);
-      const id = query('SELECT last_insert_rowid()')[0][0];
-      return { success: true, id };
+      // Use MAX(id) instead of last_insert_rowid() — some sql.js versions return 0 from last_insert_rowid()
+      const newId = query('SELECT MAX(id) FROM requirements')[0][0];
+      log('handleReq POST: newId=' + newId + ' title=' + (title||'').substring(0, 30));
+      return { success: true, id: newId };
     }
     case 'PUT': {
       if (!id) return { error: 'No id' };
@@ -263,7 +363,7 @@ function handleDocuments(method, data, id) {
       const { title, category, type, size, date, tags, featured, content, file_path } = data || {};
       run('INSERT INTO documents (title, category, type, size, date, tags, featured, content, file_path) VALUES (?,?,?,?,?,?,?,?,?)',
         [title||'', category||'guide', type||'MD', size||'', date||'', JSON.stringify(tags||[]), featured ? 1 : 0, content||'', file_path||'']);
-      return { success: true, id: query('SELECT last_insert_rowid()')[0][0] };
+      return { success: true, id: query('SELECT MAX(id) FROM documents')[0][0] };
     }
     case 'PUT': {
       if (!id) return { error: 'No id' };
@@ -326,19 +426,20 @@ function handleModels(method, data, id) {
     case 'POST': {
       const { name, provider, baseUrl, apiKey, modelId } = data || {};
       const displayName = name || (provider + ' - ' + modelId);
-      run('INSERT INTO models (name, provider, base_url, api_key, model_id) VALUES (?,?,?,?,?)',
+      run('INSERT INTO models (name, provider, base_url, api_key, model_id, enabled) VALUES (?,?,?,?,?,1)',
         [displayName, provider||'', baseUrl||'', apiKey||'', modelId||'']);
-      return { success: true, id: query('SELECT last_insert_rowid()')[0][0] };
+      return { success: true, id: query('SELECT MAX(id) FROM documents')[0][0] };
     }
     case 'PUT': {
       if (!id) return { error: 'No id' };
-      const { is_default, apiKey, modelId, name } = data || {};
+      const { is_default, apiKey, modelId, name, enabled } = data || {};
       if (is_default) run('UPDATE models SET is_default = 0');
       const fields = []; const vals = [];
       if (name !== undefined) { fields.push('name=?'); vals.push(name); }
       if (apiKey !== undefined) { fields.push('api_key=?'); vals.push(apiKey); }
       if (modelId !== undefined) { fields.push('model_id=?'); vals.push(modelId); }
       if (is_default !== undefined) { fields.push('is_default=?'); vals.push(is_default?1:0); }
+      if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
       if (fields.length) { vals.push(id); run(`UPDATE models SET ${fields.join(',')} WHERE id=?`, vals); }
       return { success: true };
     }
@@ -375,7 +476,6 @@ function setupWindowEvents(win) {
 async function createWindow() {
   log('Creating window...');
   try {
-  const preloadPath = path.join(app.getAppPath(), 'electron', 'preload.cjs');
   log('createWindow: preload path = ' + preloadPath);
   log('createWindow: preload exists = ' + fs.existsSync(preloadPath));
 
@@ -475,26 +575,94 @@ app.whenReady().then(async () => {
 
     // QuickCapture external popup
     ipcMain.handle('toggle-qc-window', (_, enabled) => {
+      log('toggle-qc-window called: enabled=' + enabled);
       if (enabled) {
         if (!qcWindow) {
           const { screen } = require('electron');
           const disp = screen.getPrimaryDisplay();
           const { width, height } = disp.workAreaSize;
           qcWindow = new BrowserWindow({
-            width: 420, height: 520,
-            x: width - 440, y: height - 540,
+            width: 56, height: 56,
+            x: width - 76, y: height - 76,
             frame: false, resizable: false, alwaysOnTop: true,
             skipTaskbar: true, transparent: true,
-            webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false }
+            webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, additionalArguments: ['--qc-popup'] }
           });
-          qcWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: 'qc-popup' });
-          qcWindow.on('closed', () => { qcWindow = null; });
+          qcWindow.loadFile(path.join(app.getAppPath(), 'electron', 'qc-entry.html'));
+          qcWindow.on('closed', () => {
+            log('QC window closed');
+            qcWindow = null;
+            // Restore main window from tray
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show();
+              mainWindow.focus();
+            }
+          });
         }
         qcWindow.show();
+        log('QC window shown');
       } else {
+        log('Closing QC window');
         qcWindow?.close();
       }
       return enabled;
+    });
+
+    ipcMain.handle('test-model-connection', async (_, baseUrl, apiKey, modelId) => {
+      try {
+        // Detect API style from baseUrl
+        const isAnthropic = baseUrl.includes('anthropic');
+        let url = baseUrl.replace(/\/+$/, '');
+        if (isAnthropic) {
+          url += '/v1/messages';
+        } else {
+          url += '/v1/chat/completions';
+        }
+        log('Model test: ' + url);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+          body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const text = await res.text();
+        log('Model test response status=' + res.status + ' body=' + text.substring(0, 200));
+        try {
+          const data = JSON.parse(text);
+          // OpenAI: choices[0].message.content, Anthropic: content[].text (may have thinking blocks first)
+          return !!(data.choices?.[0]?.message?.content
+            || (data.content && Array.isArray(data.content) && data.content.some((c) => c.type === 'text' && c.text))
+            || data.id);
+        } catch {
+          return false;
+        }
+      } catch (e) {
+        log('Model test failed', e);
+        return false;
+      }
+    });
+
+    ipcMain.handle('notify-requirements-changed', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript(`
+          window.dispatchEvent(new CustomEvent('requirements-changed'));
+        `);
+      }
+    });
+
+    ipcMain.handle('close-qc-form', () => {
+      if (qcWindow && !qcWindow.isDestroyed()) {
+        qcWindow.setSize(56, 56);
+        qcWindow.loadFile(path.join(app.getAppPath(), 'electron', 'qc-entry.html'));
+      }
+    });
+
+    ipcMain.handle('open-qc-form', () => {
+      if (qcWindow && !qcWindow.isDestroyed()) {
+        qcWindow.setSize(420, 540);
+        qcWindow.center();
+        qcWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+      }
     });
 
   } catch (e) { log('App ready handler failed', e); }

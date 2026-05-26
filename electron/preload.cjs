@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const isQCPopup = process.argv.includes('--qc-popup');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  __isQCPopup: isQCPopup,
   platform: process.platform,
   versions: { node: process.versions.node, chrome: process.versions.chrome, electron: process.versions.electron },
   getVersion: () => ipcRenderer.invoke('get-version'),
@@ -25,4 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setMinimizeToTray: (enabled) => ipcRenderer.invoke('set-minimize-to-tray', enabled),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke('set-open-at-login', enabled),
   toggleQCWindow: (enabled) => ipcRenderer.invoke('toggle-qc-window', enabled),
+  openQCForm: () => ipcRenderer.invoke('open-qc-form'),
+  closeQCForm: () => ipcRenderer.invoke('close-qc-form'),
+  notifyRequirementsChanged: () => ipcRenderer.invoke('notify-requirements-changed'),
+  testModelConnection: (baseUrl, apiKey, modelId) => ipcRenderer.invoke('test-model-connection', baseUrl, apiKey, modelId),
+  resizeQC: (width, height) => ipcRenderer.invoke('resize-qc-window', width, height),
 });

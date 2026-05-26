@@ -122,6 +122,12 @@ export default function QuickCapture() {
     setCaptured(prev => prev ? { ...prev, images: prev.images.filter((_, i) => i !== idx) } : null);
   };
 
+  const refreshMainList = () => {
+    window.dispatchEvent(new CustomEvent('requirements-changed'));
+    // Cross-window: notify main window via IPC (for standalone QC popup)
+    (window as any).electronAPI?.notifyRequirementsChanged?.();
+  };
+
   const handleSubmit = async () => {
     const hasImages = captured?.images && captured.images.length > 0;
     const finalDesc = captured?.text ? (desc ? `${captured.text}\n${desc}` : captured.text) : desc;
@@ -130,38 +136,48 @@ export default function QuickCapture() {
       return;
     }
     const title = finalDesc.substring(0, 30) || (hasImages ? '图片需求' : '新建需求');
+
+    // Step 1: save
+    let newId: number | null = null;
     try {
       const res = await apiFetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, desc: finalDesc, module, priority, images: captured?.images || [] }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowModal(false);
-        setCaptured(null);
-        setDesc('');
-        if (data.id) {
-          // Only auto-analyze if model is configured
-          apiFetch('/api/models').then(r => r.json()).then(models => {
-            if (Array.isArray(models) && models.length > 0) {
-              toast.success('需求采集成功，正在分析...');
-              apiFetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' })
-                .then(r => r.json())
-                .then(() => toast.success('AI 分析完成'))
-                .catch(() => {});
-            } else {
-              toast.success('需求采集成功');
-            }
-          }).catch(() => toast.success('需求采集成功'));
-        }
-      }
-    } catch {
-      toast.error('采集失败');
+      const result = res.data;
+      console.log('[qc-submit] POST result:', JSON.stringify(result).substring(0, 200));
+      const extractedId = result?.id;
+      if (!extractedId) { toast.error('采集失败 (id=' + extractedId + ')'); return; }
+      newId = extractedId;
+    } catch (e) { console.error('[qc-submit] save error', e); toast.error('采集失败'); return; }
+
+    // Step 2: UI cleanup (independent)
+    try { setShowModal(false); setCaptured(null); setDesc(''); toast.success('需求采集成功'); refreshMainList(); } catch {}
+
+    // Step 3: auto-analyze
+    if (newId) {
+      setTimeout(async () => {
+        try {
+          console.log('[qc-auto-analyze] start, newId=' + newId);
+          const autoEnabled = (() => { try { return localStorage.getItem('ai_auto_analyze') !== 'false'; } catch { return true; } })();
+          if (!autoEnabled) return;
+          const modelsRes = await apiFetch('/api/models');
+          const models = modelsRes.data;
+          if (Array.isArray(models) && models.some((m: any) => m.enabled)) {
+            toast.success('正在 AI 分析...');
+            const aRes = await apiFetch(`/api/requirements/${newId}/analyze`, { method: 'POST' });
+            const aData = aRes.data;
+            if (aData.error) { toast.error(aData.error); return; }
+            toast.success('AI 分析完成');
+            refreshMainList();
+          }
+        } catch (e) { console.error('[qc-auto-analyze] error', e); }
+      }, 800);
     }
   };
 
-  const isStandalone = window.location.hash === '#qc-popup';
+  const isStandalone = !!(window as any).electronAPI?.__isQCPopup;
 
   return (
     <>
@@ -261,7 +277,7 @@ export default function QuickCapture() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => { if (isStandalone) window.close(); else { setShowModal(false); setCaptured(null); setDesc(''); } }}
+                onClick={() => { if (isStandalone) (window as any).electronAPI?.closeQCForm?.(); else { setShowModal(false); setCaptured(null); setDesc(''); } }}
                 className="flex-1 py-2 rounded-lg text-xs"
                 style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
               >

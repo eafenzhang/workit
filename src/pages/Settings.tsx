@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, DownloadIcon, RefreshCwIcon, CheckIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, RefreshCwIcon, CheckIcon, CogIcon, SparklesIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
 
 export default function Settings() {
@@ -15,6 +15,9 @@ export default function Settings() {
   const [updateError, setUpdateError] = useState('');
   const [minimizeToTray, setMinimizeToTray] = useState(false);
   const [openAtLogin, setOpenAtLogin] = useState(false);
+  const [autoAnalyze, setAutoAnalyze] = useState(() => {
+    try { return localStorage.getItem('ai_auto_analyze') === 'true'; } catch { return true; }
+  });
 
   const api = (window as any).electronAPI;
 
@@ -54,7 +57,11 @@ export default function Settings() {
     setQuickCollect(enabled);
     localStorage.setItem('quick_collect_enabled', String(enabled));
     window.dispatchEvent(new CustomEvent('quick-collect-toggle', { detail: { enabled } }));
-    api?.toggleQCWindow?.(enabled);
+  };
+
+  const toggleAutoAnalyze = (enabled: boolean) => {
+    setAutoAnalyze(enabled);
+    localStorage.setItem('ai_auto_analyze', String(enabled));
   };
 
   const appearanceOptions = [
@@ -69,6 +76,36 @@ export default function Settings() {
         <h1 className="text-xl font-semibold text-wiki-text mb-1">设置</h1>
         <p className="text-wiki-text2 text-sm mb-8">配置 Workit 的外观和行为</p>
 
+        {/* System Section — moved to top with icon */}
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <CogIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
+            <h2 className="text-base font-semibold text-wiki-text">系统</h2>
+          </div>
+          <div className="flex flex-col gap-3 rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+            {[{
+              label: '开机启动', desc: '系统启动时自动运行 Workit',
+              value: openAtLogin, set: (v: boolean) => { setOpenAtLogin(v); api?.setOpenAtLogin(v); }
+            }, {
+              label: '最小化到托盘', desc: '关闭窗口时隐藏到系统托盘而非退出',
+              value: minimizeToTray, set: (v: boolean) => { setMinimizeToTray(v); api?.setMinimizeToTray(v); }
+            }].map((item, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-wiki-text">{item.label}</div>
+                  <div className="text-xs text-wiki-text3 mt-0.5">{item.desc}</div>
+                </div>
+                <button onClick={() => item.set(!item.value)}
+                  className="relative w-12 h-6 rounded-full transition-colors"
+                  style={{ background: item.value ? 'var(--wiki-text)' : 'var(--wiki-surface2)' }}>
+                  <span className="absolute top-0.5 w-5 h-5 rounded-full shadow transition-all"
+                    style={{ left: item.value ? '26px' : '4px', transition: 'left 0.2s', background: item.value ? 'var(--wiki-bg)' : 'var(--wiki-text3)' }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Appearance Section */}
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -76,10 +113,9 @@ export default function Settings() {
             <h2 className="text-base font-semibold text-wiki-text">外观</h2>
           </div>
 
-          {/* Light/Dark/System */}
           <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <div className="text-sm font-medium text-wiki-text mb-1">色彩模式</div>
-            <div className="text-xs text-wiki-text3 mb-4">选择浅色或深色模式</div>
+            <div className="text-sm font-medium text-wiki-text mb-1">主题模式</div>
+            <div className="text-xs text-wiki-text3 mb-4">选择浅色或深色主题</div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {appearanceOptions.map((opt) => {
@@ -134,30 +170,30 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* System Section */}
+        {/* AI Auto-Analyze Section */}
         <section className="mb-8">
-          <h2 className="text-base font-semibold text-wiki-text mb-4">系统</h2>
-          <div className="flex flex-col gap-3 rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            {[{
-              label: '开机启动', desc: '系统启动时自动运行 Workit',
-              value: openAtLogin, set: (v: boolean) => { setOpenAtLogin(v); api?.setOpenAtLogin(v); }
-            }, {
-              label: '最小化到托盘', desc: '关闭窗口时隐藏到系统托盘而非退出',
-              value: minimizeToTray, set: (v: boolean) => { setMinimizeToTray(v); api?.setMinimizeToTray(v); }
-            }].map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-wiki-text">{item.label}</div>
-                  <div className="text-xs text-wiki-text3 mt-0.5">{item.desc}</div>
-                </div>
-                <button onClick={() => item.set(!item.value)}
-                  className="relative w-12 h-6 rounded-full transition-colors"
-                  style={{ background: item.value ? 'var(--wiki-text)' : 'var(--wiki-surface2)' }}>
-                  <span className="absolute top-0.5 w-5 h-5 rounded-full shadow transition-all"
-                    style={{ left: item.value ? '26px' : '4px', transition: 'left 0.2s', background: item.value ? 'var(--wiki-bg)' : 'var(--wiki-text3)' }} />
-                </button>
+          <div className="flex items-center gap-2 mb-4">
+            <SparklesIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
+            <h2 className="text-base font-semibold text-wiki-text">AI 自动分析</h2>
+          </div>
+
+          <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-wiki-text mb-1">保存后自动分析</div>
+                <div className="text-xs text-wiki-text3">新建需求或快速采集保存后，自动调用 AI 模型生成摘要和标签（需配置模型）</div>
               </div>
-            ))}
+              <button
+                onClick={() => toggleAutoAnalyze(!autoAnalyze)}
+                className="relative w-12 h-6 rounded-full transition-colors"
+                style={{ background: autoAnalyze ? "var(--wiki-text)" : "var(--wiki-surface2)" }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full shadow transition-all"
+                  style={{ left: autoAnalyze ? '26px' : '4px', transition: 'left 0.2s', background: autoAnalyze ? "var(--wiki-bg)" : "var(--wiki-text3)" }}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

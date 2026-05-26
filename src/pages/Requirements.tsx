@@ -72,7 +72,12 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
   const viewType = initialTab?.type || 'requirements';
   const detailReqId = initialTab?.reqId;
 
-  useEffect(() => { fetchRequirements(); }, []);
+  useEffect(() => {
+    fetchRequirements();
+    const listener = () => fetchRequirements();
+    window.addEventListener('requirements-changed', listener);
+    return () => window.removeEventListener('requirements-changed', listener);
+  }, []);
 
   const fetchRequirements = () => {
     apiFetch('/api/requirements').then(r => r.json()).then(data => setRequirements(data));
@@ -108,27 +113,47 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
   };
 
   // CRUD
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.desc.trim()) { toast.error('请输入需求描述'); return; }
     const title = form.desc.substring(0, 30) || '新建需求';
-    apiFetch('/api/requirements', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, desc: form.desc, module: form.module, priority: form.priority, images, creator: user?.nickname || '' }),
-    }).then(r => r.json()).then((data) => {
-      resetForm(); fetchRequirements();
-      onCloseSelf?.();
-      if (data.id) {
-        apiFetch('/api/models').then(r => r.json()).then(models => {
-          if (Array.isArray(models) && models.length > 0) {
-            toast.success('需求创建成功，正在分析...');
-            apiFetch(`/api/requirements/${data.id}/analyze`, { method: 'POST' }).then(r => r.json()).then(result => {
-              if (result.error) toast.error(result.error);
-              else { fetchRequirements(); toast.success('AI 分析完成'); }
-            }).catch(() => {});
-          } else toast.success('需求创建成功');
-        }).catch(() => toast.success('需求创建成功'));
-      }
-    });
+
+    // Step 1: save
+    let newId: number | null = null;
+    try {
+      const res = await apiFetch('/api/requirements', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, desc: form.desc, module: form.module, priority: form.priority, images, creator: user?.nickname || '' }),
+      });
+      // Use .data directly — avoids any .json() Promise resolution quirks
+      const result = res.data;
+      console.log('[handleCreate] POST result:', JSON.stringify(result).substring(0, 200));
+      const extractedId = result?.id;
+      if (!extractedId) { toast.error('创建失败 (id=' + extractedId + ')'); return; }
+      newId = extractedId;
+    } catch (e) { console.error('[handleCreate] save error', e); toast.error('创建失败'); return; }
+
+    // Step 2: UI cleanup (separate try-catch so auto-analyze still runs even if UI ops fail)
+    try { resetForm(); fetchRequirements(); onCloseSelf?.(); toast.success('需求创建成功'); } catch {}
+
+    // Step 3: auto-analyze (independent of UI cleanup)
+    if (newId) {
+      setTimeout(async () => {
+        try {
+          console.log('[auto-analyze] start, newId=' + newId);
+          const autoEnabled = (() => { try { return localStorage.getItem('ai_auto_analyze') !== 'false'; } catch { return true; } })();
+          if (!autoEnabled) { console.log('[auto-analyze] disabled'); return; }
+          const modelsRes = await apiFetch('/api/models');
+          const models = modelsRes.data;
+          if (Array.isArray(models) && models.some((m: any) => m.enabled)) {
+            toast.success('正在 AI 分析...');
+            const aRes = await apiFetch(`/api/requirements/${newId}/analyze`, { method: 'POST' });
+            const aData = aRes.data;
+            if (aData.error) toast.error(aData.error);
+            else { fetchRequirements(); toast.success('AI 分析完成'); }
+          }
+        } catch (e) { console.error('[auto-analyze] error', e); }
+      }, 600);
+    }
   };
 
   const handleUpdate = () => {
@@ -280,7 +305,7 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
                     <div className="flex items-center gap-1.5 text-xs text-wiki-text3"><CalendarIcon size={11} /><span>{formatDate(req.createdAt)}</span></div>
                     <div className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md" style={{ background: `var(--wiki-surface2)`, color: `var(--wiki-text2)` }}>{req.module}</div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">{(req.aiTags || []).map((tag) => (<span key={tag} className="text-xs px-2 py-0.5 rounded-md" style={{ background: `var(--wiki-surface2)`, color: `var(--wiki-text)` }}>{tag}</span>))}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">{(req.aiTags || []).map((tag) => (<span key={tag} className="text-xs px-2.5 py-1 rounded-md font-medium" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>#{tag}</span>))}</div>
                 </div>
               </div>
             );
@@ -301,18 +326,35 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: statusConfig[detailReq.status]?.bg, color: statusConfig[detailReq.status]?.color }}>{detailReq.status}</span>
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: priorityConfig[detailReq.priority]?.bg, color: priorityConfig[detailReq.priority]?.color }}>{detailReq.priority}</span>
-              <span className="text-xs text-wiki-text3 ml-2">{detailReq.category}</span>
             </div>
           </div>
-          <button onClick={() => openEdit(detailReq)} className="px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}><EditIcon size={13} className="inline" /> 编辑</button>
+          {/* Action buttons: AI分析 推进 编辑 删除 返回 */}
+          <button onClick={() => handleAnalyze(detailReq)} disabled={analyzing} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: analyzing ? 'var(--wiki-surface2)' : 'rgba(99,102,241,0.12)', color: analyzing ? 'var(--wiki-text2)' : '#6366f1' }}>
+            <SparklesIcon size={13} /><span>{analyzing ? '分析中...' : 'AI分析'}</span>
+          </button>
+          {detailReq.status !== '已完成' && (
+            <button onClick={() => { const so = ['待评估','设计中','实现中','测试中','已完成']; const ni = so.indexOf(detailReq.status)+1; if (ni < so.length) apiFetch(`/api/requirements/${detailReq.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:detailReq.title,desc:detailReq.desc,module:detailReq.module,priority:detailReq.priority,status:so[ni],assignee:detailReq.assignee,workflow_handler:detailReq.assignee,images:detailReq.images})}).then(()=>{fetchRequirements();toast.success(`已推进到「${so[ni]}」`);});}}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0 font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              <CheckCircleIcon size={13} /> 推进
+            </button>
+          )}
+          <button onClick={() => openEdit(detailReq)} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
+            <EditIcon size={13} /> 编辑
+          </button>
+          <button onClick={() => handleDelete(detailReq.id)} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+            <TrashIcon size={13} /> 删除
+          </button>
+          <button onClick={onCloseSelf} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>
+            <XIcon size={13} /> 返回
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
           <div className="flex flex-col gap-4">
             {(detailReq.aiSummary || (detailReq.aiTags?.length > 0)) && (
-              <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-                <div className="flex items-center gap-2 mb-3"><SparklesIcon size={14} style={{ color: 'var(--wiki-text)' }} /><span className="text-xs font-bold" style={{ color: 'var(--wiki-text)' }}>AI 分析结果</span></div>
-                {detailReq.aiSummary && <div className="text-sm leading-relaxed mb-3" style={{ color: 'var(--wiki-text)' }}>{detailReq.aiSummary}</div>}
-                {(detailReq.aiTags?.length > 0) && <div className="flex flex-wrap gap-1.5 mt-2">{(detailReq.aiTags || []).map(tag => (<span key={tag} className="text-xs px-2 py-0.5 rounded-md" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{tag}</span>))}</div>}
+              <div className="p-5 rounded-lg" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                <div className="flex items-center gap-2 mb-3"><SparklesIcon size={14} style={{ color: '#6366f1' }} /><span className="text-xs font-bold" style={{ color: '#6366f1' }}>AI 分析结果</span></div>
+                {detailReq.aiSummary && <div className="text-sm leading-relaxed mb-3 font-medium" style={{ color: 'var(--wiki-text)' }}>{detailReq.aiSummary}</div>}
+                {(detailReq.aiTags?.length > 0) && <div className="flex flex-wrap gap-1.5 mt-2">{(detailReq.aiTags || []).map(tag => (<span key={tag} className="text-xs px-2.5 py-1 rounded-md font-medium" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>#{tag}</span>))}</div>}
               </div>
             )}
             <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
@@ -330,14 +372,6 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
               <div className="text-xs text-wiki-text3 mb-2">需求描述</div>
               <div className="text-sm text-wiki-text2 leading-relaxed whitespace-pre-wrap">{detailReq.desc || '暂无描述'}</div>
               {detailReq.images?.length > 0 && <div className="flex flex-wrap gap-2 mt-3">{detailReq.images.map((img, i) => (<img key={i} src={img} className="rounded object-cover cursor-pointer hover:opacity-80" style={{ border: '1px solid var(--wiki-border)', width: '100px', height: '80px' }} onClick={() => setPreviewImage(img)} />))}</div>}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => handleAnalyze(detailReq)} disabled={analyzing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: analyzing ? 'var(--wiki-text2)' : 'var(--wiki-text)' }}><SparklesIcon size={13} /><span>{analyzing ? '分析中...' : 'AI 分析'}</span></button>
-              {detailReq.status !== '已完成' && (
-                <button onClick={() => { const so = ['待评估','设计中','实现中','测试中','已完成']; const ni = so.indexOf(detailReq.status)+1; if (ni < so.length) apiFetch(`/api/requirements/${detailReq.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:detailReq.title,desc:detailReq.desc,module:detailReq.module,priority:detailReq.priority,status:so[ni],assignee:detailReq.assignee,workflow_handler:detailReq.assignee,images:detailReq.images})}).then(()=>{fetchRequirements();toast.success(`已推进到「${so[ni]}」`);});}}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><CheckCircleIcon size={13} /> 推进状态</button>
-              )}
-              <button onClick={() => handleDelete(detailReq.id)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}><TrashIcon size={13} /> 删除</button>
             </div>
           </div>
         </div>
@@ -357,12 +391,12 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
       </div>
       <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
         <div className="flex flex-col gap-4">
-          {images.length > 0 && (<div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">图片附件</div><div className="flex flex-wrap gap-2">{images.map((img, i) => (<div key={i} className="relative"><img src={img} className="w-20 h-20 rounded object-cover" /><button onClick={() => removeImage(img)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button></div>))}</div></div>)}
-          <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">需求描述</div><textarea className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none" style={{ background: 'transparent', border: 'none' }} rows={6} placeholder="详细描述需求内容..." value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} /></div>
           <div className="flex gap-4">
             <div className="flex-1"><label className="text-xs text-wiki-text3 mb-2 block">模块</label><select className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} value={form.module} onChange={e => setForm({ ...form, module: e.target.value })}>{modules.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
             <div className="flex-1"><label className="text-xs text-wiki-text3 mb-2 block">优先级</label><select className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>{priorities.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
           </div>
+          {images.length > 0 && (<div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">图片附件</div><div className="flex flex-wrap gap-2">{images.map((img, i) => (<div key={i} className="relative"><img src={img} className="w-20 h-20 rounded object-cover" /><button onClick={() => removeImage(img)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button></div>))}</div></div>)}
+          <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">需求描述</div><textarea className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none" style={{ background: 'transparent', border: 'none' }} rows={6} placeholder="详细描述需求内容..." value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} /></div>
           <div><input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleImageSelect} /><button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={13} /> 添加图片附件</button></div>
         </div>
       </div>

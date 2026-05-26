@@ -44,6 +44,7 @@ export default function Model() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
   const [modelDropdown, setModelDropdown] = useState<number | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => { fetchModels(); }, []);
 
@@ -58,6 +59,22 @@ export default function Model() {
   const handleProviderChange = (providerId: string) => {
     const provider = PROVIDER_LIST.find(p => p.id === providerId);
     setForm(f => ({ ...f, provider: providerId, modelId: provider?.models[0]?.id || '' }));
+  };
+
+  const handleTestConnection = async () => {
+    if (!form.apiKey.trim()) { toast.error('请先输入 API Key'); return; }
+    setTesting(true);
+    const provider = PROVIDER_LIST.find(p => p.id === form.provider);
+    try {
+      const ok = await (window as any).electronAPI?.testModelConnection?.(
+        provider?.baseUrl || '', form.apiKey, form.modelId
+      );
+      if (ok) toast.success('连接成功');
+      else toast.error('连接失败，请检查配置');
+    } catch {
+      toast.error('连接失败');
+    }
+    setTesting(false);
   };
 
   const handleSubmit = async () => {
@@ -155,6 +172,7 @@ export default function Model() {
                 <div className="flex items-center gap-2">
                   <span className="text-base font-semibold text-wiki-text">{m.name}</span>
                   {m.isDefault && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>默认</span>}
+                  {!m.enabled && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>已禁用</span>}
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{m.provider}</span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-wiki-text3">
@@ -194,6 +212,13 @@ export default function Model() {
                 {!m.isDefault && (
                   <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
                 )}
+                <button onClick={async () => {
+                  await apiFetch(`/api/models/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !m.enabled }) });
+                  toast.success(m.enabled ? '已禁用' : '已启用');
+                  fetchModels();
+                }} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: m.enabled ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.1)', color: m.enabled ? '#ef4444' : '#10b981' }}>
+                  {m.enabled ? '禁用' : '启用'}
+                </button>
                 <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
                 <button onClick={() => deleteModel(m.id)} className="p-2 rounded-lg hover:bg-wiki-surface2 transition-colors">
                   <TrashIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
@@ -251,10 +276,17 @@ export default function Model() {
                 className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
             </div>
 
-            <button onClick={handleSubmit}
-              className="w-full py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-              {editingId ? '保存修改' : '添加'}
-            </button>
+            <div className="flex gap-3 mb-4">
+              <button onClick={handleTestConnection} disabled={testing}
+                className="flex-1 py-2 rounded-lg text-xs font-medium border transition-colors"
+                style={{ background: testing ? 'var(--wiki-surface2)' : 'transparent', color: testing ? 'var(--wiki-text3)' : 'var(--wiki-text)', borderColor: 'var(--wiki-border)' }}>
+                {testing ? '测试中...' : '测试连接'}
+              </button>
+              <button onClick={handleSubmit}
+                className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                {editingId ? '保存修改' : '添加'}
+              </button>
+            </div>
           </div>
         </div>
       )}

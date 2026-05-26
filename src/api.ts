@@ -3,11 +3,12 @@ const api = (window as any).electronAPI;
 let ipcLogged = false;
 let preloadWarned = false;
 
-async function call(method: string, table: string, data?: any, id?: number | string, query?: Record<string, string>): Promise<any> {
+async function call(method: string, table: string, data?: any, id?: number | string): Promise<any> {
   if (api) {
-    // Electron mode: use IPC
     if (!ipcLogged) { console.log('[api] Using Electron IPC path (electronAPI detected)'); ipcLogged = true; }
-    return api.dbQuery(method, table, { data, id, query });
+    const result = await api.dbQuery(method, table, { data, id });
+    console.log('[call] ' + method + ' ' + table + ' → result.type=' + typeof result + ' result.id=' + (result||{}).id);
+    return result;
   }
   // Dev mode: use fetch
   if (!preloadWarned) { console.warn('[api] electronAPI not found — preload may not be loaded, falling back to fetch'); preloadWarned = true; }
@@ -58,11 +59,13 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
     if (parts.length >= 2) {
       if (/^\d+$/.test(parts[1])) {
         id = parseInt(parts[1]);
+        if (parts.length > 2) table = parts.join('/'); // e.g. requirements/123/analyze
       } else {
         table = parts.join('/');
       }
     }
-    const data = await call(method, table, body, id, Object.keys(query).length ? query : undefined);
+    const data = await call(method, table, body, id);
+    console.log('[apiFetch] ' + method + ' ' + table + ' → typeof=' + typeof data + ' keys=' + Object.keys(data||{}).join(',') + ' id=' + (data||{}).id);
     return { json: () => Promise.resolve(data), data };
   }
   const res = await fetch(url, opts);

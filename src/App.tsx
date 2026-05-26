@@ -2,40 +2,27 @@ import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Index from './pages/Index';
 import QuickCapture from './components/QuickCapture';
-import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './context/AuthContext';
 import { useState, useEffect } from 'react';
 
 const App = () => {
-  const isQCPopup = window.location.hash === '#qc-popup';
+  const isQCPopup = !!(window as any).electronAPI?.__isQCPopup;
+  if (isQCPopup) return <QuickCapture />;
 
-  if (isQCPopup) {
-    return (
-      <AuthProvider>
-        <ErrorBoundary label="QC">
-          <QuickCapture />
-        </ErrorBoundary>
-      </AuthProvider>
-    );
-  }
-
-  const [quickCollectEnabled, setQuickCollectEnabled] = useState(false);
-
+  const [qcEnabled, setQcEnabled] = useState(false);
   useEffect(() => {
-    try { setQuickCollectEnabled(localStorage.getItem('quick_collect_enabled') === 'true'); } catch {}
-    const handler = (e: Event) => setQuickCollectEnabled((e as CustomEvent<{ enabled: boolean }>).detail.enabled);
-    window.addEventListener('quick-collect-toggle', handler);
-    return () => window.removeEventListener('quick-collect-toggle', handler);
+    try { setQcEnabled(localStorage.getItem('quick_collect_enabled') === 'true'); } catch {}
+    const h = (e: Event) => setQcEnabled((e as CustomEvent<{enabled:boolean}>).detail.enabled);
+    window.addEventListener('quick-collect-toggle', h);
+    return () => window.removeEventListener('quick-collect-toggle', h);
   }, []);
 
   return (
     <AuthProvider>
       <MemoryRouter>
-        <ErrorBoundary label="App">
-          <Index />
-        </ErrorBoundary>
+        <Index />
+        {qcEnabled && <QuickCapture />}
         <Toaster position="top-right" />
-        {quickCollectEnabled && <QuickCapture />}
       </MemoryRouter>
     </AuthProvider>
   );
