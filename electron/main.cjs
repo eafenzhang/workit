@@ -553,6 +553,7 @@ function setupAutoUpdater() {
   } catch (e) { log('AutoUpdater init failed', e); }
 }
 
+app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith('http://localhost')) event.preventDefault();
   });
