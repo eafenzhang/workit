@@ -280,10 +280,19 @@ async function handleDbQuery(method, table, data, id) {
           if (!aiResult) return { error: 'AI analysis failed: model not configured or API error' };
           let aiSummary = ''; let aiTags = [];
           try {
-            const parsed = JSON.parse(aiResult.replace(/```[a-z]*\n?/g, '').replace(/`/g, '').trim());
+            let jsonStr = aiResult.replace(/```[a-z]*\n?/g, '').replace(/`/g, '').trim();
+            let parsed;
+            try {
+              parsed = JSON.parse(jsonStr);
+            } catch {
+              const match = jsonStr.match(/\{[\s\S]*\}/);
+              if (match) parsed = JSON.parse(match[0]);
+              else throw new Error('No JSON object found in response');
+            }
             aiSummary = parsed.summary || '';
             aiTags = Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5) : [];
-          } catch {
+          } catch (parseErr) {
+            log('AI analysis parse failed, raw response: ' + aiResult.substring(0, 300));
             return { error: 'AI analysis failed: invalid response format' };
           }
           if (!aiSummary) return { error: 'AI analysis failed: empty summary' };
