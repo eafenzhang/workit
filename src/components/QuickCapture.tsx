@@ -94,8 +94,63 @@ export default function QuickCapture() {
 
   const handleFloatClick = async () => {
     try {
-      const text = await navigator.clipboard.readText().catch(() => '');
-      setCaptured({ text: text || '', images: [] });
+      const api = (window as any).electronAPI;
+      let text = '';
+      const images: string[] = [];
+
+      // 1. Read images via Electron native clipboard (most reliable)
+      if (api?.readClipboardImages) {
+        try {
+          const nativeImages = await api.readClipboardImages();
+          if (Array.isArray(nativeImages)) {
+            images.push(...nativeImages.filter(Boolean));
+          }
+        } catch {}
+      }
+
+      // 2. Read text via Electron native clipboard
+      if (api?.readClipboardText) {
+        try { text = await api.readClipboardText() || ''; } catch {}
+      }
+
+      // 3. Fallback: browser clipboard API for images (if native got nothing)
+      if (images.length === 0 && navigator.clipboard.read) {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            for (const type of item.types) {
+              if (type.startsWith('image/')) {
+                const blob = await item.getType(type);
+                const dataUrl = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = () => resolve('');
+                  reader.readAsDataURL(blob);
+                });
+                if (dataUrl) images.push(dataUrl);
+              }
+            }
+            if (!text && item.types.includes('text/plain')) {
+              try {
+                const blob = await item.getType('text/plain');
+                text = await blob.text();
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Fallback: browser readText
+      if (!text && navigator.clipboard.readText) {
+        try { text = await navigator.clipboard.readText() || ''; } catch {}
+      }
+
+      if (!text && images.length === 0) {
+        toast.error('剪贴板为空或无法读取');
+        return;
+      }
+
+      setCaptured({ text: text || '', images });
       setShowModal(true);
       setDesc('');
     } catch {

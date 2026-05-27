@@ -50,6 +50,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifyRequirementsChanged: () => ipcRenderer.invoke('notify-requirements-changed'),
   testModelConnection: (baseUrl, apiKey, modelId) => ipcRenderer.invoke('test-model-connection', baseUrl, apiKey, modelId),
   resizeQC: (width, height) => ipcRenderer.invoke('resize-qc-window', width, height),
+  // Clipboard operations
+  readClipboardImages: () => ipcRenderer.invoke('read-clipboard-images'),
+  readClipboardText: () => ipcRenderer.invoke('read-clipboard-text'),
+  readClipboardHTML: () => ipcRenderer.invoke('read-clipboard-html'),
   // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
   onRequirementsChanged: (cb) => {
     const handler = () => cb();

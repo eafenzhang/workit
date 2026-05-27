@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu, safeStorage, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -899,6 +899,59 @@ app.whenReady().then(async () => {
         log('Model test failed', e);
         return false;
       }
+    });
+
+    ipcMain.handle('read-clipboard-images', () => {
+      try {
+        const images = [];
+
+        // 1. Read native image (standard image/png clipboard)
+        const image = clipboard.readImage();
+        if (image && !image.isEmpty()) {
+          images.push(image.toDataURL());
+        }
+
+        // 2. Read HTML and extract images (WeChat/Enterprise WeChat puts images in HTML)
+        const html = clipboard.readHTML() || '';
+        if (html) {
+          // Match <img src="..."> patterns
+          const imgRx = /<img[^>]+src\s*=\s*["']([^"']+?)["']/gi;
+          let m;
+          while ((m = imgRx.exec(html)) !== null) {
+            const src = m[1];
+            if (!src) continue;
+            if (src.startsWith('data:')) {
+              images.push(src);
+            } else if (src.startsWith('file://')) {
+              // Convert file:// to data URL
+              try {
+                const filePath = src.replace('file:///', '').replace(/\//g, '\\');
+                if (fs.existsSync(filePath)) {
+                  const buf = fs.readFileSync(filePath);
+                  const ext = path.extname(filePath).toLowerCase();
+                  const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.gif' ? 'image/gif' : 'image/png';
+                  images.push(`data:${mime};base64,${buf.toString('base64')}`);
+                }
+              } catch {}
+            } else if (src.startsWith('http://') || src.startsWith('https://')) {
+              images.push(src);
+            }
+          }
+        }
+
+        return images;
+      } catch (e) {
+        log('readClipboardImages error', e);
+        return [];
+      }
+    });
+
+    ipcMain.handle('read-clipboard-text', () => {
+      try { return clipboard.readText() || ''; } catch { return ''; }
+    });
+
+    ipcMain.handle('read-clipboard-html', () => {
+      try { return clipboard.readHTML() || ''; } catch { return ''; }
     });
 
     ipcMain.handle('notify-requirements-changed', () => {
