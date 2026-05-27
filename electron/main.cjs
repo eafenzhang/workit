@@ -38,7 +38,12 @@ if (!gotTheLock) {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
+      if (!mainWindow.isVisible()) {
+        // Fade in from tray to avoid white flash on frameless window
+        mainWindow.setOpacity(0);
+        mainWindow.show();
+        setTimeout(() => mainWindow.setOpacity(1), 50);
+      }
       mainWindow.focus();
     }
   });
@@ -271,22 +276,26 @@ async function callAI(prompt) {
       body: JSON.stringify({
         model: model.modelId,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300, temperature: 0.7,
+        max_tokens: 4000, temperature: 0.7,
       }),
       signal: AbortSignal.timeout(30000), // P1-07: 30s timeout
     });
     const data = await res.json();
-    log('AI call response status=' + res.status + ' body=' + JSON.stringify(data).substring(0, 300));
+    log('AI call response status=' + res.status + ' body=' + JSON.stringify(data).substring(0, 500));
     // OpenAI format: { choices: [{ message: { content: "..." } }] }
     if (data.choices?.[0]?.message?.content) {
       return data.choices[0].message.content.trim();
     }
     // Anthropic/Minimax format: { content: [{ type: "thinking", thinking: "..." }, { type: "text", text: "..." }] }
     if (data.content && Array.isArray(data.content)) {
+      // Try standard Anthropic text block first
       const textBlock = data.content.find((c) => c.type === 'text');
       if (textBlock?.text) return textBlock.text.trim();
+      // MiniMax M2.7 thinking model: content only has thinking block, no text block
+      const thinkingBlock = data.content.find((c) => c.thinking);
+      if (thinkingBlock?.thinking) return thinkingBlock.thinking.trim();
     }
-    log('AI call unexpected response format: ' + JSON.stringify(data).substring(0, 200));
+    log('AI call unexpected response format: ' + JSON.stringify(data).substring(0, 300));
     return null;
   } catch (e) {
     log('AI call failed', e);
@@ -738,11 +747,18 @@ async function createWindow() {
     title: 'Workit',
     icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')),
     frame: false,
+    show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
   });
 
   setupWindowEvents(mainWindow);
   setupIPC();
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+    log('createWindow: ready-to-show, window displayed');
+  });
 
   try {
     await initDatabase();
@@ -793,12 +809,22 @@ app.whenReady().then(async () => {
       const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')).resize({ width: 16, height: 16 });
       tray = new Tray(icon);
       tray.setToolTip('Workit');
+      function showFromTray() {
+        if (!mainWindow) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) {
+          mainWindow.setOpacity(0);
+          mainWindow.show();
+          setTimeout(() => mainWindow.setOpacity(1), 50);
+        }
+        mainWindow.focus();
+      }
       tray.setContextMenu(Menu.buildFromTemplate([
-        { label: '显示窗口', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+        { label: '显示窗口', click: showFromTray },
         { type: 'separator' },
         { label: '退出', click: () => { app.isQuitting = true; app.quit(); } }
       ]));
-      tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+      tray.on('double-click', showFromTray);
     }
 
     mainWindow.on('close', (event) => {
@@ -905,32 +931,74 @@ app.whenReady().then(async () => {
       try {
         const images = [];
 
+        // Diagnostic: log available clipboard formats
+        const text = clipboard.readText() || '';
+        const html = clipboard.readHTML() || '';
+        const rtf = clipboard.readRTF() || '';
+        log('Clipboard: text=' + text.substring(0, 100) + ' | html=' + (html ? html.substring(0, 200) : '(empty)') + ' | rtf=' + (rtf ? rtf.substring(0, 100) : '(empty)'));
+
         // 1. Read native image (standard image/png clipboard)
         const image = clipboard.readImage();
-        if (image && !image.isEmpty()) {
+        const hasNativeImage = image && !image.isEmpty();
+        if (hasNativeImage) {
           images.push(image.toDataURL());
+          log('Clipboard: native image found, size=' + image.getSize().width + 'x' + image.getSize().height);
+        } else {
+          log('Clipboard: no native image');
         }
 
-        // 2. Read HTML and extract images (WeChat/Enterprise WeChat puts images in HTML)
-        const html = clipboard.readHTML() || '';
+        // 2. Read file references from clipboard (WeChat/Enterprise WeChat stores images as files)
+        if (typeof clipboard.readFinderFiles === 'function') {
+          try {
+            const files = clipboard.readFinderFiles();
+            log('Clipboard: finderFiles=' + JSON.stringify(files));
+            if (Array.isArray(files)) {
+              const mediaExts = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.flv': 'video/x-flv', '.wmv': 'video/x-ms-wmv', '.m4v': 'video/mp4', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.pdf': 'application/pdf', '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.csv': 'text/csv', '.rtf': 'application/rtf', '.odt': 'application/vnd.oasis.opendocument.text', '.ods': 'application/vnd.oasis.opendocument.spreadsheet', '.odp': 'application/vnd.oasis.opendocument.presentation', '.zip': 'application/zip', '.rar': 'application/vnd.rar', '.7z': 'application/x-7z-compressed', '.tar': 'application/x-tar', '.gz': 'application/gzip', '.bz2': 'application/x-bzip2', '.xz': 'application/x-xz', '.tgz': 'application/gzip', '.html': 'text/html', '.htm': 'text/html', '.md': 'text/markdown', '.markdown': 'text/markdown', '.json': 'application/json', '.xml': 'application/xml', '.yaml': 'text/yaml', '.yml': 'text/yaml', '.toml': 'application/toml', '.ini': 'text/plain', '.conf': 'text/plain', '.log': 'text/plain', '.sql': 'application/sql', '.sh': 'application/x-sh', '.bat': 'application/x-bat', '.py': 'text/x-python', '.js': 'text/javascript', '.ts': 'text/typescript', '.css': 'text/css', '.txt': 'text/plain' };
+              for (const fp of files) {
+                if (!fp) continue;
+                const ext = path.extname(fp).toLowerCase();
+                const mime = mediaExts[ext];
+                if (mime) {
+                  try {
+                    if (fs.existsSync(fp)) {
+                      const buf = fs.readFileSync(fp);
+                      images.push(`data:${mime};base64,${buf.toString('base64')}`);
+                      log('Clipboard: file media read OK: ' + fp + ' (' + buf.length + ' bytes, ' + mime + ')');
+                    } else {
+                      log('Clipboard: file not found: ' + fp);
+                    }
+                  } catch (e) { log('Clipboard: file read error: ' + fp, e); }
+                }
+              }
+            }
+          } catch (e) { log('Clipboard: readFinderFiles error', e); }
+        }
+
+        // 3. Read HTML and extract media (images + videos)
         if (html) {
-          // Match <img src="..."> patterns
-          const imgRx = /<img[^>]+src\s*=\s*["']([^"']+?)["']/gi;
+          const mediaRx = /<(?:img|video|source)[^>]+src\s*=\s*["']([^"']+?)["']/gi;
+          const mimeExt = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.flv': 'video/x-flv', '.wmv': 'video/x-ms-wmv', '.m4v': 'video/mp4' };
           let m;
-          while ((m = imgRx.exec(html)) !== null) {
+          while ((m = mediaRx.exec(html)) !== null) {
             const src = m[1];
             if (!src) continue;
             if (src.startsWith('data:')) {
               images.push(src);
+              log('Clipboard: HTML data: media found');
             } else if (src.startsWith('file://')) {
-              // Convert file:// to data URL
               try {
-                const filePath = src.replace('file:///', '').replace(/\//g, '\\');
+                let filePath = src.replace(/^file:\/\//, '').replace(/^localhost\//, '');
+                if (/^\/[a-zA-Z]:/.test(filePath)) filePath = filePath.slice(1);
+                filePath = decodeURIComponent(filePath);
+                filePath = filePath.replace(/\//g, '\\');
                 if (fs.existsSync(filePath)) {
                   const buf = fs.readFileSync(filePath);
                   const ext = path.extname(filePath).toLowerCase();
-                  const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.gif' ? 'image/gif' : 'image/png';
+                  const mime = mimeExt[ext] || 'application/octet-stream';
                   images.push(`data:${mime};base64,${buf.toString('base64')}`);
+                  log('Clipboard: HTML file:// media read OK: ' + filePath + ' (' + buf.length + ' bytes, ' + mime + ')');
+                } else {
+                  log('Clipboard: HTML file:// path not found: ' + filePath + ' (original: ' + src + ')');
                 }
               } catch {}
             } else if (src.startsWith('http://') || src.startsWith('https://')) {
@@ -942,6 +1010,32 @@ app.whenReady().then(async () => {
         return images;
       } catch (e) {
         log('readClipboardImages error', e);
+        return [];
+      }
+    });
+
+    ipcMain.handle('read-local-file', (_, filePath) => {
+      try {
+        if (!filePath || !fs.existsSync(filePath)) { log('readLocalFile: not found: ' + filePath); return null; }
+        const buf = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeMap = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.flv': 'video/x-flv', '.wmv': 'video/x-ms-wmv', '.m4v': 'video/mp4', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.pdf': 'application/pdf', '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.csv': 'text/csv', '.rtf': 'application/rtf', '.odt': 'application/vnd.oasis.opendocument.text', '.ods': 'application/vnd.oasis.opendocument.spreadsheet', '.odp': 'application/vnd.oasis.opendocument.presentation', '.zip': 'application/zip', '.rar': 'application/vnd.rar', '.7z': 'application/x-7z-compressed', '.tar': 'application/x-tar', '.gz': 'application/gzip', '.bz2': 'application/x-bzip2', '.xz': 'application/x-xz', '.tgz': 'application/gzip', '.html': 'text/html', '.htm': 'text/html', '.md': 'text/markdown', '.markdown': 'text/markdown', '.json': 'application/json', '.xml': 'application/xml', '.yaml': 'text/yaml', '.yml': 'text/yaml', '.toml': 'application/toml', '.ini': 'text/plain', '.conf': 'text/plain', '.log': 'text/plain', '.sql': 'application/sql', '.sh': 'application/x-sh', '.bat': 'application/x-bat', '.ps1': 'text/plain', '.py': 'text/x-python', '.js': 'text/javascript', '.ts': 'text/typescript', '.css': 'text/css', '.less': 'text/plain', '.scss': 'text/plain', '.txt': 'text/plain' };
+        const mime = mimeMap[ext] || 'application/octet-stream';
+        return `data:${mime};base64,${buf.toString('base64')}`;
+      } catch (e) {
+        log('readLocalFile error: ' + filePath, e);
+        return null;
+      }
+    });
+
+    ipcMain.handle('read-clipboard-files', () => {
+      try {
+        if (typeof clipboard.readFinderFiles === 'function') {
+          const files = clipboard.readFinderFiles();
+          return Array.isArray(files) ? files : [];
+        }
+        return [];
+      } catch {
         return [];
       }
     });

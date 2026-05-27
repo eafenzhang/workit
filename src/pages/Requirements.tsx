@@ -1,8 +1,70 @@
 import { apiFetch } from '../api';
 import { useEffect, useState, useRef, useMemo, memo } from 'react';
-import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, TagIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, TagIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { parseChatMessages, buildSenderColorMap } from '../utils/chatParser';
+import { FileTextIcon, FileIcon, ArchiveIcon, CodeIcon } from 'lucide-react';
+
+const ARCHIVE_EXTS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz'];
+const DOC_EXTS = ['.doc', '.docx', '.pdf', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.rtf', '.odt', '.ods', '.odp'];
+const CODE_EXTS = ['.html', '.htm', '.md', '.markdown', '.json', '.xml', '.yaml', '.yml', '.toml', '.sql', '.py', '.js', '.ts', '.css'];
+
+function getFileExt(name: string): string {
+  const idx = name.lastIndexOf('.');
+  return idx >= 0 ? name.substring(idx).toLowerCase() : '';
+}
+
+function getFileCategory(ext: string): 'archive' | 'doc' | 'code' | 'file' {
+  if (ARCHIVE_EXTS.includes(ext)) return 'archive';
+  if (DOC_EXTS.includes(ext)) return 'doc';
+  if (CODE_EXTS.includes(ext)) return 'code';
+  return 'file';
+}
+
+function getFileNameFromUrl(url: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const parts = pathname.split('/');
+    return decodeURIComponent(parts[parts.length - 1] || url);
+  } catch { return url; }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function isFileUrl(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    const ext = getFileExt(t);
+    if (DOC_EXTS.includes(ext) || ARCHIVE_EXTS.includes(ext) || CODE_EXTS.includes(ext)) return true;
+  }
+  return false;
+}
+
+function ReqFileChip({ url }: { url: string }) {
+  const name = getFileNameFromUrl(url);
+  const ext = getFileExt(name);
+  const cat = getFileCategory(ext);
+  const Icon = cat === 'archive' ? ArchiveIcon : cat === 'doc' ? FileTextIcon : cat === 'code' ? CodeIcon : FileIcon;
+  const colors: Record<string, string> = { archive: '#f59e0b', doc: '#6366f1', code: '#10b981', file: '#8b5cf6' };
+  const color = colors[cat];
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:opacity-80 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', maxWidth: '280px', textDecoration: 'none' }}>
+      <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0" style={{ background: color + '20' }}>
+        <Icon size={14} style={{ color }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-wiki-text truncate">{name}</div>
+      </div>
+    </a>
+  );
+}
 
 interface Requirement {
   id: number;
@@ -72,6 +134,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const previewImages = useRef<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Determine current view based on initialTab
@@ -85,6 +149,18 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     const unsub = api?.onRequirementsChanged?.(() => fetchRequirements());
     return () => { if (unsub) unsub(); };
   }, []);
+
+  // Keyboard navigation for image preview lightbox
+  useEffect(() => {
+    if (!previewImage) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewImage(null);
+      else if (e.key === 'ArrowLeft') setPreviewIdx(i => { const n = i > 0 ? i - 1 : i; setPreviewImage(previewImages.current[n]); return n; });
+      else if (e.key === 'ArrowRight') setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [previewImage]);
 
   const fetchRequirements = () => {
     apiFetch('/api/requirements').then(r => r.json()).then(data => setRequirements(data));
@@ -381,12 +457,75 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
             <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
               <div className="text-xs text-wiki-text3 mb-2">需求描述</div>
-              <div className="text-sm text-wiki-text2 leading-relaxed whitespace-pre-wrap">{detailReq.desc || '暂无描述'}</div>
-              {detailReq.images?.length > 0 && <div className="flex flex-wrap gap-2 mt-3">{detailReq.images.map((img, i) => (<img key={i} src={img} className="rounded object-cover cursor-pointer hover:opacity-80" style={{ border: '1px solid var(--wiki-border)', width: '100px', height: '80px' }} onClick={() => setPreviewImage(img)} />))}</div>}
+              {(() => {
+                const chat = detailReq.desc ? parseChatMessages(detailReq.desc) : null;
+                const images = detailReq.images || [];
+                if (chat) {
+                  const colorMap = buildSenderColorMap(chat);
+                  let imgIdx = 0;
+                  return (
+                    <div className="flex flex-col gap-2">
+                      {chat.map((msg, i) => (
+                        <div key={i} className="flex flex-col">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-semibold" style={{ color: colorMap.get(msg.sender) || '#6366f1' }}>{msg.sender}</span>
+                            <span className="text-xs" style={{ color: 'var(--wiki-text3)', fontSize: '10px' }}>{msg.time}</span>
+                          </div>
+                          <div className="text-sm text-wiki-text2 leading-relaxed rounded-lg px-3 py-2" style={{ background: 'var(--wiki-surface)', alignSelf: 'flex-start', maxWidth: '85%' }}>
+                            {msg.content.split('\n').map((line, j) => {
+                              const trimmedLine = line.trim();
+                              if (trimmedLine === '[图片]') {
+                                const img = images[Math.min(imgIdx, images.length - 1)];
+                                imgIdx++;
+                                return img ? <img key={j} src={img} className="w-20 h-16 rounded object-cover my-1 cursor-pointer hover:opacity-80" onClick={() => { previewImages.current = images; setPreviewIdx(Math.min(imgIdx - 1, images.length - 1)); setPreviewImage(img); }} /> : <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={11} /> 图片</div>;
+                              }
+                              if (trimmedLine === '[视频]') {
+                                return <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}>🎥 视频</div>;
+                              }
+                              const fileMatch = trimmedLine.match(/^\[文件[：:](.+?)\]$/);
+                              if (fileMatch) {
+                                return <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><FileIcon size={11} /> {fileMatch[1].trim()}</div>;
+                              }
+                              return <div key={j} className="whitespace-pre-wrap">{line || ' '}</div>;
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                // Plain text mode: show text (with file URL detection) then images
+                const descLines = detailReq.desc ? detailReq.desc.split('\n') : [];
+                return (
+                  <>
+                    {descLines.length > 0 && (
+                      <div className="text-sm text-wiki-text2 leading-relaxed mb-3">
+                        {descLines.map((line, j) => {
+                          const trimmedLine = line.trim();
+                          if (isFileUrl(trimmedLine)) return <div key={j} className="my-1"><ReqFileChip url={trimmedLine} /></div>;
+                          // [文件:filename] marker
+                          const fileMatch = trimmedLine.match(/^\[文件[：:](.+?)\]$/);
+                          if (fileMatch) {
+                            return <div key={j} className="my-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><FileIcon size={11} /> {fileMatch[1].trim()}</div>;
+                          }
+                          return <div key={j} className="whitespace-pre-wrap">{line || ' '}</div>;
+                        })}
+                      </div>
+                    )}
+                    {images.length > 0 && <div className="flex flex-wrap gap-2">{images.map((img, i) => (<img key={i} src={img} className="rounded object-cover cursor-pointer hover:opacity-80" style={{ border: '1px solid var(--wiki-border)', width: '100px', height: '80px' }} onClick={() => { previewImages.current = images; setPreviewIdx(i); setPreviewImage(img); }} />))}</div>}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
-        {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}><img src={previewImage} className="max-w-[90vw] max-h-[90vh] rounded-md object-contain" onClick={e => e.stopPropagation()} /></div>)}
+        {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}>
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">{previewIdx + 1} / {previewImages.current.length}</div>
+          <button onClick={e => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl">×</button>
+          {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i > 0 ? i - 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronLeftIcon size={24} /></button>}
+          {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
+          <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
+        </div>)}
       </div>
     );
   }
@@ -406,12 +545,18 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <div className="flex-1"><label className="text-xs text-wiki-text3 mb-2 block">模块</label><select className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} value={form.module} onChange={e => setForm({ ...form, module: e.target.value })}>{modules.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
             <div className="flex-1"><label className="text-xs text-wiki-text3 mb-2 block">优先级</label><select className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>{priorities.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
           </div>
-          {images.length > 0 && (<div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">图片附件</div><div className="flex flex-wrap gap-2">{images.map((img, i) => (<div key={i} className="relative"><img src={img} className="w-20 h-20 rounded object-cover" /><button onClick={() => removeImage(img)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button></div>))}</div></div>)}
+          {images.length > 0 && (<div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">图片附件</div><div className="flex flex-wrap gap-2">{images.map((img, i) => (<div key={i} className="relative"><img src={img} className="w-20 h-20 rounded object-cover cursor-pointer hover:opacity-80" onClick={() => { previewImages.current = images; setPreviewIdx(i); setPreviewImage(img); }} /><button onClick={() => removeImage(img)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button></div>))}</div></div>)}
           <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">需求描述</div><textarea className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none" style={{ background: 'transparent', border: 'none' }} rows={6} placeholder="详细描述需求内容..." value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} /></div>
           <div><input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleImageSelect} /><button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={13} /> 添加图片附件</button></div>
         </div>
       </div>
-      {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}><img src={previewImage} className="max-w-[90vw] max-h-[90vh] rounded-md object-contain" onClick={e => e.stopPropagation()} /></div>)}
+      {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">{previewIdx + 1} / {previewImages.current.length}</div>
+        <button onClick={e => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl">×</button>
+        {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i > 0 ? i - 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronLeftIcon size={24} /></button>}
+        {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
+        <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
+      </div>)}
     </div>
   );
 }
