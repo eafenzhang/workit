@@ -35,3 +35,5 @@ auto-imports.d.ts
 *.png
 !public/*.png
 !build/*.png
+.claude/
+UPDATE_MEMORY.md
