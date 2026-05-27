@@ -84,7 +84,7 @@ export default function Settings() {
   return (
     <div data-cmp="Settings" className="h-full p-8 overflow-y-auto overflow-x-hidden scrollbar-thin">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-semibold text-wiki-text mb-1">设置</h1>
+        <h1 className="text-xl font-semibold text-wiki-text mb-1">系统设置</h1>
         <p className="text-wiki-text2 text-sm mb-8">配置 Workit 的外观和行为</p>
 
         {/* System Section — moved to top with icon */}

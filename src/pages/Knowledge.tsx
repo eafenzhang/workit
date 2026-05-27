@@ -92,6 +92,12 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  // 300ms debounce for search input
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showDoc, setShowDoc] = useState<Document | null>(null);
   const [showEdit, setShowEdit] = useState<Partial<Document> | null>(null);
@@ -108,20 +114,25 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   });
   const [showCategoryEdit, setShowCategoryEdit] = useState<Partial<Category> | null>(null);
   const [docChangeKey, setDocChangeKey] = useState(0);
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        link: {
-          openOnClick: false,
-          autolink: true,
-        },
-      }),
-      Placeholder.configure({ placeholder: '输入文档内容...' }),
-      Image.configure({ inline: false, allowBase64: true }),
-    ],
-    content: '',
-    onUpdate: ({ editor }) => setShowEdit(prev => prev ? ({ ...prev, content: editor.getHTML() }) : prev),
-  });
+  // Lazy-init Tiptap editor: only create when editing/creating a document
+  const isEditing = showEdit !== null;
+  const editor = useEditor(
+    isEditing ? {
+      extensions: [
+        StarterKit.configure({
+          link: {
+            openOnClick: false,
+            autolink: true,
+          },
+        }),
+        Placeholder.configure({ placeholder: '输入文档内容...' }),
+        Image.configure({ inline: false, allowBase64: true }),
+      ],
+      content: showEdit?.content || '',
+      onUpdate: ({ editor: ed }) => setShowEdit(prev => prev ? ({ ...prev, content: ed.getHTML() }) : prev),
+    } : null,
+    [isEditing]
+  );
   const imageInputRef = useRef<HTMLInputElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const [linkInputValue, setLinkInputValue] = useState('');
@@ -551,7 +562,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
         <div className="flex items-center gap-3 mb-6">
           <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
-            <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索文档、标签..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索文档、标签..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
           <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <button onClick={() => setViewMode('grid')} className="w-7 h-7 rounded-md flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'var(--wiki-surface2)' : 'transparent' }}>

@@ -1,5 +1,5 @@
 import { apiFetch } from '../api';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { SparklesIcon, DatabaseIcon, LightbulbIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, AlertCircleIcon, ZapIcon, ArrowUpRightIcon, ActivityIcon } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
@@ -24,7 +24,7 @@ interface AreaData {
   name: string;
   需求: number;
   知识: number;
-  洞察: number;
+  洞察分析: number;
 }
 
 interface BarData {
@@ -41,7 +41,7 @@ interface DashboardProps {
   onOpenSubTab?: (title: string, type: string, extra?: { reqId?: number }) => void;
 }
 
-export default function Dashboard({ onOpenSubTab }: DashboardProps) {
+function Dashboard({ onOpenSubTab }: DashboardProps) {
   const [stats, setStats] = useState<StatCard[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [areaData, setAreaData] = useState<AreaData[]>([]);
@@ -67,7 +67,7 @@ export default function Dashboard({ onOpenSubTab }: DashboardProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-wiki-text">智能体工作台</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">仪表盘</h1>
           <p className="text-wiki-text2 text-sm mt-1">欢迎回来，今日数据一切正常</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
@@ -115,7 +115,7 @@ export default function Dashboard({ onOpenSubTab }: DashboardProps) {
             <div className="flex items-center gap-4 text-xs text-wiki-text3">
               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: '#6366f1' }} /><span>需求</span></div>
               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: '#06b6d4' }} /><span>知识</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} /><span>洞察</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} /><span>洞察分析</span></div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={180}>
@@ -139,7 +139,7 @@ export default function Dashboard({ onOpenSubTab }: DashboardProps) {
               <Tooltip contentStyle={{ background: 'transparent', border: 'none', color: 'var(--wiki-text)', fontSize: 12 }} />
               <Area type="monotone" dataKey="需求" stroke="#6366f1" strokeWidth={2} fill="url(#g1)" activeDot={{ r: 5, fill: '#6366f1' }} />
               <Area type="monotone" dataKey="知识" stroke="#06b6d4" strokeWidth={2} fill="url(#g2)" activeDot={{ r: 5, fill: '#06b6d4' }} />
-              <Area type="monotone" dataKey="洞察" stroke="#10b981" strokeWidth={2} fill="url(#g3)" activeDot={{ r: 5, fill: '#10b981' }} />
+              <Area type="monotone" dataKey="洞察分析" stroke="#10b981" strokeWidth={2} fill="url(#g3)" activeDot={{ r: 5, fill: '#10b981' }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -188,3 +188,5 @@ export default function Dashboard({ onOpenSubTab }: DashboardProps) {
     </div>
   );
 }
+
+export default memo(Dashboard);

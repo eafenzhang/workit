@@ -1,5 +1,5 @@
 import { apiFetch } from '../api';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { LightbulbIcon, TrendingUpIcon, BarChart2Icon, PieChartIcon, RefreshCwIcon, DownloadIcon, SparklesIcon, ArrowUpRightIcon, ArrowDownRightIcon, BrainCircuitIcon, ZapIcon, AlertTriangleIcon, Loader2Icon } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 
@@ -9,7 +9,7 @@ const iconMap: Record<string, typeof TrendingUpIcon> = {
   TrendingUpIcon, AlertTriangleIcon, BrainCircuitIcon, ZapIcon,
 };
 
-export default function Insights() {
+function Insights() {
   const [kpis, setKpis] = useState<any[]>([]);
   const [charts, setCharts] = useState<any>({});
   const [aiInsights, setAiInsights] = useState<any[]>([]);
@@ -259,3 +259,5 @@ export default function Insights() {
     </div>
   );
 }
+
+export default memo(Insights);

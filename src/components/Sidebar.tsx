@@ -9,13 +9,13 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: `首页`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
+  { id: 'dashboard', label: `仪表盘`, icon: LayoutDashboardIcon, color: 'var(--wiki-text)', path: '/' },
   { id: 'requirements', label: `采集库`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
   { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
-  { id: 'insights', label: `洞察`, icon: LightbulbIcon, color: '#10b981', path: '/insights' },
-  { id: 'model', label: `模型`, icon: CpuIcon, color: '#f59e0b', path: '/model' },
-  { id: 'mcp', label: `MCP`, icon: ServerIcon, color: '#ef4444', path: '/mcp' },
-  { id: 'messages', label: `消息`, icon: MessageSquareIcon, color: '#ec4899', path: '/messages' },
+  { id: 'insights', label: `洞察分析`, icon: LightbulbIcon, color: '#10b981', path: '/insights' },
+  { id: 'model', label: `模型配置`, icon: CpuIcon, color: '#f59e0b', path: '/model' },
+  { id: 'mcp', label: `MCP工具`, icon: ServerIcon, color: '#ef4444', path: '/mcp' },
+  { id: 'messages', label: `消息中心`, icon: MessageSquareIcon, color: '#ec4899', path: '/messages' },
 ];
 
 export default function Sidebar({
@@ -95,7 +95,7 @@ export default function Sidebar({
         {/* Settings */}
         <button
           onClick={handleSettingsClick}
-          title="设置"
+          title="系统设置"
           className="flex items-center px-1.5 rounded-lg transition-all duration-200 text-left hover:bg-wiki-surface2 relative group"
           style={{
             justifyContent: 'center',
@@ -115,7 +115,7 @@ export default function Sidebar({
             <SettingsIcon size={18} style={{ color: activeTab === 'settings' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
           </div>
           <span className="absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
-            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>设置</span>
+            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>系统设置</span>
         </button>
       </nav>
 

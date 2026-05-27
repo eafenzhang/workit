@@ -30,16 +30,31 @@ const MODEL_FIELDS = new Map([
 const isDev = !app.isPackaged;
 let logPath = '';
 
+// Single instance lock — show existing window on second launch
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 function log(msg, err) {
   try {
     if (!logPath) logPath = path.join(app.getPath('userData'), 'workit.log');
-    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}${err ? ': ' + (err.message || err) : ''}\n`);
+    const line = `[${new Date().toISOString()}] ${msg}${err ? ': ' + (err.message || err) : ''}\n`;
+    fs.appendFile(logPath, line, () => {});
   } catch {}
 }
 
 process.on('uncaughtException', (err) => {
   log('UNCAUGHT', err);
-  try { fs.appendFileSync(logPath, (err.stack || '') + '\n'); } catch {}
+  try { fs.appendFile(logPath, (err.stack || '') + '\n', () => {}); } catch {}
   app.exit(1);
 });
 process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
@@ -305,9 +320,11 @@ async function handleDbQuery(method, table, data, id) {
     case 'models':
       return handleModels(method, data, id);
     case 'dashboard/stats': {
-      const total = query('SELECT COUNT(*) FROM requirements')[0][0];
-      const completed = query("SELECT COUNT(*) FROM requirements WHERE status='已完成'")[0][0];
-      const inProgress = query("SELECT COUNT(*) FROM requirements WHERE status='实现中'")[0][0];
+      // Merged single query: total, completed, in-progress in one pass
+      const statsRow = query("SELECT COUNT(*) as cnt, SUM(CASE WHEN status='已完成' THEN 1 ELSE 0 END), SUM(CASE WHEN status='实现中' THEN 1 ELSE 0 END) FROM requirements")[0];
+      const total = statsRow[0];
+      const completed = statsRow[1] || 0;
+      const inProgress = statsRow[2] || 0;
       const docCount = query('SELECT COUNT(*) FROM documents')[0][0];
       return [
         { label: '需求总数', value: String(total), change: '+' + total, icon: 'SparklesIcon', color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
@@ -322,13 +339,13 @@ async function handleDbQuery(method, table, data, id) {
       const cats = query('SELECT category, COUNT(*) FROM requirements GROUP BY category');
       return {
         areaData: [
-          { name: '1月', 需求: 0, 知识: 0, 洞察: 0 },
-          { name: '2月', 需求: 0, 知识: 0, 洞察: 0 },
-          { name: '3月', 需求: 0, 知识: 0, 洞察: 0 },
-          { name: '4月', 需求: 0, 知识: 0, 洞察: 0 },
-          { name: '5月', 需求: total, 知识: docCount, 洞察: 0 },
-          { name: '6月', 需求: 0, 知识: 0, 洞察: 0 },
-          { name: '7月', 需求: 0, 知识: 0, 洞察: 0 },
+          { name: '1月', 需求: 0, 知识: 0, 洞察分析: 0 },
+          { name: '2月', 需求: 0, 知识: 0, 洞察分析: 0 },
+          { name: '3月', 需求: 0, 知识: 0, 洞察分析: 0 },
+          { name: '4月', 需求: 0, 知识: 0, 洞察分析: 0 },
+          { name: '5月', 需求: total, 知识: docCount, 洞察分析: 0 },
+          { name: '6月', 需求: 0, 知识: 0, 洞察分析: 0 },
+          { name: '7月', 需求: 0, 知识: 0, 洞察分析: 0 },
         ],
         barData: cats.map(r => ({ name: r[0]||'未分类', value: r[1] })),
       };
@@ -689,7 +706,6 @@ async function createWindow() {
     title: 'Workit',
     icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'icon.png')),
     frame: false,
-    show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
   });
 
@@ -712,10 +728,6 @@ async function createWindow() {
     log('createWindow: loading HTML = ' + htmlPath);
     mainWindow.loadFile(htmlPath);
   }
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus();
-  });
 
   // 渲染进程错误监听
   mainWindow.webContents.on('did-fail-load', (_, code, desc) => {

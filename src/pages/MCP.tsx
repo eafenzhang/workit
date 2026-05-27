@@ -66,7 +66,7 @@ export default function MCP() {
     <div className="flex flex-col gap-6 p-8 h-full overflow-y-auto scrollbar-thin">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-wiki-text">MCP 工具</h1>
+          <h1 className="text-xl font-semibold text-wiki-text">MCP工具</h1>
           <p className="text-sm text-wiki-text2 mt-1">管理和配置 MCP 服务器</p>
         </div>
         <button onClick={() => setShowAdd(true)}

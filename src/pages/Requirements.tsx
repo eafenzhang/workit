@@ -1,5 +1,5 @@
 import { apiFetch } from '../api';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, TagIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -49,10 +49,16 @@ const priorityConfig: Record<string, { color: string; bg: string }> = {
 const modules = ['系统后台', '机构后台', '品牌门店', '收银终端', '用户端', '开放平台'];
 const priorities = ['高', '中', '低'];
 
-export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
+function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const { user } = useAuth();
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  // 300ms debounce for search input
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
   const [filterStatus, setFilterStatus] = useState('全部');
   const [filterPriority, setFilterPriority] = useState('全部');
   const [filterCategory, setFilterCategory] = useState('全部');
@@ -96,6 +102,16 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
   });
 
   const detailReq = detailReqId ? requirements.find(r => r.id === detailReqId) : null;
+
+  // Memoize status counts to avoid re-filtering on every render
+  const statusStats = useMemo(() => [
+    { label: `全部`, count: requirements.length, color: `var(--wiki-text)`, status: `全部` },
+    { label: `待评估`, count: requirements.filter(r => r.status === '待评估').length, color: statusConfig['待评估']?.color || '#f59e0b', status: `待评估` },
+    { label: `设计中`, count: requirements.filter(r => r.status === '设计中').length, color: statusConfig['设计中']?.color || '#6366f1', status: `设计中` },
+    { label: `实现中`, count: requirements.filter(r => r.status === '实现中').length, color: statusConfig['实现中']?.color || '#06b6d4', status: `实现中` },
+    { label: `测试中`, count: requirements.filter(r => r.status === '测试中').length, color: statusConfig['测试中']?.color || '#8b5cf6', status: `测试中` },
+    { label: `已完成`, count: requirements.filter(r => r.status === '已完成').length, color: statusConfig['已完成']?.color || '#10b981', status: `已完成` },
+  ], [requirements]);
 
   // Open detail in parent tab
   const openDetail = (req: Requirement) => {
@@ -217,13 +233,13 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
     return (
       <div data-cmp="Requirements" className="flex flex-col h-full">
         <div className="flex items-center justify-between mb-4 px-8 pt-8">
-          <div><h1 className="text-xl font-semibold text-wiki-text">需求采集</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪所有智能体需求条目</p></div>
+          <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪所有智能体需求条目</p></div>
           <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><PlusIcon size={16} /><span>新建需求</span></button>
         </div>
         <div className="flex items-center gap-3 mb-4 px-8">
           <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
-            <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
           <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
             style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)`, color: `var(--wiki-text2)` }}>
@@ -264,13 +280,7 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
           </div>
         )}
         <div className="flex gap-3 mb-4 px-8">
-          {[{ label: `全部`, count: requirements.length, color: `var(--wiki-text)`, status: `全部` },
-            { label: `待评估`, count: requirements.filter(r => r.status === '待评估').length, color: statusConfig['待评估']?.color || '#f59e0b', status: `待评估` },
-            { label: `设计中`, count: requirements.filter(r => r.status === '设计中').length, color: statusConfig['设计中']?.color || '#6366f1', status: `设计中` },
-            { label: `实现中`, count: requirements.filter(r => r.status === '实现中').length, color: statusConfig['实现中']?.color || '#06b6d4', status: `实现中` },
-            { label: `测试中`, count: requirements.filter(r => r.status === '测试中').length, color: statusConfig['测试中']?.color || '#8b5cf6', status: `测试中` },
-            { label: `已完成`, count: requirements.filter(r => r.status === '已完成').length, color: statusConfig['已完成']?.color || '#10b981', status: `已完成` },
-          ].map((stat) => (
+          {statusStats.map((stat) => (
             <div key={stat.label} onClick={() => setFilterStatus(stat.status)} className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-all"
               style={{ background: filterStatus === stat.status ? `var(--wiki-surface2)` : `var(--wiki-surface)`, border: filterStatus === stat.status ? `1px solid var(--wiki-border)` : `1px solid transparent` }}>
               <div className="w-2 h-2 rounded-full" style={{ background: stat.color }} />
@@ -405,3 +415,5 @@ export default function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: 
     </div>
   );
 }
+
+export default memo(Requirements);

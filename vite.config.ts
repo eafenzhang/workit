@@ -17,6 +17,22 @@ const lucideIconNames = Object.keys(lucide).filter(
 // https://vite.dev/config/
 export default defineConfig({
   base: './',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
+            if (id.includes('recharts')) return 'vendor-recharts';
+            if (id.includes('@tiptap')) return 'vendor-tiptap';
+            if (id.includes('@radix-ui')) return 'vendor-ui';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('sql.js') || id.includes('jszip') || id.includes('file-saver')) return 'vendor-utils';
+          }
+        },
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

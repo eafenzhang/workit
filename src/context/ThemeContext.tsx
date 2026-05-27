@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 
 type Theme = 'light' | 'dark' | 'neutral' | 'warm' | 'ocean' | 'minimal' | 'system';
 
@@ -90,8 +90,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#ffffff')
     : accentColorMap[theme] || '#ffffff';
 
+  const value = useMemo(() => ({
+    theme, resolvedTheme, setTheme, accentColor: resolvedAccent
+  }), [theme, resolvedTheme, setTheme, resolvedAccent]);
+
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, accentColor: resolvedAccent }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );
