@@ -3,16 +3,22 @@ import { useTheme } from '../context/ThemeContext';
 import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, RefreshCwIcon, CheckIcon, CogIcon, SparklesIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
 
+// Persist update state across tab switches (module-level, survives unmount)
+let _updStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' = 'idle';
+let _updVersion = '';
+let _updProgress = 0;
+let _updError = '';
+
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [quickCollect, setQuickCollect] = useState(() => {
     try { return localStorage.getItem('quick_collect_enabled') === 'true'; } catch { return false; }
   });
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
-  const [latestVersion, setLatestVersion] = useState('');
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [updateStatus, setUpdateStatus] = useState(_updStatus);
+  const [latestVersion, setLatestVersion] = useState(_updVersion);
+  const [downloadProgress, setDownloadProgress] = useState(_updProgress);
   const [currentVersion, setCurrentVersion] = useState('1.0.0');
-  const [updateError, setUpdateError] = useState('');
+  const [updateError, setUpdateError] = useState(_updError);
   const [minimizeToTray, setMinimizeToTray] = useState(false);
   const [openAtLogin, setOpenAtLogin] = useState(false);
   const [autoAnalyze, setAutoAnalyze] = useState(() => {
@@ -21,23 +27,33 @@ export default function Settings() {
 
   const api = (window as any).electronAPI;
 
+  // Sync to module-level + state
+  const sync = (patch: Partial<{ status: typeof _updStatus; version: string; progress: number; error: string }>) => {
+    if (patch.status !== undefined) { _updStatus = patch.status; setUpdateStatus(patch.status); }
+    if (patch.version !== undefined) { _updVersion = patch.version; setLatestVersion(patch.version); }
+    if (patch.progress !== undefined) { _updProgress = patch.progress; setDownloadProgress(patch.progress); }
+    if (patch.error !== undefined) { _updError = patch.error; setUpdateError(patch.error); }
+  };
+
   useEffect(() => {
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
     api?.getSettings?.().then((s: any) => {
       if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
     }).catch(() => {});
-    // P1-06: Store unsubscribe functions for cleanup
     const unsubs: (() => void)[] = [];
     if (api?.onUpdateAvailable) {
-      const unsub = api.onUpdateAvailable((v: string) => { setLatestVersion(v); setUpdateStatus('available'); });
+      const unsub = api.onUpdateAvailable((v: string) => sync({ status: 'available', version: v }));
       if (unsub) unsubs.push(unsub);
     }
     if (api?.onUpdateProgress) {
-      const unsub = api.onUpdateProgress((p: number) => { setDownloadProgress(p); if (p >= 100) setUpdateStatus('ready'); });
+      const unsub = api.onUpdateProgress((p: number) => {
+        sync({ progress: p });
+        if (p >= 100) sync({ status: 'ready' });
+      });
       if (unsub) unsubs.push(unsub);
     }
     if (api?.onUpdateDownloaded) {
-      const unsub = api.onUpdateDownloaded(() => setUpdateStatus('ready'));
+      const unsub = api.onUpdateDownloaded(() => sync({ status: 'ready' }));
       if (unsub) unsubs.push(unsub);
     }
     return () => { unsubs.forEach(fn => fn()); };
@@ -45,21 +61,21 @@ export default function Settings() {
 
   const checkForUpdate = async () => {
     if (!api) return;
-    setUpdateStatus('checking');
-    setUpdateError('');
+    sync({ status: 'checking', error: '' });
     try {
       const result = await api.checkForUpdate();
-      if (result?.error) { setUpdateError(result.error); setUpdateStatus('error'); return; }
+      if (result?.error) { sync({ status: 'error', error: result.error }); return; }
       if (result?.available) {
-        setLatestVersion(result.version);
-        setUpdateStatus('downloading');
-        setDownloadProgress(0);
-        await api.downloadUpdate(); // triggers progress events
+        sync({ status: 'downloading', version: result.version, progress: 0 });
+        const dlResult = await api.downloadUpdate();
+        if (dlResult?.error) {
+          sync({ status: 'error', error: '下载失败: ' + dlResult.error });
+        }
       } else {
-        setUpdateError('已是最新版本'); setUpdateStatus('idle');
-        setTimeout(() => setUpdateError(''), 3000);
+        sync({ status: 'idle', error: '已是最新版本' });
+        setTimeout(() => sync({ error: '' }), 3000);
       }
-    } catch { setUpdateError('网络请求失败'); setUpdateStatus('error'); }
+    } catch { sync({ status: 'error', error: '网络请求失败' }); }
   };
 
   const installUpdate = () => { api?.installUpdate(); };
