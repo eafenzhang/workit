@@ -116,23 +116,21 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   const [docChangeKey, setDocChangeKey] = useState(0);
   // Lazy-init Tiptap editor: only create when editing/creating a document
   const isEditing = showEdit !== null;
-  const editor = useEditor(
-    isEditing ? {
-      extensions: [
-        StarterKit.configure({
-          link: {
-            openOnClick: false,
-            autolink: true,
-          },
-        }),
-        Placeholder.configure({ placeholder: '输入文档内容...' }),
-        Image.configure({ inline: false, allowBase64: true }),
-      ],
-      content: showEdit?.content || '',
-      onUpdate: ({ editor: ed }) => setShowEdit(prev => prev ? ({ ...prev, content: ed.getHTML() }) : prev),
-    } : null,
-    [isEditing]
-  );
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        link: {
+          openOnClick: false,
+          autolink: true,
+        },
+      }),
+      Placeholder.configure({ placeholder: '输入文档内容...' }),
+      Image.configure({ inline: false, allowBase64: true }),
+    ],
+    content: showEdit?.content || '',
+    onUpdate: ({ editor: ed }) => setShowEdit(prev => prev ? ({ ...prev, content: ed.getHTML() }) : prev),
+    immediatelyRender: false,
+  }, [isEditing]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const [linkInputValue, setLinkInputValue] = useState('');

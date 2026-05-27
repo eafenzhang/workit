@@ -70,28 +70,60 @@ async function initDatabase() {
   const sqlJsInit = require('sql.js');
   const SQL = await sqlJsInit();
   const dbPath = path.join(app.getPath('userData'), 'workit-data.db');
+  const dbBackupPath = path.join(app.getPath('userData'), 'workit-data.db.bak');
 
   // P1-10: Database corruption recovery
   try {
     if (fs.existsSync(dbPath)) {
+      // Create startup backup before any write operations
+      try {
+        fs.copyFileSync(dbPath, dbBackupPath);
+        log('initDatabase: backup created at ' + dbBackupPath);
+      } catch (backupErr) {
+        log('initDatabase: backup creation failed (non-fatal)', backupErr);
+      }
       const fileData = fs.readFileSync(dbPath);
       db = new SQL.Database(fileData);
       // Quick integrity check: try a simple query
-      db.prepare('SELECT 1').step().free();
+      db.exec('SELECT 1');
+    } else if (fs.existsSync(dbBackupPath)) {
+      // Restore from backup if main DB is missing (e.g. after reinstall)
+      log('initDatabase: main DB missing, restoring from backup');
+      fs.copyFileSync(dbBackupPath, dbPath);
+      const fileData = fs.readFileSync(dbPath);
+      db = new SQL.Database(fileData);
+      db.exec('SELECT 1');
     } else {
       db = new SQL.Database();
     }
   } catch (dbErr) {
-    log('initDatabase: corruption detected or read error, backing up and creating new DB', dbErr);
-    try {
-      // Backup the corrupted file
-      const backupPath = dbPath + '.corrupt.' + Date.now();
-      if (fs.existsSync(dbPath)) fs.renameSync(dbPath, backupPath);
-    } catch (backupErr) {
-      log('initDatabase: backup failed', backupErr);
+    log('initDatabase: corruption detected or read error', dbErr);
+    // Try to restore from backup
+    if (fs.existsSync(dbBackupPath)) {
+      try {
+        log('initDatabase: attempting restore from backup');
+        fs.copyFileSync(dbBackupPath, dbPath);
+        const fileData = fs.readFileSync(dbPath);
+        db = new SQL.Database(fileData);
+        db.exec('SELECT 1');
+        log('initDatabase: restored from backup successfully');
+      } catch (restoreErr) {
+        log('initDatabase: restore from backup also failed, creating fresh DB', restoreErr);
+        try {
+          const corruptPath = dbPath + '.corrupt.' + Date.now();
+          if (fs.existsSync(dbPath)) fs.renameSync(dbPath, corruptPath);
+        } catch {}
+        db = new SQL.Database();
+      }
+    } else {
+      try {
+        const backupPath = dbPath + '.corrupt.' + Date.now();
+        if (fs.existsSync(dbPath)) fs.renameSync(dbPath, backupPath);
+      } catch (backupErr) {
+        log('initDatabase: backup failed', backupErr);
+      }
+      db = new SQL.Database();
     }
-    // Create a fresh database
-    db = new SQL.Database();
   }
 
   db.run(`CREATE TABLE IF NOT EXISTS requirements (
@@ -704,7 +736,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200, height: 800, minWidth: 900, minHeight: 600,
     title: 'Workit',
-    icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'icon.png')),
+    icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')),
     frame: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
   });
@@ -758,7 +790,7 @@ app.whenReady().then(async () => {
 
     function createTray() {
       if (tray) return;
-      const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'icon.png')).resize({ width: 16, height: 16 });
+      const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')).resize({ width: 16, height: 16 });
       tray = new Tray(icon);
       tray.setToolTip('Workit');
       tray.setContextMenu(Menu.buildFromTemplate([
