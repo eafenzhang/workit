@@ -3,12 +3,15 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ClipboardIcon, XIcon, SparklesIcon, ClipboardPasteIcon, ChevronLeftIcon, ChevronRightIcon, FileTextIcon, FileIcon, ArchiveIcon, CodeIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseChatMessages, buildSenderColorMap } from '../utils/chatParser';
+import { captureItemsToBlocks, extractTextFromBlocks, extractImagesFromBlocks } from '../utils/contentBlocks';
 
 interface CaptureItem {
-  type: 'text' | 'image' | 'video' | 'file';
+  type: 'text' | 'image' | 'video' | 'file' | 'table';
   content: string; // text content / image dataURL / video dataURL / file dataURL
   name?: string;   // file name (for 'file' type)
   size?: number;   // file size in bytes (for 'file' type)
+  rows?: string[][];  // 表格数据（table 类型时）
+  headers?: string[]; // 表头（table 类型时可选）
 }
 
 interface CaptureData {
@@ -56,6 +59,14 @@ async function resolveTextFileItems(text: string, api: any): Promise<CaptureItem
   let hasFiles = false;
 
   for (const line of lines) {
+    // WeChat/WeCom file markers: [文件:filename] or [文件：filename]
+    const fileMarkerRx = /^\[文件[：:](.+?)\]$/;
+    const fileMatch = line.match(fileMarkerRx);
+    if (fileMatch) {
+      items.push({ type: 'file', content: '', name: fileMatch[1].trim(), size: undefined });
+      hasFiles = true;
+      continue;
+    }
     // Check if line is a file:// URL
     if (line.startsWith('file://')) {
       const fp = fileUrlToPath(line);
@@ -155,7 +166,7 @@ export default function QuickCapture() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const mountedRef = useRef(true);
 
-  const allImages = useMemo(() => captured?.items.filter(i => i.type === 'image' && i.content).map(i => i.content) || [], [captured]);
+  const allImages = useMemo(() => captured?.items.filter(i => i.type === 'image').map(i => i.content || '') || [], [captured]);
   const capturedText = useMemo(() => captured?.items.filter(i => i.type === 'text').map(i => i.content).join('\n') || '', [captured]);
   const chatMessages = capturedText ? parseChatMessages(capturedText) : null;
   const senderColorMap = useMemo(() => chatMessages ? buildSenderColorMap(chatMessages) : new Map(), [chatMessages]);
@@ -265,8 +276,10 @@ export default function QuickCapture() {
     }
     console.log('[parseHtml] resolvedMedia count:', resolvedMedia.length);
 
-    // 4. Build items from plain text (authoritative source for content structure)
-    if (plainText) {
+    // 4. Build items: use plainText unless HTML contains table/video structures
+    // (plainText flattens tables & can't represent video; HTML-only walk() handles both)
+    const hasTableOrVideo = /<table\b|<video\b/i.test(cleanedHtml);
+    if (plainText && !hasTableOrVideo) {
       const lines = plainText.split('\n');
       let mediaIdx = 0;
       const items: CaptureItem[] = [];
@@ -334,7 +347,7 @@ export default function QuickCapture() {
     const BLOCK_TAGS = ['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'tr', 'section', 'article'];
     const SKIP_TAGS = ['script', 'style', 'noscript', 'head', 'meta', 'link', 'title'];
 
-    const walk = (node: Node) => {
+    const walk = async (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         const t = (node.textContent || '').replace(/ /g, ' ').trim();
         if (t) items.push({ type: 'text', content: t });
@@ -344,15 +357,45 @@ export default function QuickCapture() {
         if (SKIP_TAGS.includes(tag)) return;
         if (tag === 'img') {
           const src = el.getAttribute('src');
-          if (src) items.push({ type: 'image', content: src });
+          if (src && src.startsWith('file://') && api?.readLocalFile) {
+            const resolved = await resolveFileItem(src, api);
+            if (resolved) items.push(resolved);
+            else items.push({ type: 'image', content: src });
+          } else if (src) {
+            items.push({ type: 'image', content: src });
+          }
           return;
         }
         if (tag === 'video') {
           const src = el.getAttribute('src') || el.querySelector('source')?.getAttribute('src');
-          if (src) items.push({ type: 'video', content: src });
+          if (src) {
+            if (src.startsWith('file://')) {
+              const resolved = await resolveFileItem(src, api);
+              if (resolved) items.push(resolved);
+              else items.push({ type: 'video', content: src });
+            } else {
+              items.push({ type: 'video', content: src });
+            }
+          }
           return;
         }
-        for (const child of Array.from(el.childNodes)) walk(child);
+        if (tag === 'table') {
+          const rows: string[][] = [];
+          const headers: string[] = [];
+          for (const tr of Array.from(el.querySelectorAll('tr'))) {
+            const cells: string[] = [];
+            for (const cell of Array.from(tr.children)) {
+              const isHeader = cell.tagName === 'TH';
+              const text = (cell.textContent || '').trim();
+              cells.push(text);
+              if (isHeader && headers.length === 0) headers.push(text);
+            }
+            if (cells.length > 0) rows.push(cells);
+          }
+          items.push({ type: 'table', content: '', rows, headers: headers.length > 0 ? headers : undefined });
+          return; // don't recurse into table children
+        }
+        for (const child of Array.from(el.childNodes)) await walk(child);
         if (BLOCK_TAGS.includes(tag)) {
           const last = items[items.length - 1];
           if (last?.type === 'text' && !last.content.endsWith('\n')) {
@@ -362,7 +405,7 @@ export default function QuickCapture() {
       }
     };
 
-    for (const child of Array.from(body.childNodes)) walk(child);
+    for (const child of Array.from(body.childNodes)) await walk(child);
 
     // Merge adjacent text items
     const merged: CaptureItem[] = [];
@@ -387,11 +430,30 @@ export default function QuickCapture() {
       if (!dt) return;
       const api = (window as any).electronAPI;
 
+      // Diagnostic: dump ALL clipboard formats
+      console.log('[qc-diag] dt.types:', Array.from(dt.types));
+      if (dt.items) {
+        for (const item of Array.from(dt.items)) {
+          console.log('[qc-diag] dt.item:', item.kind, item.type);
+        }
+      }
+      // Also check raw clipboard via electronAPI
+      if (api?.readClipboardFiles) {
+        try {
+          const rawFiles = await api.readClipboardFiles();
+          console.log('[qc-diag] readClipboardFiles result:', JSON.stringify(rawFiles));
+        } catch(e) { console.log('[qc-diag] readClipboardFiles error:', e); }
+      }
+
       let text = '', html = '';
       try { text = dt.getData('text/plain') || ''; } catch {}
       try { html = dt.getData('text/html') || ''; } catch {}
 
-      // Fallback: use Electron IPC for HTML if browser paste has none
+      // Fallback: use Electron IPC for text/HTML if browser paste has none
+      // (WeCom uses custom clipboard formats that browser ClipboardEvent can't read)
+      if (!text && api?.readClipboardText) {
+        try { text = await api.readClipboardText() || ''; } catch {}
+      }
       if (!html && api?.readClipboardHTML) {
         try { html = await api.readClipboardHTML() || ''; } catch {}
       }
@@ -435,6 +497,30 @@ export default function QuickCapture() {
         } else {
           newItems.push({ type: 'text', content: text });
         }
+      }
+
+      // Fallback: check native clipboard files for videos that HTML didn't capture
+      const emptyVideos = newItems.filter(i => i.type === 'video' && !i.content);
+      if (emptyVideos.length > 0 && api?.readClipboardFiles) {
+        try {
+          const files = await api.readClipboardFiles();
+          if (Array.isArray(files)) {
+            const VIDEO_EXTS_FALLBACK = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv', '.wmv', '.m4v'];
+            const videoPaths = files.filter((f: string) => {
+              const ext = f.substring(f.lastIndexOf('.')).toLowerCase();
+              return VIDEO_EXTS_FALLBACK.includes(ext);
+            });
+            // Replace empty video items with resolved ones
+            let vidIdx = 0;
+            newItems = newItems.map(item => {
+              if (item.type === 'video' && !item.content && vidIdx < videoPaths.length) {
+                return resolveFileItem(videoPaths[vidIdx++], api).then(r => r || item);
+              }
+              return Promise.resolve(item);
+            });
+            newItems = await Promise.all(newItems);
+          }
+        } catch {}
       }
 
       for (const rb of rawBlobs) {
@@ -489,8 +575,14 @@ export default function QuickCapture() {
               const name = getFileNameFromPath(fp);
               const ext = getFileExt(name);
               const cat = getFileCategory(ext);
-              if (cat === 'image' || cat === 'video') {
+              if (cat === 'image') {
                 // Already handled by readClipboardImages (converted to data URL)
+                continue;
+              }
+              if (cat === 'video') {
+                // readClipboardImages doesn't handle video — resolve this file
+                const item = await resolveFileItem(fp, api);
+                if (item) fileItems.push(item);
                 continue;
               }
               // Document / archive / code file
@@ -636,43 +728,45 @@ export default function QuickCapture() {
   };
 
   const handleSubmit = async () => {
-    const images = allImages;
-    const hasImages = images.length > 0;
-    const hasFiles = captured?.items.some(i => i.type === 'file') || false;
-    const finalDesc = capturedText ? (desc ? `${capturedText}\n${desc}` : capturedText) : desc;
-    if (!finalDesc.trim() && !hasImages && !hasFiles) {
-      toast.error('请输入需求描述或添加文件');
-      return;
-    }
-    const title = finalDesc.substring(0, 30) || (hasImages ? '图片需求' : hasFiles ? '文件需求' : '新建需求');
+    const images = allImages.filter(Boolean); // filter out empty strings
+    const hasContent = captured?.items.some(i => i.type !== 'text' || i.content.trim()) || desc.trim();
+    if (!hasContent) { toast.error('请输入需求描述或添加文件'); return; }
 
-    // Upload file items and collect their URLs
-    const uploadedFileUrls: string[] = [];
-    if (captured) {
-      for (const item of captured.items) {
-        if (item.type === 'file' && item.content) {
-          try {
-            const blob = await fetch(item.content).then(r => r.blob());
-            const formData = new FormData();
-            formData.append('file', blob, item.name || 'file');
-            const res = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.url) uploadedFileUrls.push(data.url);
-          } catch (e) { console.error('[qc-submit] file upload error', e); }
-        }
+    // Build final items: upload file items first, replace data URLs with persistent URLs
+    const finalItems = captured ? [...captured.items] : [];
+
+    // Upload file items and replace content with persistent URLs
+    for (const item of finalItems) {
+      if (item.type === 'file' && item.content && item.content.startsWith('data:')) {
+        try {
+          const blob = await fetch(item.content).then(r => r.blob());
+          const formData = new FormData();
+          formData.append('file', blob, item.name || 'file');
+          const res = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
+          const uploadData = await res.json();
+          if (uploadData.url) item.content = uploadData.url;
+        } catch (e) { console.error('[qc-submit] file upload error', e); }
       }
     }
 
-    // Append uploaded file URLs to description
-    const fileDesc = uploadedFileUrls.length > 0 ? '\n附件:\n' + uploadedFileUrls.join('\n') : '';
-    const fullDesc = finalDesc + fileDesc;
+    // Build content_blocks from items (preserves order)
+    const contentBlocks = captureItemsToBlocks(finalItems);
+    const contentBlocksStr = JSON.stringify(contentBlocks);
+
+    // Build backward-compatible desc and images
+    const textPart = extractTextFromBlocks(contentBlocks) || '';
+    const compatImages = extractImagesFromBlocks(contentBlocks);
+    const fileBlocks = contentBlocks.filter(b => b.type === 'file');
+    const attachmentLines = fileBlocks.map(f => `[附件:${f.fileName || 'file'}|${f.content}]`);
+    const fullDesc = textPart + (attachmentLines.length > 0 ? '\n' + attachmentLines.join('\n') : '') + (desc ? '\n' + desc : '');
+    const title = textPart.substring(0, 30) || (compatImages.length > 0 ? '图片需求' : fileBlocks.length > 0 ? '文件需求' : '新建需求');
 
     let newId: number | null = null;
     try {
       const res = await apiFetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, desc: fullDesc, module, priority, images }),
+        body: JSON.stringify({ title, desc: fullDesc, module, priority, images: compatImages, content_blocks: contentBlocksStr }),
       });
       const result = res.data;
       console.log('[qc-submit] POST result:', JSON.stringify(result).substring(0, 200));
@@ -687,7 +781,7 @@ export default function QuickCapture() {
       setTimeout(async () => {
         try {
           console.log('[qc-auto-analyze] start, newId=' + newId);
-          const autoEnabled = (() => { try { return localStorage.getItem('ai_auto_analyze') !== 'false'; } catch { return true; } })();
+          const autoEnabled = (() => { try { return localStorage.getItem('ai_auto_analyze') === 'true'; } catch { return false; } })();
           if (!autoEnabled) return;
           const modelsRes = await apiFetch('/api/models');
           const models = modelsRes.data;
@@ -739,7 +833,7 @@ export default function QuickCapture() {
             {/* Mixed content display: items in copy order */}
             {captured && captured.items.length > 0 && (
               <div className="mb-4 p-3 rounded-lg max-h-60 overflow-y-auto" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-                {chatMessages ? (
+                {chatMessages && !captured.items.some(i => i.type !== 'text') ? (
                   <>
                     <div className="text-xs text-wiki-text3 mb-2">对话记录 ({chatMessages.length} 条)</div>
                     <div className="flex flex-col gap-2">
@@ -817,6 +911,23 @@ export default function QuickCapture() {
                       }
                       if (item.type === 'file') {
                         return <FileChip key={i} item={item} onRemove={() => removeItem(i)} />;
+                      }
+                      if (item.type === 'table') {
+                        return (
+                          <div key={i} className="overflow-x-auto rounded" style={{ border: '1px solid var(--wiki-border)' }}>
+                            <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+                              <tbody>
+                                {(item.rows || []).map((row, ri) => (
+                                  <tr key={ri} style={{ background: ri % 2 === 0 ? 'transparent' : 'var(--wiki-surface)' }}>
+                                    {row.map((cell, ci) => (
+                                      <td key={ci} className="px-2 py-1" style={{ borderBottom: '1px solid var(--wiki-border)' }}>{cell}</td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
                       }
                       return null;
                     })}

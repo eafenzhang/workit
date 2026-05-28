@@ -1,3 +1,15 @@
+// Strip ELECTRON_RUN_AS_NODE to fix double-click launch in Explorer.
+if (process.env.ELECTRON_RUN_AS_NODE === '1') {
+  const { spawn } = require('child_process');
+  const env = {};
+  for (const k in process.env) {
+    if (k !== 'ELECTRON_RUN_AS_NODE') env[k] = process.env[k];
+  }
+  spawn(process.execPath, [], { detached: true, stdio: 'ignore', env });
+  // Must NOT exit immediately — give child time to detach
+  setTimeout(() => process.exit(0), 500);
+}
+
 const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu, safeStorage, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -27,27 +39,8 @@ const MODEL_FIELDS = new Map([
   ['enabled', (v) => v ? 1 : 0],
 ]);
 
-const isDev = !app.isPackaged;
+const isDev = process.defaultApp || /electron/.test(process.argv[0]);
 let logPath = '';
-
-// Single instance lock — show existing window on second launch
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) {
-        // Fade in from tray to avoid white flash on frameless window
-        mainWindow.setOpacity(0);
-        mainWindow.show();
-        setTimeout(() => mainWindow.setOpacity(1), 50);
-      }
-      mainWindow.focus();
-    }
-  });
-}
 
 function log(msg, err) {
   try {
@@ -161,6 +154,16 @@ async function initDatabase() {
 
   // Migrate old status
   db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
+
+  // Migrate: add content_blocks column for unified content rendering
+  try {
+    db.run("ALTER TABLE requirements ADD COLUMN content_blocks TEXT DEFAULT '[]'");
+    log('initDatabase: content_blocks column added');
+  } catch (e) {
+    // Column may already exist — ignore
+    log('initDatabase: content_blocks migration (column may already exist)', e);
+  }
+
   saveDb();
   log('initDatabase: success, path=' + dbPath);
 }
@@ -573,9 +576,10 @@ function handleRequirements(method, data, id) {
       const all = query('SELECT * FROM requirements ORDER BY created_at DESC');
       return all.map(formatReq);
     case 'POST': {
-      const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images } = data || {};
-      run(`INSERT INTO requirements (title, description, category, module, priority, assignee, creator, due_date, tags, images) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [title||'', desc||'', category||'', module||'用户端', priority||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[])]);
+      const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images, content_blocks } = data || {};
+      const contentBlocksStr = typeof content_blocks === 'string' ? content_blocks : JSON.stringify(content_blocks || []);
+      run(`INSERT INTO requirements (title, description, category, module, priority, assignee, creator, due_date, tags, images, content_blocks) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [title||'', desc||'', category||'', module||'用户端', priority||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]), contentBlocksStr]);
       // Use MAX(id) instead of last_insert_rowid() — some sql.js versions return 0 from last_insert_rowid()
       const newId = query('SELECT MAX(id) FROM requirements')[0][0];
       log('handleReq POST: newId=' + newId + ' title=' + (title||'').substring(0, 30));
@@ -583,15 +587,16 @@ function handleRequirements(method, data, id) {
     }
     case 'PUT': {
       if (!id) return { error: 'No id' };
-      const { title, desc, category, module, priority, status, assignee, creator, dueDate, tags, images, workflow_handler } = data || {};
+      const { title, desc, category, module, priority, status, assignee, creator, dueDate, tags, images, workflow_handler, content_blocks } = data || {};
       let workflowHistory = [];
       try { workflowHistory = JSON.parse(query('SELECT workflow_history FROM requirements WHERE id = ?', [id])[0]?.[0] || '[]'); } catch {}
       if (status) {
         const old = query('SELECT status FROM requirements WHERE id = ?', [id])[0]?.[0];
         if (old && old !== status) workflowHistory.push({ from: old, to: status, handler: workflow_handler || '', time: new Date().toLocaleString('zh-CN') });
       }
-      run(`UPDATE requirements SET title=?, description=?, category=?, module=?, priority=?, status=?, assignee=?, creator=?, due_date=?, tags=?, images=?, workflow_history=?, updated_at=datetime('now','localtime') WHERE id=?`,
-        [title||'', desc||'', category||'', module||'用户端', priority||'', status||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]), JSON.stringify(workflowHistory), id]);
+      const contentBlocksStr = typeof content_blocks === 'string' ? content_blocks : JSON.stringify(content_blocks || []);
+      run(`UPDATE requirements SET title=?, description=?, category=?, module=?, priority=?, status=?, assignee=?, creator=?, due_date=?, tags=?, images=?, content_blocks=?, workflow_history=?, updated_at=datetime('now','localtime') WHERE id=?`,
+        [title||'', desc||'', category||'', module||'用户端', priority||'', status||'', assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]), contentBlocksStr, JSON.stringify(workflowHistory), id]);
       return { success: true };
     }
     case 'DELETE': {
@@ -713,12 +718,17 @@ function handleModels(method, data, id) {
 }
 
 function formatReq(r) {
+  // NOTE: ALTER TABLE ADD COLUMN appends to end. content_blocks is at index 19, NOT 15.
+  // Original columns 15-18 (workflow_handler, workflow_history, created_at, updated_at)
+  // remain at their original positions.
   return {
     id: r[0], title: r[1], desc: r[2], category: r[3], module: r[4]||'用户端', priority: r[5],
     status: r[6], assignee: r[7], creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
     images: JSON.parse(r[11]||'[]'), aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
-    imageDescriptions: JSON.parse(r[14]||'[]'), workflowHandler: r[15]||'',
-    workflowHistory: JSON.parse(r[16]||'[]'), createdAt: r[17], updatedAt: r[18],
+    imageDescriptions: JSON.parse(r[14]||'[]'),
+    workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
+    createdAt: r[17], updatedAt: r[18],
+    contentBlocks: (() => { try { return JSON.parse(r[19] || '[]'); } catch { return []; } })(),
   };
 }
 
@@ -737,6 +747,15 @@ function setupWindowEvents(win) {
 }
 
 async function createWindow() {
+  // If window already exists, just show and focus it
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+    log('createWindow: reusing existing window');
+    return;
+  }
+
   log('Creating window...');
   try {
   log('createWindow: preload path = ' + preloadPath);
@@ -1030,10 +1049,31 @@ app.whenReady().then(async () => {
 
     ipcMain.handle('read-clipboard-files', () => {
       try {
+        // macOS: Finder files
         if (typeof clipboard.readFinderFiles === 'function') {
           const files = clipboard.readFinderFiles();
-          return Array.isArray(files) ? files : [];
+          if (Array.isArray(files) && files.length > 0) return files;
         }
+        // Windows: read CF_HDROP / FileNameW format
+        if (process.platform === 'win32') {
+          try {
+            const buf = clipboard.readBuffer('FileNameW');
+            if (buf && buf.length > 0) {
+              // CF_HDROP: null-terminated file paths, double-null terminated
+              const text = buf.toString('utf16le').replace(/\0/g, '\n');
+              const paths = text.split('\n').map(s => s.trim()).filter(Boolean);
+              if (paths.length > 0) return paths;
+            }
+          } catch {}
+        }
+        // Fallback: try reading as text (some apps put file paths as text)
+        try {
+          const text = clipboard.readText();
+          if (text) {
+            const lines = text.split('\n').filter(l => /^[A-Za-z]:[\\/]/.test(l) || /^file:\/\//.test(l));
+            if (lines.length > 0) return lines;
+          }
+        } catch {}
         return [];
       } catch {
         return [];

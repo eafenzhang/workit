@@ -3,8 +3,10 @@ import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, TagIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { parseChatMessages, buildSenderColorMap } from '../utils/chatParser';
 import { FileTextIcon, FileIcon, ArchiveIcon, CodeIcon } from 'lucide-react';
+import type { ContentBlock } from '../types/content';
+import ContentBlockRenderer from '../components/ContentBlockRenderer';
+import { rebuildBlocksFromLegacy } from '../utils/contentBlocks';
 
 const ARCHIVE_EXTS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz'];
 const DOC_EXTS = ['.doc', '.docx', '.pdf', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.rtf', '.odt', '.ods', '.odp'];
@@ -84,6 +86,7 @@ interface Requirement {
   imageDescriptions: string[];
   workflowHandler: string;
   workflowHistory: { from: string; to: string; handler: string; time: string }[];
+  contentBlocks?: ContentBlock[];
   createdAt: string;
   updatedAt: string;
 }
@@ -458,62 +461,16 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
               <div className="text-xs text-wiki-text3 mb-2">需求描述</div>
               {(() => {
-                const chat = detailReq.desc ? parseChatMessages(detailReq.desc) : null;
-                const images = detailReq.images || [];
-                if (chat) {
-                  const colorMap = buildSenderColorMap(chat);
-                  let imgIdx = 0;
-                  return (
-                    <div className="flex flex-col gap-2">
-                      {chat.map((msg, i) => (
-                        <div key={i} className="flex flex-col">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold" style={{ color: colorMap.get(msg.sender) || '#6366f1' }}>{msg.sender}</span>
-                            <span className="text-xs" style={{ color: 'var(--wiki-text3)', fontSize: '10px' }}>{msg.time}</span>
-                          </div>
-                          <div className="text-sm text-wiki-text2 leading-relaxed rounded-lg px-3 py-2" style={{ background: 'var(--wiki-surface)', alignSelf: 'flex-start', maxWidth: '85%' }}>
-                            {msg.content.split('\n').map((line, j) => {
-                              const trimmedLine = line.trim();
-                              if (trimmedLine === '[图片]') {
-                                const img = images[Math.min(imgIdx, images.length - 1)];
-                                imgIdx++;
-                                return img ? <img key={j} src={img} className="w-20 h-16 rounded object-cover my-1 cursor-pointer hover:opacity-80" onClick={() => { previewImages.current = images; setPreviewIdx(Math.min(imgIdx - 1, images.length - 1)); setPreviewImage(img); }} /> : <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={11} /> 图片</div>;
-                              }
-                              if (trimmedLine === '[视频]') {
-                                return <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}>🎥 视频</div>;
-                              }
-                              const fileMatch = trimmedLine.match(/^\[文件[：:](.+?)\]$/);
-                              if (fileMatch) {
-                                return <div key={j} className="inline-flex items-center gap-1 px-2 py-1 my-0.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><FileIcon size={11} /> {fileMatch[1].trim()}</div>;
-                              }
-                              return <div key={j} className="whitespace-pre-wrap">{line || ' '}</div>;
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
+                const rawContentBlocks = detailReq.contentBlocks;
+                let blocks: ContentBlock[];
+                if (rawContentBlocks && rawContentBlocks.length > 0) {
+                  blocks = rawContentBlocks;
+                } else {
+                  // Legacy data: rebuild from desc + images
+                  blocks = rebuildBlocksFromLegacy(detailReq.desc || '', detailReq.images || []);
                 }
-                // Plain text mode: show text (with file URL detection) then images
-                const descLines = detailReq.desc ? detailReq.desc.split('\n') : [];
                 return (
-                  <>
-                    {descLines.length > 0 && (
-                      <div className="text-sm text-wiki-text2 leading-relaxed mb-3">
-                        {descLines.map((line, j) => {
-                          const trimmedLine = line.trim();
-                          if (isFileUrl(trimmedLine)) return <div key={j} className="my-1"><ReqFileChip url={trimmedLine} /></div>;
-                          // [文件:filename] marker
-                          const fileMatch = trimmedLine.match(/^\[文件[：:](.+?)\]$/);
-                          if (fileMatch) {
-                            return <div key={j} className="my-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px]" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text3)', border: '1px solid var(--wiki-border)' }}><FileIcon size={11} /> {fileMatch[1].trim()}</div>;
-                          }
-                          return <div key={j} className="whitespace-pre-wrap">{line || ' '}</div>;
-                        })}
-                      </div>
-                    )}
-                    {images.length > 0 && <div className="flex flex-wrap gap-2">{images.map((img, i) => (<img key={i} src={img} className="rounded object-cover cursor-pointer hover:opacity-80" style={{ border: '1px solid var(--wiki-border)', width: '100px', height: '80px' }} onClick={() => { previewImages.current = images; setPreviewIdx(i); setPreviewImage(img); }} />))}</div>}
-                  </>
+                  <ContentBlockRenderer blocks={blocks} />
                 );
               })()}
             </div>
