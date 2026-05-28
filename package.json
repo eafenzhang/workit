@@ -79,6 +79,7 @@
     ],
     "win": {
       "target": "nsis",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "signAndEditExecutable": false
     },
     "nsis": {
