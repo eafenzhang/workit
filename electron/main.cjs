@@ -1,13 +1,6 @@
 // Strip ELECTRON_RUN_AS_NODE to fix double-click launch in Explorer.
-if (process.env.ELECTRON_RUN_AS_NODE === '1') {
-  const { spawn } = require('child_process');
-  const env = {};
-  for (const k in process.env) {
-    if (k !== 'ELECTRON_RUN_AS_NODE') env[k] = process.env[k];
-  }
-  spawn(process.execPath, [], { detached: true, stdio: 'ignore', env });
-  // Must NOT exit immediately — give child time to detach
-  setTimeout(() => process.exit(0), 500);
+if (process.env.ELECTRON_RUN_AS_NODE === '1' && !process.defaultApp) {
+  delete process.env.ELECTRON_RUN_AS_NODE;
 }
 
 const { app, BrowserWindow, shell, ipcMain, nativeImage, Tray, Menu, safeStorage, clipboard } = require('electron');
@@ -51,9 +44,8 @@ function log(msg, err) {
 }
 
 process.on('uncaughtException', (err) => {
-  log('UNCAUGHT', err);
-  try { fs.appendFile(logPath, (err.stack || '') + '\n', () => {}); } catch {}
-  app.exit(1);
+  console.error('UNCAUGHT:', err?.message || err, err?.stack);
+  try { fs.appendFileSync(logPath || 'crash.log', (err?.stack || String(err)) + '\n'); } catch {}
 });
 process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
 
@@ -163,6 +155,9 @@ async function initDatabase() {
     // Column may already exist — ignore
     log('initDatabase: content_blocks migration (column may already exist)', e);
   }
+
+  // Performance: add index for list query ORDER BY created_at DESC
+  db.run('CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at)');
 
   saveDb();
   log('initDatabase: success, path=' + dbPath);
@@ -573,8 +568,9 @@ function handleRequirements(method, data, id) {
         if (!r.length) return { error: 'Not found' };
         return formatReq(r[0]);
       }
-      const all = query('SELECT * FROM requirements ORDER BY created_at DESC');
-      return all.map(formatReq);
+      // List query — select only fields needed by list view (no heavy payloads)
+      const all = query('SELECT id,title,description,category,module,priority,status,assignee,creator,images,ai_summary,ai_tags,created_at FROM requirements ORDER BY created_at DESC');
+      return all.map(formatReqList);
     case 'POST': {
       const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images, content_blocks } = data || {};
       const contentBlocksStr = typeof content_blocks === 'string' ? content_blocks : JSON.stringify(content_blocks || []);
@@ -729,6 +725,16 @@ function formatReq(r) {
     workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
     createdAt: r[17], updatedAt: r[18],
     contentBlocks: (() => { try { return JSON.parse(r[19] || '[]'); } catch { return []; } })(),
+  };
+}
+
+// Lightweight formatter for list queries — only fields needed by list view
+function formatReqList(r) {
+  return {
+    id: r[0], title: r[1], desc: r[2], category: r[3], module: r[4]||'用户端', priority: r[5],
+    status: r[6], assignee: r[7], creator: r[8],
+    images: JSON.parse(r[9]||'[]'), aiSummary: r[10]||'', aiTags: JSON.parse(r[11]||'[]'),
+    createdAt: r[12],
   };
 }
 
@@ -1049,34 +1055,258 @@ app.whenReady().then(async () => {
 
     ipcMain.handle('read-clipboard-files', () => {
       try {
+        const results = [];
+
+        // Helper: read file and return structured result with dataUrl
+        const readFileAsResult = (filePath, typeHint) => {
+          try {
+            if (!fs.existsSync(filePath)) return null;
+            const stat = fs.statSync(filePath);
+            if (!stat.isFile()) return null;
+            const name = path.basename(filePath);
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeMap = {
+              '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+              '.bmp': 'image/bmp', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+              '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo',
+              '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.flv': 'video/x-flv',
+              '.wmv': 'video/x-ms-wmv', '.m4v': 'video/mp4',
+              '.pdf': 'application/pdf', '.doc': 'application/msword',
+              '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              '.xls': 'application/vnd.ms-excel',
+              '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              '.ppt': 'application/vnd.ms-powerpoint',
+              '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              '.csv': 'text/csv', '.rtf': 'application/rtf', '.txt': 'text/plain',
+            };
+            const mime = mimeMap[ext] || 'application/octet-stream';
+            // For large files (>50MB), don't embed as data URL — just return the path
+            const MAX_EMBED = 50 * 1024 * 1024;
+            const isVideo = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv', '.wmv', '.m4v'].includes(ext);
+            const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(ext);
+            let type = typeHint || (isVideo ? 'video' : isImage ? 'image' : 'file');
+            if (stat.size > MAX_EMBED) {
+              return { path: filePath, name, size: stat.size, type, dataUrl: null };
+            }
+            const buf = fs.readFileSync(filePath);
+            const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+            log('Clipboard: readFileAsResult: ' + filePath + ' (' + buf.length + ' bytes, ' + mime + ')');
+            return { path: filePath, name, size: stat.size, type, dataUrl };
+          } catch (e) {
+            log('Clipboard: readFileAsResult error: ' + filePath, e);
+            return null;
+          }
+        };
+
         // macOS: Finder files
         if (typeof clipboard.readFinderFiles === 'function') {
           const files = clipboard.readFinderFiles();
-          if (Array.isArray(files) && files.length > 0) return files;
+          if (Array.isArray(files) && files.length > 0) {
+            for (const fp of files) {
+              const r = readFileAsResult(fp);
+              if (r) results.push(r);
+            }
+          }
         }
-        // Windows: read CF_HDROP / FileNameW format
+
+        // Windows: try standard clipboard file formats
         if (process.platform === 'win32') {
+          // 1. FileNameW (CF_HDROP — Explorer file copy)
           try {
             const buf = clipboard.readBuffer('FileNameW');
             if (buf && buf.length > 0) {
-              // CF_HDROP: null-terminated file paths, double-null terminated
               const text = buf.toString('utf16le').replace(/\0/g, '\n');
               const paths = text.split('\n').map(s => s.trim()).filter(Boolean);
-              if (paths.length > 0) return paths;
+              for (const fp of paths) {
+                const r = readFileAsResult(fp);
+                if (r) results.push(r);
+              }
             }
           } catch {}
         }
-        // Fallback: try reading as text (some apps put file paths as text)
-        try {
-          const text = clipboard.readText();
-          if (text) {
-            const lines = text.split('\n').filter(l => /^[A-Za-z]:[\\/]/.test(l) || /^file:\/\//.test(l));
-            if (lines.length > 0) return lines;
+
+        // Parse HTML/text to find WXWork/WeChat file references
+        const html = clipboard.readHTML() || '';
+        const text = clipboard.readText() || '';
+
+        if (html || text) {
+          // Find WXWork user cache directory
+          const wxworkBase = path.join(process.env.USERPROFILE || '', 'Documents', 'WXWork');
+          let wxworkCacheDir = null;
+          try {
+            if (fs.existsSync(wxworkBase)) {
+              const userDirs = fs.readdirSync(wxworkBase, { withFileTypes: true })
+                .filter(d => d.isDirectory() && /^\d+$/.test(d.name));
+              for (const d of userDirs) {
+                const cacheDir = path.join(wxworkBase, d.name, 'Cache');
+                if (fs.existsSync(cacheDir)) {
+                  wxworkCacheDir = cacheDir;
+                  break;
+                }
+              }
+            }
+          } catch {}
+
+          // Find WeChat (personal) cache directory
+          const wechatBase = path.join(process.env.USERPROFILE || '', 'Documents', 'WeChat Files');
+          let wechatFileStorage = null;
+          try {
+            if (fs.existsSync(wechatBase)) {
+              const wxDirs = fs.readdirSync(wechatBase, { withFileTypes: true })
+                .filter(d => d.isDirectory() && d.name !== 'All Users');
+              for (const d of wxDirs) {
+                const fileStorage = path.join(wechatBase, d.name, 'FileStorage');
+                if (fs.existsSync(fileStorage)) {
+                  wechatFileStorage = fileStorage;
+                  break;
+                }
+              }
+            }
+          } catch {}
+
+          // Helper: find file by name in cache subdirectories
+          const findFileInCache = (fileName, subDir, timeWindowMs = 180000) => {
+            const searchDirs = [];
+            const roots = [];
+            if (wxworkCacheDir) roots.push(wxworkCacheDir);
+            if (wechatFileStorage) roots.push(wechatFileStorage);
+
+            for (const root of roots) {
+              const cacheSub = path.join(root, subDir);
+              if (fs.existsSync(cacheSub)) {
+                searchDirs.push(cacheSub);
+                try {
+                  const subDirs = fs.readdirSync(cacheSub, { withFileTypes: true }).filter(d => d.isDirectory());
+                  for (const sd of subDirs) searchDirs.push(path.join(cacheSub, sd.name));
+                } catch {}
+              }
+            }
+
+            for (const dir of searchDirs) {
+              try {
+                const entries = fs.readdirSync(dir);
+                for (const entry of entries) {
+                  if (entry === fileName) {
+                    const fp = path.join(dir, entry);
+                    try { if (fs.statSync(fp).isFile()) return fp; } catch {}
+                  }
+                }
+              } catch {}
+            }
+
+            // Fallback: partial name match (without extension) + recent
+            const baseName = fileName.split('.')[0].toLowerCase();
+            for (const dir of searchDirs) {
+              try {
+                let bestMatch = null, bestTime = 0;
+                const entries = fs.readdirSync(dir);
+                for (const entry of entries) {
+                  if (entry.toLowerCase().startsWith(baseName)) {
+                    const fp = path.join(dir, entry);
+                    try {
+                      const stat = fs.statSync(fp);
+                      if (stat.isFile() && stat.mtimeMs > bestTime && Date.now() - stat.mtimeMs < timeWindowMs) {
+                        bestMatch = fp;
+                        bestTime = stat.mtimeMs;
+                      }
+                    } catch {}
+                  }
+                }
+                if (bestMatch) return bestMatch;
+              } catch {}
+            }
+            return null;
+          };
+
+          // Helper: find most recently modified file in a cache subdirectory
+          const findRecentFile = (subDir, extFilter, timeWindowMs = 180000) => {
+            const searchDirs = [];
+            const roots = [];
+            if (wxworkCacheDir) roots.push(wxworkCacheDir);
+            if (wechatFileStorage) roots.push(wechatFileStorage);
+
+            for (const root of roots) {
+              const cacheSub = path.join(root, subDir);
+              if (fs.existsSync(cacheSub)) {
+                searchDirs.push(cacheSub);
+                try {
+                  const subDirs = fs.readdirSync(cacheSub, { withFileTypes: true }).filter(d => d.isDirectory());
+                  for (const sd of subDirs) searchDirs.push(path.join(cacheSub, sd.name));
+                } catch {}
+              }
+            }
+
+            let bestMatch = null, bestTime = 0;
+            for (const dir of searchDirs) {
+              try {
+                const entries = fs.readdirSync(dir);
+                for (const entry of entries) {
+                  const ext = path.extname(entry).toLowerCase();
+                  if (extFilter && !extFilter.includes(ext)) continue;
+                  const fp = path.join(dir, entry);
+                  try {
+                    const stat = fs.statSync(fp);
+                    if (stat.isFile() && stat.mtimeMs > bestTime && Date.now() - stat.mtimeMs < timeWindowMs) {
+                      bestMatch = fp;
+                      bestTime = stat.mtimeMs;
+                    }
+                  } catch {}
+                }
+              } catch {}
+            }
+            return bestMatch;
+          };
+
+          const contentToCheck = text || html;
+
+          // Detect [视频] markers — find most recent video file in cache
+          const videoCount = (contentToCheck.match(/\[视频\]/g) || []).length;
+          if (videoCount > 0) {
+            const videoExts = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv', '.wmv', '.m4v'];
+            for (let v = 0; v < videoCount; v++) {
+              const foundPath = findRecentFile('Video', videoExts, 180000);
+              if (foundPath) {
+                log('Clipboard: resolved [视频] -> ' + foundPath);
+                const r = readFileAsResult(foundPath, 'video');
+                if (r) results.push(r);
+              } else {
+                results.push({ name: '视频', type: 'video', dataUrl: null });
+              }
+            }
           }
-        } catch {}
-        return [];
+
+          // Detect [文件：xxx] markers — find file by name in cache
+          const fileMarkers = contentToCheck.match(/\[文件[：:](.+?)\]/g) || [];
+          for (const marker of fileMarkers) {
+            const nameMatch = marker.match(/\[文件[：:](.+?)\]/);
+            if (nameMatch) {
+              const fileName = nameMatch[1].trim();
+              const foundPath = findFileInCache(fileName, 'File', 180000);
+              if (foundPath) {
+                log('Clipboard: resolved [文件：' + fileName + '] -> ' + foundPath);
+                const r = readFileAsResult(foundPath, 'file');
+                if (r) results.push(r);
+              } else {
+                results.push({ name: fileName, type: 'file', dataUrl: null });
+              }
+            }
+          }
+        }
+
+        return results;
       } catch {
         return [];
+      }
+    });
+
+    // Open file with system default application via shell.openPath
+    ipcMain.handle('open-path-external', async (_event, filePath) => {
+      try {
+        if (!filePath || !fs.existsSync(filePath)) return { error: 'File not found: ' + filePath };
+        await shell.openPath(filePath);
+        return { success: true };
+      } catch (e) {
+        return { error: e.message };
       }
     });
 
