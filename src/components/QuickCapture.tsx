@@ -443,15 +443,13 @@ export default function QuickCapture() {
       if (!dt) return;
       const api = (window as any).electronAPI;
 
-      // Diagnostic: dump ALL clipboard formats
-      if (dt.items) {
-        for (const item of Array.from(dt.items)) {
-        }
-      }
-      // Also check raw clipboard via electronAPI
       let text = '', html = '';
       try { text = dt.getData('text/plain') || ''; } catch {}
       try { html = dt.getData('text/html') || ''; } catch {}
+      
+      // Diagnostic: log what browser event gives us
+      const dtTypes = dt.types ? Array.from(dt.types) : [];
+      console.log('[qc-diag] browser paste — dt.types:', dtTypes, '| text-len:', text.length, '| html-len:', html.length);
 
       // Fallback: use Electron IPC for text/HTML if browser paste has none
       // (WeCom uses custom clipboard formats that browser ClipboardEvent can't read)
@@ -487,6 +485,45 @@ export default function QuickCapture() {
       let newItems: CaptureItem[] = [];
 
 
+      // Handle Files-type clipboard (WeChat/WeCom video/file paste: dt.types=['Files'])
+      // Browser provides file references directly — no need for backend IPC
+      const pasteFiles: CaptureItem[] = [];
+      console.log('[qc-diag] dt.files:', dt.files ? dt.files.length : 'null', 'dt.types:', dtTypes);
+      if (dt.files && dt.files.length > 0) {
+        for (const f of Array.from(dt.files)) {
+          const name = f.name || '文件';
+          const ext = getFileExt(name);
+          const cat = getFileCategory(ext);
+          if (cat === 'video') {
+            // Read video file as data URL for preview
+            const dataUrl = await new Promise<string>(resolve => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => resolve('');
+              r.readAsDataURL(f);
+            });
+            pasteFiles.push({ type: 'video', content: dataUrl, name, size: f.size });
+          } else if (cat === 'image') {
+            const dataUrl = await new Promise<string>(resolve => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => resolve('');
+              r.readAsDataURL(f);
+            });
+            pasteFiles.push({ type: 'image', content: dataUrl, name, size: f.size });
+          } else {
+            const dataUrl = await new Promise<string>(resolve => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => resolve('');
+              r.readAsDataURL(f);
+            });
+            pasteFiles.push({ type: 'file', content: dataUrl, name, size: f.size });
+          }
+        }
+        console.log('[qc-diag] pasteFiles from dt.files:', pasteFiles.length, pasteFiles.map(p => p.type + ':' + (p.name || '?')));
+      }
+
       // Pre-read clipboardFiles for in-place placeholder replacement
       let clipboardFilesData: any[] = [];
       if (api?.readClipboardFiles) {
@@ -496,8 +533,46 @@ export default function QuickCapture() {
         } catch {}
       }
 
+      // Fallback: navigator.clipboard.read() — works for Files-type paste (WeChat video)
+      // Run when we have no usable media data from other sources
+      const hasUsableMedia = clipboardFilesData.some((f: any) => f.dataUrl) || rawBlobs.length > 0;
+      if (!hasUsableMedia && navigator.clipboard?.read) {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            for (const type of item.types) {
+              if (type.startsWith('video/')) {
+                const blob = await item.getType(type);
+                const dataUrl = await blobToDataUrl(blob);
+                if (dataUrl) {
+                  rawBlobs.push({ type: 'video', blob });
+                  console.log('[qc-diag] clipboard.read video:', type, 'size:', blob.size);
+                }
+              } else if (type.startsWith('image/')) {
+                const blob = await item.getType(type);
+                rawBlobs.push({ type: 'image', blob });
+              }
+            }
+          }
+        } catch {}
+      }
+
       if (html) {
         newItems = await parseHtmlToItems(html, text, api, clipboardFilesData);
+      }
+
+      // Directly use clipboardFilesData when no text/html (Files-type paste: WeChat video)
+      if (newItems.length === 0 && clipboardFilesData.length > 0) {
+        for (const cf of clipboardFilesData) {
+          if (cf.type === 'video' && cf.dataUrl) {
+            newItems.push({ type: 'video', content: cf.dataUrl, name: cf.name, size: cf.size, path: cf.path });
+          } else if (cf.type === 'image' && cf.dataUrl) {
+            newItems.push({ type: 'image', content: cf.dataUrl, name: cf.name, size: cf.size });
+          } else if (cf.type === 'file') {
+            newItems.push({ type: 'file', content: cf.dataUrl || cf.path || '', name: cf.name, size: cf.size, path: cf.path });
+          }
+        }
+        console.log('[qc-diag] created items from clipboardFilesData:', newItems.length);
       }
 
       if (newItems.length === 0 && text) {
@@ -507,6 +582,11 @@ export default function QuickCapture() {
         } else {
           newItems.push({ type: 'text', content: text });
         }
+      }
+
+      // Merge Files-type paste items (from dt.files, e.g. WeChat video)
+      if (pasteFiles.length > 0) {
+        newItems = [...newItems, ...pasteFiles];
       }
 
       // Fallback: check native clipboard files for videos/files that HTML didn't capture
@@ -533,7 +613,9 @@ export default function QuickCapture() {
         if (dataUrl) newItems.push({ type: rb.type, content: dataUrl });
       }
 
-      if (newItems.length === 0) return;
+      console.log('[qc-diag] final items:', newItems.length, 'types:', newItems.map(i => i.type + (i.name ? ':' + i.name : '')).join(', '));
+
+      if (newItems.length === 0) { console.log('[qc-diag] no items, abort'); return; }
 
       if (!mountedRef.current) return;
       setCaptured(prev => ({

@@ -98,7 +98,8 @@ function getContentTags(req: Requirement): string[] {
   const desc = req.desc || '';
   if (desc.trim()) tags.push('文本');
   if (/https?:\/\//.test(desc)) tags.push('链接');
-  if (/\[视频\]/.test(desc) || /\[附件/.test(desc) || /\[文件[：:]/.test(desc)) {
+  if (/\[视频\]/.test(desc)) tags.push('视频');
+  if (/\[附件/.test(desc) || /\[文件[：:]/.test(desc)) {
     if (!tags.includes('文件')) tags.push('文件');
   }
   if (req.images?.length) tags.push('图片');
