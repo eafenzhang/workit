@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, lazy, Suspense } from 'react';
 import Sidebar from '../components/Sidebar';
 import TitleBar from '../components/TitleBar';
 import { XIcon, Trash2Icon } from 'lucide-react';
@@ -80,13 +80,22 @@ export default function Index() {
   const switchTab = useCallback((tabId: string) => setActiveTabId(tabId), []);
 
   // Update browser tab URL in params (persists across tab switches)
-  const updateBrowserUrl = useCallback((url: string) => {
+  const updateBrowserUrl = useCallback((tabId: string, url: string) => {
     setTabs(prev => prev.map(t =>
-      t.id === activeTabId && t.type === 'browser'
-        ? { ...t, title: url.replace(/^https?:\/\//, '').substring(0, 30) || '浏览器', params: { ...t.params, url } }
+      t.id === tabId && t.type === 'browser'
+        ? { ...t, params: { ...t.params, url } }
         : t
     ));
-  }, [activeTabId]);
+  }, []);
+
+  // Update browser tab title from webview page title
+  const updateBrowserTitle = useCallback((tabId: string, title: string) => {
+    setTabs(prev => prev.map(t =>
+      t.id === tabId && t.type === 'browser'
+        ? { ...t, title: title.substring(0, 20) || '浏览器' }
+        : t
+    ));
+  }, []);
 
   // Sidebar menu click → open tab
   const handleMenuClick = useCallback((menuType: string, menuTitle: string) => {
@@ -96,20 +105,22 @@ export default function Index() {
   const onCloseSelf = useCallback(() => closeTab(activeTabId), [closeTab, activeTabId]);
   const onToggleSidebar = useCallback(() => setSidebarCollapsed(prev => !prev), []);
 
-  // Listen for browser tab open requests
+  // Open browser tab — always creates a NEW tab (fix #7)
+  const onOpenBrowser = useCallback((url?: string) => {
+    const urlStr = url || '';
+    const title = urlStr ? urlStr.replace(/^https?:\/\//, '').substring(0, 30) : '浏览器';
+    openTab('browser', title || '浏览器', { params: { url: urlStr }, reqId: Date.now() });
+  }, [openTab]);
+
+  // Listen for browser tab open requests from link clicks (App.tsx)
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ url: string; newTab?: boolean }>).detail;
-      const url = detail?.url;
-      if (url !== undefined) {
-        const title = url ? url.replace(/^https?:\/\//, '').substring(0, 30) : '浏览器';
-        const extra = { params: { url }, reqId: detail?.newTab ? Date.now() : undefined };
-        openTab('browser', title || '浏览器', extra);
-      }
+      const detail = (e as CustomEvent<{ url: string }>).detail;
+      if (detail?.url) onOpenBrowser(detail.url);
     };
     window.addEventListener('open-browser-tab', handler);
     return () => window.removeEventListener('open-browser-tab', handler);
-  }, [openTab]);
+  }, [onOpenBrowser]);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
 
@@ -120,10 +131,10 @@ export default function Index() {
         const isActive = activeTabId === tab.id;
         return (
           <div key={tab.id} onClick={() => switchTab(tab.id)}
-            className="flex items-center justify-between gap-1 px-2.5 h-7 rounded-md text-xs cursor-pointer select-none transition-colors group flex-shrink"
+            className="flex items-center justify-between gap-1 px-2.5 h-7 rounded-md cursor-pointer select-none transition-colors group flex-1 min-w-0"
             style={{
-              width: '88px',
-              minWidth: '80px',
+              maxWidth: '160px',
+              fontSize: '13px',
               background: isActive ? 'var(--wiki-surface2)' : 'transparent',
               color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text3)',
               WebkitAppRegion: 'no-drag',
@@ -195,7 +206,7 @@ export default function Index() {
       case 'messages':
         return <Lazy><Messages /></Lazy>;
       case 'browser':
-        return <Lazy><Browser initialUrl={activeTab.params?.url} onUrlChange={updateBrowserUrl} /></Lazy>;
+        return null; // browser tabs rendered separately below (kept alive with display:none)
       case 'settings':
         return <Lazy><Settings /></Lazy>;
       default:
@@ -212,6 +223,7 @@ export default function Index() {
       <TitleBar
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
+        onOpenBrowser={() => onOpenBrowser()}
       >
         {tabBar}
       </TitleBar>
@@ -237,8 +249,23 @@ export default function Index() {
 
         {/* Main content area */}
         <main className="flex-1 overflow-hidden">
-          <div className="h-full">
+          <div className="h-full relative">
             <Suspense fallback={<Loading />}>{page}</Suspense>
+            {/* Browser tabs — always rendered, hidden when inactive (fix #1: keep webview alive) */}
+            {tabs.filter(t => t.type === 'browser').map(tab => (
+              <div key={tab.id} className="h-full absolute inset-0"
+                style={{ display: tab.id === activeTabId ? undefined : 'none' }}>
+                <Suspense fallback={<Loading />}>
+                  <Browser
+                    initialUrl={tab.params?.url}
+                    onUrlChange={(url) => updateBrowserUrl(tab.id, url)}
+                    onTitleChange={(title) => updateBrowserTitle(tab.id, title)}
+                    onOpenNewTab={onOpenBrowser}
+                    visible={tab.id === activeTabId}
+                  />
+                </Suspense>
+              </div>
+            ))}
           </div>
         </main>
       </div>

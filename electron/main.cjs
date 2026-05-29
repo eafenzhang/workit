@@ -1,4 +1,6 @@
 // Strip ELECTRON_RUN_AS_NODE to fix double-click launch in Explorer.
+// Note: when spawned from WorkBuddy, this env var prevents Electron from
+// bootstrapping — the fix is in the workit-build skill (clears it before launch).
 if (process.env.ELECTRON_RUN_AS_NODE === '1' && !process.defaultApp) {
   delete process.env.ELECTRON_RUN_AS_NODE;
 }
@@ -568,9 +570,41 @@ function handleRequirements(method, data, id) {
         if (!r.length) return { error: 'Not found' };
         return formatReq(r[0]);
       }
-      // List query — select only fields needed by list view (no heavy payloads)
-      const all = query('SELECT id,title,description,category,module,priority,status,assignee,creator,images,ai_summary,ai_tags,created_at FROM requirements ORDER BY created_at DESC');
-      return all.map(formatReqList);
+      // List query with optional filtering + pagination (data = query params from URL)
+      {
+        const q = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        let all = query('SELECT id,title,description,category,module,priority,status,assignee,creator,images,ai_summary,ai_tags,created_at FROM requirements ORDER BY created_at DESC');
+
+        // Apply filters
+        if (q.search) {
+          const s = String(q.search).toLowerCase();
+          all = all.filter(r => (String(r[1]||'')).toLowerCase().includes(s) || (String(r[2]||'')).toLowerCase().includes(s));
+        }
+        if (q.status && q.status !== '全部') all = all.filter(r => r[6] === q.status);
+        if (q.category && q.category !== '全部') all = all.filter(r => r[3] === q.category);
+        if (q.priority && q.priority !== '全部') all = all.filter(r => r[5] === q.priority);
+        if (q.assignee && q.assignee !== '全部') all = all.filter(r => r[7] === q.assignee);
+        if (q.dateFrom) all = all.filter(r => (String(r[12]||'')) >= q.dateFrom);
+        if (q.dateTo) all = all.filter(r => (String(r[12]||'')) <= q.dateTo);
+
+        const total = all.length;
+        const page = parseInt(q._page) || 1;
+        const ps = parseInt(q._pageSize) || 10;
+        const paged = all.slice((page - 1) * ps, page * ps);
+
+        // Unfiltered status counts for the status bar
+        const allCounts = query('SELECT status, COUNT(*) FROM requirements GROUP BY status');
+        const counts = { '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 };
+        for (const [s, c] of allCounts) {
+          if (counts[s] !== undefined) counts[s] = c;
+        }
+
+        // If query params exist, return paginated format; else return raw array (backward compat)
+        if (Object.keys(q).length > 0) {
+          return { items: paged.map(formatReqList), total, counts, page, pageSize: ps };
+        }
+        return all.map(formatReqList);
+      }
     case 'POST': {
       const { title, desc, category, module, priority, assignee, creator, dueDate, tags, images, content_blocks } = data || {};
       const contentBlocksStr = typeof content_blocks === 'string' ? content_blocks : JSON.stringify(content_blocks || []);
@@ -773,7 +807,7 @@ async function createWindow() {
     icon: nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')),
     frame: false,
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, preload: preloadPath },
+    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: true, webviewTag: true, preload: preloadPath },
   });
 
   setupWindowEvents(mainWindow);
@@ -1310,6 +1344,24 @@ app.whenReady().then(async () => {
       }
     });
 
+    // Download and save Chrome extension from store
+    ipcMain.handle('install-extension', async (_event, extId, dataUrl) => {
+      try {
+        const extDir = path.join(app.getPath('userData'), 'extensions', extId);
+        if (!fs.existsSync(extDir)) fs.mkdirSync(extDir, { recursive: true });
+        const base64 = dataUrl.split(',')[1];
+        if (!base64) return { error: 'Invalid data URL' };
+        const buf = Buffer.from(base64, 'base64');
+        fs.writeFileSync(path.join(extDir, extId + '.crx'), buf);
+        fs.writeFileSync(path.join(extDir, 'info.json'), JSON.stringify({ id: extId, installedAt: new Date().toISOString() }));
+        log('Extension downloaded: ' + extId);
+        return { success: true };
+      } catch (e) {
+        log('Extension install error', e);
+        return { error: e.message };
+      }
+    });
+
     ipcMain.handle('read-clipboard-text', () => {
       try { return clipboard.readText() || ''; } catch { return ''; }
     });
@@ -1410,6 +1462,8 @@ function setupAutoUpdater() {
 }
 
 app.on('web-contents-created', (_, contents) => {
+  // Skip webview guest WebContents — they manage their own navigation
+  if (contents.getType() === 'webview') return;
   contents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith('http://localhost')) event.preventDefault();
   });

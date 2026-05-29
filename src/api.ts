@@ -50,7 +50,11 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
         table = parts.join('/');
       }
     }
-    const data = await call(method, table, body, id);
+    // For GET requests, pass query params inside data so they reach handleRequirements
+    const dataPayload = method === 'GET' && Object.keys(query).length > 0
+      ? query
+      : body;
+    const data = await call(method, table, dataPayload || undefined, id);
     return { json: () => Promise.resolve(data), data };
   }
   const res = await fetch(url, opts);

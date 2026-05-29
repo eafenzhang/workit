@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readClipboardFiles: () => ipcRenderer.invoke('read-clipboard-files'),
   readLocalFile: (filePath) => ipcRenderer.invoke('read-local-file', filePath),
   openPathExternal: (filePath) => ipcRenderer.invoke('open-path-external', filePath),
+  installExtension: (extId, dataUrl) => ipcRenderer.invoke('install-extension', extId, dataUrl),
   // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
   onRequirementsChanged: (cb) => {
     const handler = () => cb();

@@ -9,9 +9,10 @@ interface Props {
   children?: ReactNode;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onOpenBrowser?: () => void;
 }
 
-export default function TitleBar({ children, sidebarCollapsed = false, onToggleSidebar }: Props) {
+export default function TitleBar({ children, sidebarCollapsed = false, onToggleSidebar, onOpenBrowser }: Props) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
       <div className="flex h-full flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
         {/* Browser button */}
         <button
-          onClick={() => window.dispatchEvent(new CustomEvent('open-browser-tab', { detail: { url: '', newTab: true } }))}
+          onClick={() => onOpenBrowser?.()}
           className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors"
           title="内置浏览器"
         >

@@ -134,14 +134,14 @@ function VideoBlock({ block }: { block: ContentBlock }) {
 
   return (
     <>
-      <div className="relative group max-w-full cursor-pointer" style={{ maxWidth: '480px' }} onClick={() => setFullscreen(true)}>
+      <div className="relative group max-w-full" style={{ maxWidth: '480px' }}>
         <video
           key={block.content?.substring(0, 40)}
           src={block.content}
           controls
           preload="metadata"
           crossOrigin={isDataUrl ? undefined : 'anonymous'}
-          className="rounded max-w-full pointer-events-none"
+          className="rounded max-w-full"
           style={{ border: '1px solid var(--wiki-border)', maxHeight: '320px', width: '100%' }}
           onError={(e) => {
             const el = e.currentTarget;
@@ -152,11 +152,14 @@ function VideoBlock({ block }: { block: ContentBlock }) {
         >
           您的浏览器不支持视频播放
         </video>
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded" style={{ background: 'rgba(0,0,0,0.3)' }}>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21" /></svg>
-          </div>
-        </div>
+        <button
+          onClick={() => setFullscreen(true)}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          title="全屏播放"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
         <div
           className="hidden items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px]"
           style={{ background: 'var(--wiki-surface)', color: '#ef4444', border: '1px solid #ef444430' }}

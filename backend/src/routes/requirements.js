@@ -23,12 +23,12 @@ const upload = multer({ storage });
 
 const app = express.Router();
 
-// 列表 - 支持多维度筛选
+// 列表 - 支持多维度筛选 + 分页
 app.get('/', (req, res) => {
   const db = getDb();
   let results = db.exec("SELECT id, title, description, category, module, priority, status, assignee, creator, due_date, tags, images, ai_summary, ai_tags, image_descriptions, workflow_handler, workflow_history, created_at, updated_at FROM requirements ORDER BY created_at DESC")[0]?.values || [];
 
-  const { search, status, category, priority, assignee, dateFrom, dateTo } = req.query;
+  const { search, status, category, priority, assignee, dateFrom, dateTo, _page, _pageSize } = req.query;
 
   if (search) {
     const s = search.toLowerCase();
@@ -53,16 +53,35 @@ app.get('/', (req, res) => {
     results = results.filter(r => (r[17]||'') <= dateTo);
   }
 
-  res.json(results.map(r => ({
-    id: r[0], title: r[1], desc: r[2], category: r[3],
-    module: r[4]||'用户端', priority: r[5], status: r[6], assignee: r[7],
-    creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
-    images: JSON.parse(r[11]||'[]'),
-    aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
-    imageDescriptions: JSON.parse(r[14]||'[]'),
-    workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
-    createdAt: r[17], updatedAt: r[18],
-  })));
+  const total = results.length;
+  const page = parseInt(_page) || 1;
+  const ps = parseInt(_pageSize) || 10;
+  const start = (page - 1) * ps;
+  const paged = results.slice(start, start + ps);
+
+  // Compute unfiltered status counts for the status bar (always from ALL records)
+  const allCounts = db.exec("SELECT status, COUNT(*) FROM requirements GROUP BY status")[0]?.values || [];
+  const counts = { '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 };
+  for (const [s, c] of allCounts) {
+    if (counts[s] !== undefined) counts[s] = c;
+  }
+
+  res.json({
+    items: paged.map(r => ({
+      id: r[0], title: r[1], desc: r[2], category: r[3],
+      module: r[4]||'用户端', priority: r[5], status: r[6], assignee: r[7],
+      creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
+      images: JSON.parse(r[11]||'[]'),
+      aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
+      imageDescriptions: JSON.parse(r[14]||'[]'),
+      workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
+      createdAt: r[17], updatedAt: r[18],
+    })),
+    total,
+    counts,
+    page,
+    pageSize: ps,
+  });
 });
 
 // 详情
