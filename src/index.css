@@ -82,6 +82,16 @@
   --wiki-text: #1a1a1a;
   --wiki-text2: #555555;
   --wiki-text3: #999999;
+  --wiki-danger: #ef4444;
+  --wiki-danger-bg: rgba(239,68,68,0.1);
+  --wiki-success: #10b981;
+  --wiki-success-bg: rgba(16,185,129,0.1);
+  --wiki-warning: #f59e0b;
+  --wiki-warning-bg: rgba(245,158,11,0.1);
+  --wiki-info: #6366f1;
+  --wiki-info-bg: rgba(99,102,241,0.1);
+  --wiki-overlay: rgba(0, 0, 0, 0.3);
+  --wiki-overlay-heavy: rgba(0, 0, 0, 0.85);
 
   --background: #ffffff;
   --foreground: #1a1a1a;
@@ -135,6 +145,16 @@
   --wiki-text: #ffffff;
   --wiki-text2: rgba(255, 255, 255, 0.7);
   --wiki-text3: rgba(255, 255, 255, 0.4);
+  --wiki-danger: #f87171;
+  --wiki-danger-bg: rgba(248,113,113,0.15);
+  --wiki-success: #34d399;
+  --wiki-success-bg: rgba(52,211,153,0.15);
+  --wiki-warning: #fbbf24;
+  --wiki-warning-bg: rgba(251,191,36,0.15);
+  --wiki-info: #818cf8;
+  --wiki-info-bg: rgba(129,140,248,0.15);
+  --wiki-overlay: rgba(0, 0, 0, 0.5);
+  --wiki-overlay-heavy: rgba(0, 0, 0, 0.92);
 
   --background: #000000;
   --foreground: #ffffff;
@@ -286,12 +306,6 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-@keyframes textBounce {
-  0% { transform: translateX(-4px); opacity: 0.5; }
-  50% { transform: translateX(2px); opacity: 0.8; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
 /* Apply theme attribute to html */
 :root,
 .dark,
@@ -309,4 +323,41 @@
 /* Recharts tooltip — 去掉悬浮时的灰色背景色块 */
 .recharts-tooltip-cursor {
   fill: transparent !important;
+}
+
+/* P0-10: 原生控件暗色模式适配 */
+select,
+input[type="date"] {
+  background: var(--wiki-surface);
+  color: var(--wiki-text);
+  border: 1px solid var(--wiki-border);
+}
+select option {
+  background: var(--wiki-surface);
+  color: var(--wiki-text);
+}
+
+/* P2-14: Page fade transition */
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-fade-enter {
+  animation: pageFadeIn 0.2s ease-out;
+}
+
+/* P2-16: Global scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--wiki-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--wiki-text3);
 }

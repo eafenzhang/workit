@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, lazy, Suspense, useMemo, memo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, FileTextIcon } from 'lucide-react';
+import { useState, useEffect, useCallback, lazy, Suspense, useMemo, memo, useRef } from 'react';
+import { FileTextIcon } from 'lucide-react';
 import type { ContentBlock } from '../types/content';
 import FileChip, { getFileExt, DOC_EXTS } from './FileChip';
 import { downloadFile } from '../utils/download';
+import Lightbox from './Lightbox';
 
 const OfficePreview = lazy(() => import('./OfficePreview'));
 
@@ -24,7 +25,7 @@ function TextBlock({ block }: { block: ContentBlock }) {
     return (
       <div className="flex flex-col mb-1">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs font-medium" style={{ color: '#6366f1' }}>
+          <span className="text-xs font-medium" style={{ color: 'var(--wiki-info)' }}>
             {block.sender}
           </span>
           {block.timestamp && (
@@ -110,11 +111,16 @@ function ImageBlock({
       className="w-20 h-16 rounded object-cover cursor-pointer hover:opacity-80 transition-opacity"
       style={{ border: '1px solid var(--wiki-border)' }}
       onClick={() => onImageClick?.(imageIndex)}
+      loading="lazy"
     />
   );
 }
 
-/** Render video player — click to fullscreen */
+/**
+ * Render a video content block with inline player and fullscreen overlay.
+ * Handles data URLs and HTTP sources. Shows a fallback message on load error.
+ * A fullscreen button appears on hover, and clicking it opens a full-screen overlay.
+ */
 function VideoBlock({ block }: { block: ContentBlock }) {
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -158,11 +164,11 @@ function VideoBlock({ block }: { block: ContentBlock }) {
           style={{ background: 'rgba(0,0,0,0.5)' }}
           title="全屏播放"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         </button>
         <div
           className="hidden items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px]"
-          style={{ background: 'var(--wiki-surface)', color: '#ef4444', border: '1px solid #ef444430' }}
+          style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-danger)', border: '1px solid var(--wiki-danger)' }}
         >
           ⚠️ 视频加载失败 — {block.content?.startsWith('data:') ? '数据不完整' : 'URL 不可访问或跨域限制'}
         </div>
@@ -170,7 +176,7 @@ function VideoBlock({ block }: { block: ContentBlock }) {
 
       {/* Fullscreen overlay */}
       {fullscreen && (
-        <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: '#000' }}>
+        <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: 'var(--wiki-overlay-heavy)' }}>
           <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }}>
             <div className="text-white/60 text-sm truncate">{block.fileName || '视频'}</div>
             <button onClick={() => setFullscreen(false)} className="text-white/60 hover:text-white text-2xl leading-none">×</button>
@@ -184,16 +190,34 @@ function VideoBlock({ block }: { block: ContentBlock }) {
   );
 }
 
-/** Render file card with fullscreen modal preview */
+/**
+ * Render a file attachment content block.
+ * Supports PDF/Office preview in a fullscreen overlay, manual file upload
+ * for missing clipboard data, and FileChip fallback for other file types.
+ * Converts data URLs to blob URLs for embed compatibility.
+ */
 function FileBlock({ block }: { block: ContentBlock }) {
   const fname = block.fileName || getFileNameFromUrl(block.content);
   const ext = getFileExt(fname);
   const url = block.content || '';
   const [expanded, setExpanded] = useState(false);
   const [manualDataUrl, setManualDataUrl] = useState<string | null>(null);
+  const blobUrlsRef = useRef<string[]>([]);
+
+  // Cleanup blob URLs on unmount or before creating new ones
+  const revokeBlobUrls = useCallback(() => {
+    for (const blobUrl of blobUrlsRef.current) {
+      try { URL.revokeObjectURL(blobUrl); } catch {}
+    }
+    blobUrlsRef.current = [];
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => () => revokeBlobUrls(), [revokeBlobUrls]);
 
   // Resolve preview URL: blob URL for data URLs, direct for HTTP
-  const resolveEmbedUrl = (rawUrl: string): string => {
+  // P2-15: useMemo caches the blob URL conversion to avoid re-creating on every render
+  const resolveEmbedUrl = useCallback((rawUrl: string): string => {
     if (!rawUrl || rawUrl === '') return '';
     if (rawUrl.startsWith('http')) return rawUrl;
     if (rawUrl.startsWith('data:')) {
@@ -202,13 +226,20 @@ function FileBlock({ block }: { block: ContentBlock }) {
         const mime = (hdr.split(':')[1] || '').split(';')[0] || 'application/pdf';
         const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
         const blob = new Blob([bytes], { type: mime });
-        return URL.createObjectURL(blob);
+        // Revoke old blob URLs before creating a new one
+        revokeBlobUrls();
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrlsRef.current.push(blobUrl);
+        return blobUrl;
       } catch { return rawUrl; }
     }
     return rawUrl;
-  };
+  }, [revokeBlobUrls]);
 
-  const embedUrl = manualDataUrl ? resolveEmbedUrl(manualDataUrl) : resolveEmbedUrl(url);
+  const embedUrl = useMemo(
+    () => manualDataUrl ? resolveEmbedUrl(manualDataUrl) : resolveEmbedUrl(url),
+    [manualDataUrl, url, resolveEmbedUrl]
+  );
 
   const handleDownload = () => downloadFile(url, fname || 'download' + ext);
 
@@ -232,13 +263,13 @@ function FileBlock({ block }: { block: ContentBlock }) {
 
   // ── Fullscreen preview overlay ──
   const PreviewOverlay = expanded && showExpand ? (
-    <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: '#1a1a2e' }}>
+    <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: 'var(--wiki-overlay-heavy)' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ background: 'rgba(0,0,0,0.4)' }}>
         <div className="text-white/80 text-sm truncate max-w-[60%]">{fname}</div>
         <div className="flex items-center gap-3">
           <button onClick={handleDownload} className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors" title="下载">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             下载
           </button>
           <button onClick={() => setExpanded(false)} className="text-white/60 hover:text-white text-2xl leading-none">×</button>
@@ -281,8 +312,8 @@ function FileBlock({ block }: { block: ContentBlock }) {
       <>
         <button onClick={() => setExpanded(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:opacity-80 transition-opacity text-left"
           style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#ef444420' }}>
-            <FileTextIcon size={16} style={{ color: '#ef4444' }} />
+          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-danger-bg)' }}>
+            <FileTextIcon size={16} style={{ color: 'var(--wiki-danger)' }} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-wiki-text truncate">{fname}</div>
@@ -300,8 +331,8 @@ function FileBlock({ block }: { block: ContentBlock }) {
       <>
         <button onClick={() => setExpanded(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:opacity-80 transition-opacity text-left"
           style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#6366f120' }}>
-            <FileTextIcon size={16} style={{ color: '#6366f1' }} />
+          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-info-bg)' }}>
+            <FileTextIcon size={16} style={{ color: 'var(--wiki-info)' }} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-wiki-text truncate">{fname}</div>
@@ -319,8 +350,8 @@ function FileBlock({ block }: { block: ContentBlock }) {
       <>
         <button onClick={() => setExpanded(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:opacity-80 transition-opacity text-left"
           style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#6366f120' }}>
-            <FileTextIcon size={16} style={{ color: '#6366f1' }} />
+          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-info-bg)' }}>
+            <FileTextIcon size={16} style={{ color: 'var(--wiki-info)' }} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-wiki-text truncate">{fname}</div>
@@ -337,8 +368,8 @@ function FileBlock({ block }: { block: ContentBlock }) {
     return (
       <div className="flex flex-col gap-1">
         <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#f59e0b20' }}>
-            <FileTextIcon size={16} style={{ color: '#f59e0b' }} />
+          <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-warning-bg)' }}>
+            <FileTextIcon size={16} style={{ color: 'var(--wiki-warning)' }} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-wiki-text truncate">{fname}</div>
@@ -347,7 +378,7 @@ function FileBlock({ block }: { block: ContentBlock }) {
           <button
             onClick={handleManualUpload}
             className="px-2 py-1 rounded text-[11px] text-white flex-shrink-0 hover:opacity-80"
-            style={{ background: '#6366f1' }}
+            style={{ background: 'var(--wiki-info)' }}
           >
             上传文件
           </button>
@@ -375,14 +406,18 @@ function FileBlock({ block }: { block: ContentBlock }) {
   );
 }
 
-/** Render table block */
+/**
+ * Render a table content block.
+ * Displays an HTML table with optional headers and alternating row colors.
+ * Falls back to an italic placeholder when rows are empty.
+ */
 function TableBlock({ block }: { block: ContentBlock }) {
   const rows = block.rows || [];
   if (rows.length === 0) return <div className="text-xs text-wiki-text3 italic">（空表格）</div>;
   const hasHeaders = block.headers && block.headers.length > 0;
   return (
     <div className="overflow-x-auto rounded" style={{ border: '1px solid var(--wiki-border)' }}>
-      <table className="w-full text-xs text-wiki-text2" style={{ borderCollapse: 'collapse' }}>
+      <table className="w-full text-xs text-wiki-text2" style={{ borderCollapse: 'collapse' }} role="table" aria-label={block.fileName || '数据表格'}>
         {hasHeaders && (
           <thead>
             <tr style={{ background: 'var(--wiki-surface2)' }}>
@@ -484,26 +519,8 @@ export default memo(function ContentBlockRenderer({
   );
 
   const closeLightbox = useCallback(() => setLightboxIndex(null), []);
-  const prevImage = useCallback(() => {
-    setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i));
-  }, []);
-  const nextImage = useCallback(() => {
-    setLightboxIndex((i) =>
-      i !== null && i < allImageUrls.length - 1 ? i + 1 : i
-    );
-  }, [allImageUrls.length]);
 
-  // Keyboard navigation for lightbox
-  useEffect(() => {
-    if (lightboxIndex === null) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeLightbox();
-      else if (e.key === 'ArrowLeft') prevImage();
-      else if (e.key === 'ArrowRight') nextImage();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [lightboxIndex, closeLightbox, prevImage, nextImage]);
+  // Keyboard navigation for lightbox is handled internally by the Lightbox component
 
   if (!blocks || blocks.length === 0) {
     return (
@@ -551,52 +568,7 @@ export default memo(function ContentBlockRenderer({
 
       {/* Internal lightbox */}
       {lightboxIndex !== null && allImageUrls.length > 0 && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.85)' }}
-          onClick={closeLightbox}
-        >
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
-            {lightboxIndex + 1} / {allImageUrls.length}
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              closeLightbox();
-            }}
-            className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl"
-          >
-            ×
-          </button>
-          {allImageUrls.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                prevImage();
-              }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-            >
-              <ChevronLeftIcon size={24} />
-            </button>
-          )}
-          {allImageUrls.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                nextImage();
-              }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-            >
-              <ChevronRightIcon size={24} />
-            </button>
-          )}
-          <img
-            src={allImageUrls[lightboxIndex]}
-            className="max-w-[85vw] max-h-[85vh] rounded-md object-contain"
-            onClick={(e) => e.stopPropagation()}
-            alt="预览"
-          />
-        </div>
+        <Lightbox images={allImageUrls} index={lightboxIndex} onClose={closeLightbox} altText={allImageUrls[lightboxIndex] ? '图片预览' : '预览图片'} />
       )}
     </>
   );

@@ -61,30 +61,3 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
   const data = await res.json();
   return { json: () => Promise.resolve(data), data };
 }
-
-/** API path constants */
-export const API = {
-  requirements: '/api/requirements',
-  requirementsUploadImage: '/api/requirements/upload-image',
-  requirementsAnalyze: (id: number) => `/api/requirements/${id}/analyze`,
-  requirementsById: (id: number) => `/api/requirements/${id}`,
-  documents: '/api/documents',
-  documentsUpload: '/api/documents/upload',
-  documentsById: (id: number) => `/api/documents/${id}`,
-  documentsPreview: (id: number) => `/api/documents/${id}/preview`,
-  documentsSummarize: (id: number) => `/api/documents/${id}/summarize`,
-  models: '/api/models',
-  modelsById: (id: number) => `/api/models/${id}`,
-  storageStats: '/api/storage/stats',
-  knowledgeCategories: '/api/knowledge_categories',
-  mcp: '/api/mcp',
-  mcpById: (id: number) => `/api/mcp/${id}`,
-  mcpToken: (serverId: number) => `/api/mcp/${serverId}/token`,
-  mcpServers: '/api/mcp_servers',
-  insights: {
-    kpis: '/api/insights/kpis',
-    charts: '/api/insights/charts',
-    aiInsights: '/api/insights/ai-insights',
-    activities: '/api/insights/activities',
-  },
-} as const;

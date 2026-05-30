@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openQCForm: () => ipcRenderer.invoke('open-qc-form'),
   closeQCForm: () => ipcRenderer.invoke('close-qc-form'),
   notifyRequirementsChanged: () => ipcRenderer.invoke('notify-requirements-changed'),
-  testModelConnection: (baseUrl, apiKey, modelId) => ipcRenderer.invoke('test-model-connection', baseUrl, apiKey, modelId),
+  testModelConnection: (modelId) => ipcRenderer.invoke('test-model-connection', modelId),
   resizeQC: (width, height) => ipcRenderer.invoke('resize-qc-window', width, height),
   // Clipboard operations
   readClipboardImages: () => ipcRenderer.invoke('read-clipboard-images'),
@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readLocalFile: (filePath) => ipcRenderer.invoke('read-local-file', filePath),
   openPathExternal: (filePath) => ipcRenderer.invoke('open-path-external', filePath),
   installExtension: (extId, dataUrl) => ipcRenderer.invoke('install-extension', extId, dataUrl),
+  /** Send chat message to AI — returns { content: string } | { error: string } */
+  chatSend: (payload) => ipcRenderer.invoke('chat:send', payload),
   // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
   onRequirementsChanged: (cb) => {
     const handler = () => cb();

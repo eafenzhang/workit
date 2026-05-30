@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { SunIcon, MoonIcon, MonitorIcon, PaletteIcon, InfoIcon, GlobeIcon, RefreshCwIcon, CheckIcon, CogIcon, SparklesIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
+import { toast } from 'sonner';
+
+// ── Toast message constants ──
+const MESSAGES = {
+  updated: '已更新',
+  saveFailed: '保存失败',
+  cacheCleared: '缓存已清理',
+  cacheClearFailed: '清理失败',
+  fixErrors: '请修正表单中的错误',
+  apiConfigSaved: 'API 配置已保存',
+} as const;
 
 // Persist update state across tab switches (module-level, survives unmount)
 let _updStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' = 'idle';
@@ -24,8 +35,16 @@ export default function Settings() {
   const [autoAnalyze, setAutoAnalyze] = useState(() => {
     try { return localStorage.getItem('ai_auto_analyze') === 'true'; } catch { return true; }
   });
+  // P2-11: API configuration fields with validation
+  const [apiEndpoint, setApiEndpoint] = useState(() => {
+    try { return localStorage.getItem('api_endpoint_url') || ''; } catch { return ''; }
+  });
+  const [apiTimeout, setApiTimeout] = useState(() => {
+    try { return parseInt(localStorage.getItem('api_timeout') || '30', 10); } catch { return 30; }
+  });
+  const [apiErrors, setApiErrors] = useState<{ endpoint?: string; timeout?: string }>({});
 
-  const api = (window as any).electronAPI;
+  const api = window.electronAPI;
 
   // Sync to module-level + state
   const sync = (patch: Partial<{ status: typeof _updStatus; version: string; progress: number; error: string }>) => {
@@ -62,12 +81,13 @@ export default function Settings() {
   const checkForUpdate = async () => {
     if (!api) return;
     sync({ status: 'checking', error: '' });
+    const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
     try {
-      const result = await api.checkForUpdate();
+      const result = await Promise.race([api.checkForUpdate(), timeout(30000)]);
       if (result?.error) { sync({ status: 'error', error: result.error }); return; }
       if (result?.available) {
         sync({ status: 'downloading', version: result.version, progress: 0 });
-        const dlResult = await api.downloadUpdate();
+        const dlResult = await Promise.race([api.downloadUpdate(), timeout(30000)]);
         if (dlResult?.error) {
           sync({ status: 'error', error: '下载失败: ' + dlResult.error });
         }
@@ -75,20 +95,26 @@ export default function Settings() {
         sync({ status: 'idle', error: '已是最新版本' });
         setTimeout(() => sync({ error: '' }), 3000);
       }
-    } catch { sync({ status: 'error', error: '网络请求失败' }); }
+    } catch (err: any) {
+      if (err?.message === 'timeout') {
+        sync({ status: 'error', error: '检查更新超时' });
+      } else {
+        sync({ status: 'error', error: '网络请求失败' });
+      }
+    }
   };
 
   const installUpdate = () => { api?.installUpdate(); };
 
   const toggleQuickCollect = (enabled: boolean) => {
     setQuickCollect(enabled);
-    localStorage.setItem('quick_collect_enabled', String(enabled));
+    try { localStorage.setItem('quick_collect_enabled', String(enabled)); } catch {}
     window.dispatchEvent(new CustomEvent('quick-collect-toggle', { detail: { enabled } }));
   };
 
   const toggleAutoAnalyze = (enabled: boolean) => {
     setAutoAnalyze(enabled);
-    localStorage.setItem('ai_auto_analyze', String(enabled));
+    try { localStorage.setItem('ai_auto_analyze', String(enabled)); } catch {}
   };
 
   const appearanceOptions = [
@@ -97,14 +123,82 @@ export default function Settings() {
     { id: 'system', label: '跟随系统', icon: MonitorIcon, desc: '自动跟随系统' },
   ] as const;
 
-  return (
-    <div data-cmp="Settings" className="h-full p-8 overflow-y-auto overflow-x-hidden scrollbar-thin">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-semibold text-wiki-text mb-1">系统设置</h1>
-        <p className="text-wiki-text2 text-sm mb-8">配置 Workit 的外观和行为</p>
+  const NAV_ITEMS = [
+    { id: 'system', label: '系统', icon: CogIcon },
+    { id: 'appearance', label: '外观', icon: PaletteIcon },
+    { id: 'capture', label: '采集', icon: GlobeIcon },
+    { id: 'ai', label: 'AI', icon: SparklesIcon },
+    { id: 'api', label: 'API', icon: GlobeIcon },
+    { id: 'update', label: '更新', icon: RefreshCwIcon },
+    { id: 'data', label: '数据', icon: InfoIcon },
+    { id: 'about', label: '关于', icon: InfoIcon },
+  ] as const;
+  const [activeNav, setActiveNav] = useState<string>('system');
 
-        {/* System Section — moved to top with icon */}
-        <section className="mb-8">
+  return (
+    <div data-cmp="Settings" className="h-full flex">
+      {/* Sidebar */}
+      <div className="w-[200px] flex-shrink-0 p-4 border-r overflow-y-auto" style={{ background: 'var(--wiki-surface)', borderColor: 'var(--wiki-border)' }}>
+        <h1 className="text-lg font-semibold text-wiki-text mb-4 px-2">设置</h1>
+        <nav className="flex flex-col gap-0.5">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            const active = activeNav === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveNav(item.id)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
+                style={{
+                  background: active ? 'var(--wiki-surface2)' : 'transparent',
+                  color: active ? 'var(--wiki-text)' : 'var(--wiki-text2)',
+                  fontWeight: active ? 600 : 400,
+                }}
+              >
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 p-8 overflow-y-auto scrollbar-thin">
+        <div className="max-w-xl">
+
+        {activeNav === 'data' && (
+          <section>
+            <h2 className="text-base font-semibold text-wiki-text mb-4">数据管理</h2>
+            <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--wiki-surface2)' }}>
+                <div>
+                  <div className="text-sm font-medium text-wiki-text">清理浏览器缓存</div>
+                  <div className="text-xs text-wiki-text3 mt-1">清除 localStorage 和 sessionStorage 中的临时数据</div>
+                </div>
+                <button onClick={() => {
+                  if (!window.confirm('确认清理缓存？主题和布局设置将保留。')) return;
+                  try {
+                    const theme = localStorage.getItem('theme');
+                    const qcX = localStorage.getItem('qc-float-x');
+                    const qcY = localStorage.getItem('qc-float-y');
+                    localStorage.clear();
+                    if (theme) localStorage.setItem('theme', theme);
+                    if (qcX) localStorage.setItem('qc-float-x', qcX);
+                    if (qcY) localStorage.setItem('qc-float-y', qcY);
+                    sessionStorage.clear();
+                    toast.success(MESSAGES.cacheCleared);
+                  } catch { toast.error(MESSAGES.cacheClearFailed); }
+                }} className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>
+                  清理缓存
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeNav === 'system' && (
+          <section>
           <div className="flex items-center gap-2 mb-4">
             <CogIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">系统</h2>
@@ -112,10 +206,10 @@ export default function Settings() {
           <div className="flex flex-col gap-3 rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             {[{
               label: '开机启动', desc: '系统启动时自动运行 Workit',
-              value: openAtLogin, set: (v: boolean) => { setOpenAtLogin(v); api?.setOpenAtLogin(v); }
+              value: openAtLogin, set: (v: boolean) => { setOpenAtLogin(v); api?.setOpenAtLogin(v).then(() => toast.success(MESSAGES.updated)).catch(() => toast.error(MESSAGES.saveFailed)); }
             }, {
               label: '最小化到托盘', desc: '关闭窗口时隐藏到系统托盘而非退出',
-              value: minimizeToTray, set: (v: boolean) => { setMinimizeToTray(v); api?.setMinimizeToTray(v); }
+              value: minimizeToTray, set: (v: boolean) => { setMinimizeToTray(v); api?.setMinimizeToTray(v).then(() => toast.success(MESSAGES.updated)).catch(() => toast.error(MESSAGES.saveFailed)); }
             }].map((item, i) => (
               <div key={i} className="flex items-center justify-between">
                 <div>
@@ -132,13 +226,10 @@ export default function Settings() {
             ))}
           </div>
         </section>
+        )}
 
-        {/* Appearance Section */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <PaletteIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
-            <h2 className="text-base font-semibold text-wiki-text">外观</h2>
-          </div>
+        {activeNav === 'appearance' && (
+          <section>
 
           <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="text-sm font-medium text-wiki-text mb-1">主题模式</div>
@@ -152,13 +243,13 @@ export default function Settings() {
                   <button
                     key={opt.id}
                     onClick={() => setTheme(opt.id)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-md transition-all relative"
+                    className="flex flex-col items-center gap-2 p-4 rounded-lg transition-all relative"
                     style={{
                       background: isActive ? 'var(--wiki-surface2)' : 'transparent',
                       border: '1px solid var(--wiki-border)',
                     }}
                   >
-                    <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ background: isActive ? 'var(--wiki-accent)' : 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: isActive ? 'var(--wiki-accent)' : 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                       <Icon size={18} strokeWidth={1.5} style={{ color: isActive ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }} />
                     </div>
                     <div className="text-sm font-medium" style={{ color: isActive ? 'var(--wiki-accent)' : 'var(--wiki-text2)' }}>{opt.label}</div>
@@ -169,14 +260,11 @@ export default function Settings() {
             </div>
           </div>
         </section>
+        )}
 
-        {/* Quick Collect Section */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <GlobeIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
-            <h2 className="text-base font-semibold text-wiki-text">快速采集</h2>
-          </div>
-
+        {activeNav === 'capture' && (
+          <section>
+          <h2 className="text-base font-semibold text-wiki-text mb-4">快速采集</h2>
           <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -196,9 +284,10 @@ export default function Settings() {
             </div>
           </div>
         </section>
+        )}
 
-        {/* AI Auto-Analyze Section */}
-        <section className="mb-8">
+        {activeNav === 'ai' && (
+          <section>
           <div className="flex items-center gap-2 mb-4">
             <SparklesIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">AI 自动分析</h2>
@@ -223,9 +312,91 @@ export default function Settings() {
             </div>
           </div>
         </section>
+        )}
 
-        {/* About Section */}
-        <section>
+        {activeNav === 'api' && (
+          <section>
+          <div className="flex items-center gap-2 mb-4">
+            <GlobeIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
+            <h2 className="text-base font-semibold text-wiki-text">API 配置</h2>
+          </div>
+
+          <div className="rounded-lg p-5 flex flex-col gap-4" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+            {/* API Endpoint URL */}
+            <div>
+              <div className="text-sm font-medium text-wiki-text mb-1">API 端点 URL</div>
+              <div className="text-xs text-wiki-text3 mb-2">默认 AI API 端点地址，用于模型调用</div>
+              <input
+                type="text"
+                value={apiEndpoint}
+                onChange={(e) => { setApiEndpoint(e.target.value); setApiErrors(prev => ({ ...prev, endpoint: undefined })); }}
+                onBlur={() => {
+                  if (apiEndpoint && !/^https?:\/\/.+/.test(apiEndpoint)) {
+                    setApiErrors(prev => ({ ...prev, endpoint: 'URL 格式不正确，请输入有效的 HTTP/HTTPS 地址' }));
+                  }
+                }}
+                placeholder="https://api.openai.com/v1"
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: 'var(--wiki-surface2)', border: apiErrors.endpoint ? '1px solid var(--wiki-danger)' : '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+              />
+              {apiErrors.endpoint && <div className="text-xs mt-1" style={{ color: 'var(--wiki-danger)' }}>{apiErrors.endpoint}</div>}
+            </div>
+
+            {/* Timeout */}
+            <div>
+              <div className="text-sm font-medium text-wiki-text mb-1">请求超时（秒）</div>
+              <div className="text-xs text-wiki-text3 mb-2">API 请求超时时间，范围 1-300 秒</div>
+              <input
+                type="number"
+                min={1}
+                max={300}
+                value={apiTimeout}
+                onChange={(e) => { const v = parseInt(e.target.value, 10); setApiTimeout(isNaN(v) ? 30 : v); setApiErrors(prev => ({ ...prev, timeout: undefined })); }}
+                onBlur={() => {
+                  if (apiTimeout < 1 || apiTimeout > 300) {
+                    setApiErrors(prev => ({ ...prev, timeout: '超时时间必须在 1-300 秒之间' }));
+                  }
+                }}
+                className="w-32 px-3 py-2 rounded-lg text-xs"
+                style={{ background: 'var(--wiki-surface2)', border: apiErrors.timeout ? '1px solid var(--wiki-danger)' : '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+              />
+              {apiErrors.timeout && <div className="text-xs mt-1" style={{ color: 'var(--wiki-danger)' }}>{apiErrors.timeout}</div>}
+            </div>
+
+            {/* Save button */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  const newErrors: { endpoint?: string; timeout?: string } = {};
+                  if (apiEndpoint && !/^https?:\/\/.+/.test(apiEndpoint)) {
+                    newErrors.endpoint = 'URL 格式不正确';
+                  }
+                  if (apiTimeout < 1 || apiTimeout > 300) {
+                    newErrors.timeout = '超时时间必须在 1-300 秒之间';
+                  }
+                  setApiErrors(newErrors);
+                  if (Object.keys(newErrors).length > 0) {
+                    toast.error(MESSAGES.fixErrors);
+                    return;
+                  }
+                  try {
+                    localStorage.setItem('api_endpoint_url', apiEndpoint);
+                    localStorage.setItem('api_timeout', String(apiTimeout));
+                  } catch { /* quota exceeded */ }
+                  toast.success(MESSAGES.apiConfigSaved);
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-medium"
+                style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
+              >
+                保存配置
+              </button>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {activeNav === 'about' && (
+          <section>
           <div className="flex items-center gap-2 mb-4">
             <InfoIcon size={18} strokeWidth={1.5} style={{ color: 'var(--wiki-accent)' }} />
             <h2 className="text-base font-semibold text-wiki-text">关于</h2>
@@ -234,7 +405,7 @@ export default function Settings() {
           <div className="rounded-lg p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-lg flex items-center justify-center overflow-hidden">
-                <img src={APP_ICON} alt="Workit" className="w-12 h-12 object-contain" />
+                <img src={APP_ICON} alt="Workit" className="w-12 h-12 object-contain" loading="lazy" />
               </div>
               <div className="flex-1">
                 <div className="text-lg font-bold text-wiki-text">Workit</div>
@@ -242,7 +413,7 @@ export default function Settings() {
                 <div className="text-xs text-wiki-text3 mt-1">版本 {currentVersion}</div>
               </div>
               {updateStatus === 'idle' && (
-                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
+                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
                   <RefreshCwIcon size={12} /> 检查更新
                 </button>
               )}
@@ -266,7 +437,7 @@ export default function Settings() {
               )}
               {updateStatus === 'ready' && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-success-bg)', color: 'var(--wiki-success)' }}>
                     <CheckIcon size={12} /> 已下载
                   </div>
                   <button onClick={installUpdate} className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
@@ -276,16 +447,18 @@ export default function Settings() {
               )}
               {updateStatus === 'error' && (
                 <div>
-                  <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                  <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>
                     <RefreshCwIcon size={12} /> 重试
                   </button>
-                  {updateError && <div className="text-xs mt-1" style={{ color: '#ef4444' }}>{updateError}</div>}
+                  {updateError && <div className="text-xs mt-1" style={{ color: 'var(--wiki-danger)' }}>{updateError}</div>}
                 </div>
               )}
             </div>
           </div>
         </section>
+        )}
       </div>
     </div>
+  </div>
   );
 }

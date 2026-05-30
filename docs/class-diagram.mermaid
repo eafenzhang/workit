@@ -1,73 +1,154 @@
 classDiagram
-    class CaptureItem {
-        +string type: 'text'|'image'|'video'|'file'|'table'
+    class GlobalTab {
+        +string id
+        +string title
+        +string type
+        +number reqId?
+        +Record~string,any~ params?
+    }
+
+    class HomeMessage {
+        +string id
+        +string role
         +string content
-        +string name?
-        +number size?
-        +string[][] rows?
-        +string[] headers?
+        +number timestamp
     }
 
-    class ContentBlock {
-        +string type: 'text'|'image'|'video'|'file'|'table'
-        +string content
-        +string fileName?
-        +number fileSize?
-        +string mimeType?
-        +boolean chatFormat?
-        +string sender?
-        +string timestamp?
-        +string[][] rows?
-        +string[] headers?
+    class QuickAction {
+        +string id
+        +string label
+        +string icon
+        +string action
+        +string target?
+        +string prompt?
     }
 
-    class CaptureData {
-        +CaptureItem[] items
+    class HomeDefaults {
+        +QuickAction[] quickActions
+        +string[] suggestedPrompts
+        +function getGreeting(name: string): string
     }
 
-    class Requirement {
+    class InsightKPI {
+        +string label
+        +string value
+        +string change
+        +boolean up
+        +string icon
+        +string color
+        +string bg
+    }
+
+    class ActivityItem {
         +number id
+        +string icon
+        +string color
+        +string text
+        +string time
+        +string targetType?
+        +number targetId?
+    }
+
+    class InsightChartData {
+        +AreaData[] areaData
+        +BarData[] barData
+        +PieData[] pieData
+    }
+
+    class AreaData {
+        +string name
+        +number 需求
+        +number 知识
+        +number 洞察分析
+    }
+
+    class BarData {
+        +string name
+        +number value
+    }
+
+    class PieData {
+        +string name
+        +number value
+    }
+
+    class AIInsight {
         +string title
         +string desc
-        +string[] images
-        +ContentBlock[] contentBlocks
+        +string icon
+        +string color
+        +string bg
+        +number score
     }
 
-    class QuickCapture {
-        +parseHtmlToItems(html, plainText, api) Promise~CaptureItem[]~
-        +resolveFileItem(src, api) Promise~CaptureItem~
-        +handleSubmit() Promise~void~
-        -walk(node) void
+    class HomePage {
+        +HomeMessage[] messages
+        +string inputValue
+        +function handleSend()
+        +function handleClearHistory()
+        +function handleDeleteMessage(id)
+        +function handleQuickAction(action)
+        +function handleSuggestedPrompt(prompt)
     }
 
-    class ContentBlocks {
-        +captureItemsToBlocks(items) ContentBlock[]
-        +blocksToCaptureItems(blocks) CaptureItem[]
-        +rebuildBlocksFromLegacy(desc, images) ContentBlock[]
-        +extractTextFromBlocks(blocks) string
-        +extractImagesFromBlocks(blocks) string[]
+    class InsightsPage {
+        +InsightKPI[] kpis
+        +InsightChartData charts
+        +AIInsight[] aiInsights
+        +ActivityItem[] activities
+        +string activeChartTab
+        +string activeReport
+        +function fetchAllData()
+        +function generateAIInsights()
     }
 
-    class ContentBlockRenderer {
-        +blocks: ContentBlock[]
-        +onImageClick(index) void?
+    class SidebarComponent {
+        +NavItem[] navItems
+        +string activeTab
+        +function onTabChange(id)
     }
 
-    class TextBlock
-    class ImageBlock
-    class VideoBlock
-    class FileBlock
-    class TableBlock
+    class IndexPage {
+        +GlobalTab[] tabs
+        +string activeTabId
+        +function openTab(type, title, extra?)
+        +function closeTab(id)
+    }
 
-    CaptureItem --> ContentBlock : captureItemsToBlocks()
-    ContentBlock --> CaptureItem : blocksToCaptureItems()
-    CaptureData "1" --> "*" CaptureItem
-    Requirement "1" --> "*" ContentBlock
-    QuickCapture --> CaptureItem : produces
-    QuickCapture --> ContentBlocks : uses
-    ContentBlockRenderer --> ContentBlock : renders
-    ContentBlockRenderer --> TextBlock : case 'text'
-    ContentBlockRenderer --> ImageBlock : case 'image'
-    ContentBlockRenderer --> VideoBlock : case 'video'
-    ContentBlockRenderer --> FileBlock : case 'file'
-    ContentBlockRenderer --> TableBlock : case 'table'
+    class NavItem {
+        +string id
+        +string label
+        +LucideIcon icon
+        +string color
+        +string path
+    }
+
+    class API {
+        +string insightsKpis
+        +string insightsCharts
+        +string insightsAiInsights
+        +string insightsActivities
+    }
+
+    class IPC {
+        +handle insights/kpis
+        +handle insights/charts
+        +handle insights/ai-insights
+        +handle insights/activities
+    }
+
+    IndexPage "1" --> "*" GlobalTab : manages
+    IndexPage "1" --> "1" SidebarComponent : renders
+    SidebarComponent "1" --> "*" NavItem : contains
+    HomePage ..> HomeMessage : uses
+    HomePage ..> QuickAction : uses
+    HomePage ..> HomeDefaults : imports
+    InsightsPage "1" --> "4" InsightKPI : displays
+    InsightsPage "1" --> "1" InsightChartData : displays
+    InsightsPage "1" --> "*" AIInsight : displays
+    InsightsPage "1" --> "*" ActivityItem : displays
+    InsightsPage ..> API : fetches
+    API ..> IPC : routes through
+    InsightChartData "1" --> "*" AreaData
+    InsightChartData "1" --> "*" BarData
+    InsightChartData "1" --> "*" PieData

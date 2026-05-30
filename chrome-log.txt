@@ -1,0 +1,2 @@
+C:\Users\121212\workit\release\win-unpacked\Workit.exe: bad option: --enable-logging=stderr
+C:\Users\121212\workit\release\win-unpacked\Workit.exe: bad option: --v=1

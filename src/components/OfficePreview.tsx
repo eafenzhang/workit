@@ -98,8 +98,8 @@ export default function OfficePreview({ dataUrl, fileName }: Props) {
   if (state.status === 'loading') {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-3 text-gray-400">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-3" style={{ color: 'var(--wiki-text3)' }}>
+          <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--wiki-border)', borderTopColor: 'var(--wiki-accent)' }} />
           <div className="text-sm">正在渲染...</div>
         </div>
       </div>
@@ -109,8 +109,8 @@ export default function OfficePreview({ dataUrl, fileName }: Props) {
   // Error
   if (state.status === 'error') {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <div className="flex flex-col items-center justify-center h-full gap-3" style={{ color: 'var(--wiki-text3)' }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
           <path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         </svg>
         <div className="text-sm">{state.message}</div>
@@ -123,7 +123,7 @@ export default function OfficePreview({ dataUrl, fileName }: Props) {
     return (
       <div
         className="w-full h-full overflow-auto p-6"
-        style={{ background: '#fff', color: '#1a1a1a', fontSize: '14px', lineHeight: '1.8' }}
+        style={{ background: 'var(--wiki-bg)', color: 'var(--wiki-text)', fontSize: '14px', lineHeight: '1.8' }}
         dangerouslySetInnerHTML={{ __html: state.html }}
       />
     );
@@ -150,25 +150,25 @@ function SheetView({ state, onSheetChange }: { state: Extract<RenderState, { sta
 
   if (effectiveRows === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
+      <div className="flex items-center justify-center h-full" style={{ color: 'var(--wiki-text3)' }}>
         该工作表为空
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#f8f9fa' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--wiki-bg)' }}>
       {/* Sheet tabs */}
       {state.sheetNames.length > 1 && (
-        <div className="flex gap-0 px-1 pt-1 overflow-x-auto flex-shrink-0" style={{ background: '#e8eaed' }}>
+        <div className="flex gap-0 px-1 pt-1 overflow-x-auto flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}>
           {state.sheetNames.map(name => (
             <button
               key={name}
               onClick={() => onSheetChange(name)}
               className="px-4 py-1.5 text-xs font-medium rounded-t transition-colors border-0 outline-none"
               style={{
-                background: name === state.activeSheet ? '#fff' : 'transparent',
-                color: name === state.activeSheet ? '#1a73e8' : '#5f6368',
+                background: name === state.activeSheet ? 'var(--wiki-surface)' : 'transparent',
+                color: name === state.activeSheet ? 'var(--wiki-accent)' : 'var(--wiki-text2)',
                 marginRight: '1px',
               }}
             >
@@ -179,22 +179,22 @@ function SheetView({ state, onSheetChange }: { state: Extract<RenderState, { sta
       )}
 
       {/* Scrollable table */}
-      <div className="flex-1 overflow-auto" style={{ background: '#fff' }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: '12px', minWidth: '100%' }}>
+      <div className="flex-1 overflow-auto" style={{ background: 'var(--wiki-surface)' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: '12px', minWidth: '100%' }} role="table" aria-label="Office 文档表格预览">
           <thead>
             <tr>
               <th style={{
                 position: 'sticky', top: 0, left: 0, zIndex: 3,
-                background: '#f1f3f4', border: '1px solid #dadce0',
-                padding: '4px 8px', minWidth: '40px', textAlign: 'center', color: '#5f6368',
+                background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)',
+                padding: '4px 8px', minWidth: '40px', textAlign: 'center', color: 'var(--wiki-text2)',
               }}>
                 #
               </th>
               {Array.from({ length: effectiveCols }, (_, ci) => (
                 <th key={ci} style={{
                   position: 'sticky', top: 0, zIndex: 2,
-                  background: '#f1f3f4', border: '1px solid #dadce0',
-                  padding: '4px 8px', minWidth: '80px', color: '#5f6368', fontWeight: 500,
+                  background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)',
+                  padding: '4px 8px', minWidth: '80px', color: 'var(--wiki-text2)', fontWeight: 500,
                 }}>
                   {colLabel(ci)}
                 </th>
@@ -203,20 +203,20 @@ function SheetView({ state, onSheetChange }: { state: Extract<RenderState, { sta
           </thead>
           <tbody>
             {rows.slice(0, 500).map((row, ri) => (
-              <tr key={ri} style={{ background: ri % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+              <tr key={ri} style={{ background: ri % 2 === 0 ? 'var(--wiki-surface)' : 'var(--wiki-bg)' }}>
                 <td style={{
                   position: 'sticky', left: 0, zIndex: 1,
-                  background: ri % 2 === 0 ? '#fff' : '#f8f9fa',
-                  border: '1px solid #dadce0', padding: '4px 8px',
-                  textAlign: 'center', color: '#5f6368', fontSize: '11px',
+                  background: ri % 2 === 0 ? 'var(--wiki-surface)' : 'var(--wiki-bg)',
+                  border: '1px solid var(--wiki-border)', padding: '4px 8px',
+                  textAlign: 'center', color: 'var(--wiki-text2)', fontSize: '11px',
                 }}>
                   {ri + 1}
                 </td>
                 {Array.from({ length: effectiveCols }, (_, ci) => (
                   <td key={ci} style={{
-                    border: '1px solid #dadce0', padding: '4px 8px',
+                    border: '1px solid var(--wiki-border)', padding: '4px 8px',
                     maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    color: '#202124',
+                    color: 'var(--wiki-text)',
                   }}>
                     {/* eslint-disable-next-line @eslint-react-dom/no-dangerously-set-innerhtml */}
                     <span dangerouslySetInnerHTML={{ __html: formatCell(String(row[ci] ?? '')) }} />
@@ -227,7 +227,7 @@ function SheetView({ state, onSheetChange }: { state: Extract<RenderState, { sta
           </tbody>
         </table>
         {effectiveRows > 500 && (
-          <div className="text-center py-3 text-xs text-gray-400">
+          <div className="text-center py-3 text-xs" style={{ color: 'var(--wiki-text3)' }}>
             仅显示前 500 行（共 {effectiveRows} 行）
           </div>
         )}

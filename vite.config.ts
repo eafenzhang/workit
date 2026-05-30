@@ -29,6 +29,10 @@ export default defineConfig({
             if (id.includes('recharts')) return 'vendor-recharts';
             if (id.includes('@radix-ui')) return 'vendor-ui';
             if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('mammoth')) return 'vendor-mammoth';
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('@tiptap') || id.includes('dompurify')) return 'vendor-editor';
+            if (id.includes('sonner')) return 'vendor-toast';
           }
         },
       },

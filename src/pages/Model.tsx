@@ -1,8 +1,26 @@
-import { apiFetch } from '../api';
+import { apiFetch, API } from '../api';
 import { useEffect, useState } from 'react';
-import { CpuIcon, PlusIcon, TrashIcon, StarIcon, CheckCircleIcon, KeyIcon, RefreshCwIcon, XIcon, ChevronDownIcon } from 'lucide-react';
+import { CpuIcon, PlusIcon, TrashIcon, StarIcon, CheckCircleIcon, KeyIcon, RefreshCwIcon, XIcon, ChevronDownIcon, Circle, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ── Toast message constants ──
+const TOAST = {
+  saveFirst: '请先保存模型配置',
+  connectionOk: '连接成功',
+  connectionFail: '连接失败，请检查配置',
+  connectionFailSimple: '连接失败',
+  fixErrors: '请修正表单中的错误',
+  updated: '已更新',
+  added: '添加成功',
+  opFailed: '操作失败',
+  saveFailed: '保存失败',
+  setDefault: '已设为默认',
+  setDefaultFailed: '设置失败',
+  deleted: '已删除',
+  switched: (name: string) => `已切换到 ${name}`,
+  disabled: '已禁用',
+  enabled: '已启用',
+} as const;
 interface ModelItem {
   id: number;
   name: string;
@@ -45,12 +63,17 @@ export default function Model() {
   const [form, setForm] = useState({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
   const [modelDropdown, setModelDropdown] = useState<number | null>(null);
   const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // P2-5: Show/hide API key toggle
+  const [showApiKey, setShowApiKey] = useState(false);
+  // P2-10: Form validation errors
+  const [errors, setErrors] = useState<{ name?: string; apiKey?: string; baseUrl?: string }>({});
 
   useEffect(() => { fetchModels(); }, []);
 
   const fetchModels = () => {
     setLoading(true);
-    apiFetch('/api/models').then(r => r.json()).then(data => {
+    apiFetch(API.models).then(r => r.json()).then(data => {
       setModels(Array.isArray(data) ? data : []);
       setLoading(false);
     }).catch(() => { setLoading(false); }); // 后端未就绪时静默处理
@@ -62,31 +85,65 @@ export default function Model() {
   };
 
   const handleTestConnection = async () => {
-    if (!form.apiKey.trim()) { toast.error('请先输入 API Key'); return; }
-    setTesting(true);
+    const newErrors: { name?: string; apiKey?: string; baseUrl?: string } = {};
+    if (!form.apiKey.trim()) newErrors.apiKey = '请输入 API Key';
     const provider = PROVIDER_LIST.find(p => p.id === form.provider);
+    const baseUrl = provider?.baseUrl || '';
+    if (baseUrl && !/^https?:\/\/.+/.test(baseUrl)) newErrors.baseUrl = 'URL 格式不正确';
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+    setTesting(true);
     try {
-      const ok = await (window as any).electronAPI?.testModelConnection?.(
-        provider?.baseUrl || '', form.apiKey, form.modelId
-      );
-      if (ok) toast.success('连接成功');
-      else toast.error('连接失败，请检查配置');
+      let modelIdToTest = editingId;
+      // P0-07: For new models, save first to get an ID so the backend can look up the decrypted key
+      if (!modelIdToTest) {
+        const modelName = provider?.models.find(m => m.id === form.modelId)?.name || form.modelId;
+        const saveRes = await apiFetch(API.models, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `${provider?.name} - ${modelName}`, provider: form.provider,
+            baseUrl: provider?.baseUrl || '', apiKey: form.apiKey, modelId: form.modelId,
+          }),
+        });
+        const saveData = await saveRes.json();
+        if (saveData?.id) {
+          modelIdToTest = saveData.id;
+          setEditingId(saveData.id);
+          fetchModels();
+        } else {
+          toast.error(TOAST.saveFirst);
+          setTesting(false);
+          return;
+        }
+      }
+      const ok = await window.electronAPI?.testModelConnection?.(modelIdToTest);
+      if (ok) toast.success(TOAST.connectionOk);
+      else toast.error(TOAST.connectionFail);
     } catch {
-      toast.error('连接失败');
+      toast.error(TOAST.connectionFailSimple);
     }
     setTesting(false);
   };
 
   const handleSubmit = async () => {
-    if (!form.apiKey.trim()) { toast.error('请输入 API Key'); return; }
+    // P2-10: Validate before saving
+    const newErrors: { name?: string; apiKey?: string; baseUrl?: string } = {};
+    if (!editingId && !form.apiKey.trim()) newErrors.apiKey = '请输入 API Key';
     const provider = PROVIDER_LIST.find(p => p.id === form.provider);
+    const baseUrl = provider?.baseUrl || '';
+    if (baseUrl && !/^https?:\/\/.+/.test(baseUrl)) newErrors.baseUrl = 'URL 格式不正确';
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      toast.error(TOAST.fixErrors);
+      return;
+    }
+    setSaving(true);
     const modelName = provider?.models.find(m => m.id === form.modelId)?.name || form.modelId;
 
-    const url = editingId ? `/api/models/${editingId}` : '/api/models';
+    const url = editingId ? API.modelsById(editingId) : API.models;
     const method = editingId ? 'PUT' : 'POST';
     const body: Record<string, string> = { modelId: form.modelId };
     if (editingId) {
-      // 只更新 API key 和 model
       if (form.apiKey) body.apiKey = form.apiKey;
     } else {
       body.name = `${provider?.name} - ${modelName}`;
@@ -95,16 +152,22 @@ export default function Model() {
       body.apiKey = form.apiKey;
     }
 
-    const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json();
-    if (data.success) {
-      toast.success(editingId ? '已更新' : '添加成功');
-      setShowModal(false);
-      setEditingId(null);
-      setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
-      fetchModels();
-    } else {
-      toast.error(data.error || '操作失败');
+    try {
+      const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(editingId ? TOAST.updated : TOAST.added);
+        setShowModal(false);
+        setEditingId(null);
+        setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
+        fetchModels();
+      } else {
+        toast.error(data.error || TOAST.opFailed);
+      }
+    } catch {
+      toast.error(TOAST.saveFailed);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -115,17 +178,17 @@ export default function Model() {
   };
 
   const setDefault = async (id: number) => {
-    const res = await apiFetch(`/api/models/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_default: true }) });
+    const res = await apiFetch(API.modelsById(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isDefault: true }) });
     const data = await res.json();
-    if (data.success) { toast.success('已设为默认'); fetchModels(); }
-    else toast.error(data.error || '设置失败');
+    if (data.success) { toast.success(TOAST.setDefault); fetchModels(); }
+    else toast.error(data.error || TOAST.setDefaultFailed);
   };
 
   const deleteModel = async (id: number) => {
     if (!confirm('确定删除该模型配置？')) return;
-    const res = await apiFetch(`/api/models/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(API.modelsById(id), { method: 'DELETE' });
     const data = await res.json();
-    if (data.success) { toast.success('已删除'); fetchModels(); }
+    if (data.success) { toast.success(TOAST.deleted); fetchModels(); }
   };
 
   const currentProvider = PROVIDER_LIST.find(p => p.id === form.provider);
@@ -138,7 +201,7 @@ export default function Model() {
           <h1 className="text-xl font-semibold text-wiki-text">模型配置</h1>
           <p className="text-sm text-wiki-text2 mt-1">支持国内主流大模型供应商</p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setShowModal(true); }}
+        <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setErrors({}); setShowModal(true); }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <PlusIcon size={16} />添加配置
         </button>
@@ -166,19 +229,19 @@ export default function Model() {
           <div key={m.id} className="rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: m.hasApiKey ? 'var(--wiki-surface2)' : 'rgba(239,68,68,0.1)' }}>
-                {m.hasApiKey ? <CheckCircleIcon size={24} style={{ color: '#10b981' }} /> : <CircleIcon size={24} style={{ color: '#ef4444' }} />}
+                {m.hasApiKey ? <CheckCircleIcon size={24} style={{ color: 'var(--wiki-success)' }} /> : <Circle size={24} style={{ color: 'var(--wiki-danger)' }} />}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-semibold text-wiki-text">{m.name}</span>
                   {m.isDefault && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>默认</span>}
-                  {!m.enabled && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>已禁用</span>}
+                  {!m.enabled && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>已禁用</span>}
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{m.provider}</span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-wiki-text3">
                   <span>{m.baseUrl}</span>
                   <span className="flex items-center gap-1">
-                    {m.hasApiKey ? <KeyIcon size={10} style={{ color: '#10b981' }} /> : <KeyIcon size={10} style={{ color: '#ef4444' }} />}
+                    {m.hasApiKey ? <KeyIcon size={10} style={{ color: 'var(--wiki-success)' }} /> : <KeyIcon size={10} style={{ color: 'var(--wiki-danger)' }} />}
                     {m.hasApiKey ? '已配置 Key' : '未配置'}
                   </span>
                 </div>
@@ -199,8 +262,8 @@ export default function Model() {
                         <button key={pm.id} onClick={async () => {
                           setModelDropdown(null);
                           if (pm.id !== m.modelId) {
-                            await apiFetch(`/api/models/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: pm.id }) });
-                            toast.success(`已切换到 ${pm.name}`);
+                            await apiFetch(API.modelsById(m.id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: pm.id }) });
+                            toast.success(TOAST.switched(pm.name));
                             fetchModels();
                           }
                         }} className="w-full px-3 py-2 text-left text-sm hover:bg-wiki-surface2 flex items-center justify-between" style={{ color: 'var(--wiki-text)' }}>
@@ -215,10 +278,10 @@ export default function Model() {
                   <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
                 )}
                 <button onClick={async () => {
-                  await apiFetch(`/api/models/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !m.enabled }) });
-                  toast.success(m.enabled ? '已禁用' : '已启用');
+                  await apiFetch(API.modelsById(m.id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !m.enabled }) });
+                  toast.success(m.enabled ? TOAST.disabled : TOAST.enabled);
                   fetchModels();
-                }} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: m.enabled ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.1)', color: m.enabled ? '#ef4444' : '#10b981' }}>
+                }} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: m.enabled ? 'var(--wiki-danger-bg)' : 'var(--wiki-success-bg)', color: m.enabled ? 'var(--wiki-danger)' : 'var(--wiki-success)' }}>
                   {m.enabled ? '禁用' : '启用'}
                 </button>
                 <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
@@ -235,11 +298,11 @@ export default function Model() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }}>
           <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-wiki-text">{editingId ? '编辑模型配置' : '添加模型配置'}</h2>
-              <button onClick={() => { setShowModal(false); setEditingId(null); }} className="p-1 rounded-md hover:bg-wiki-surface2">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setErrors({}); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
                 <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
@@ -273,9 +336,21 @@ export default function Model() {
             {/* API Key */}
             <div className="mb-6">
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>API Key</label>
-              <input type="password" value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
-                placeholder={editingId ? '不修改请留空' : '输入 API Key'}
-                className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+              <div className="relative">
+                <input type={showApiKey ? 'text' : 'password'} value={form.apiKey} onChange={e => { setForm(f => ({ ...f, apiKey: e.target.value })); setErrors(prev => ({ ...prev, apiKey: undefined })); }}
+                  placeholder={editingId ? '不修改请留空' : '输入 API Key'}
+                  className="w-full px-3 py-2 pr-10 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: errors.apiKey ? '1px solid var(--wiki-danger)' : '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-wiki-surface2 transition-colors"
+                  title={showApiKey ? '隐藏 API Key' : '显示 API Key'}
+                  aria-label={showApiKey ? '隐藏 API Key' : '显示 API Key'}
+                >
+                  {showApiKey ? <EyeOffIcon size={14} style={{ color: 'var(--wiki-text3)' }} /> : <EyeIcon size={14} style={{ color: 'var(--wiki-text3)' }} />}
+                </button>
+              </div>
+              {errors.apiKey && <div className="text-xs mt-1" style={{ color: 'var(--wiki-danger)' }}>{errors.apiKey}</div>}
             </div>
 
             <div className="flex gap-3 mb-4">
@@ -284,9 +359,9 @@ export default function Model() {
                 style={{ background: testing ? 'var(--wiki-surface2)' : 'transparent', color: testing ? 'var(--wiki-text3)' : 'var(--wiki-text)', borderColor: 'var(--wiki-border)' }}>
                 {testing ? '测试中...' : '测试连接'}
               </button>
-              <button onClick={handleSubmit}
-                className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                {editingId ? '保存修改' : '添加'}
+              <button onClick={handleSubmit} disabled={saving}
+                className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: saving ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: saving ? 'var(--wiki-text3)' : 'var(--wiki-bg)' }}>
+                {saving ? '保存中...' : (editingId ? '保存修改' : '添加')}
               </button>
             </div>
           </div>

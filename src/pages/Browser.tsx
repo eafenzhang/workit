@@ -42,10 +42,13 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
   const [history, setHistory] = useState<HistoryEntry[]>(() => load(HIST_KEY, []));
   const [showHistory, setShowHistory] = useState(false);
 
+  // P1-11: Browser loading progress bar state
+  const [browserLoading, setBrowserLoading] = useState(false);
+
   const closeAllPanels = () => { setShowHistory(false); };
 
   function saveAndSync<T>(key: string, val: T) {
-    localStorage.setItem(key, JSON.stringify(val));
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* quota exceeded */ }
     window.dispatchEvent(new CustomEvent('workit-browser-sync', { detail: { key } }));
   }
 
@@ -96,7 +99,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
       setHistory(prev => {
         const f = prev.filter(en => en.url !== cur);
         const n = [{ url: cur, title: title.substring(0, 40), visitedAt: Date.now() }, ...f].slice(0, 100);
-        localStorage.setItem(HIST_KEY, JSON.stringify(n));
+        try { localStorage.setItem(HIST_KEY, JSON.stringify(n)); } catch { /* quota exceeded */ }
         return n;
       });
     }
@@ -111,13 +114,38 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     }
   }, []);
 
-  // ── Event binding ──
+  // P1-11: Loading state handlers
+  const handleStartLoading = useCallback(() => {
+    setBrowserLoading(true);
+  }, []);
+
+  const handleStopLoading = useCallback(() => {
+    setBrowserLoading(false);
+  }, []);
+
+  // ── Event binding (stable ref callback, cleanup on unmount via null node) ──
   const wvRefCallback = useCallback((node: any) => {
-    if (!node) return;
+    if (!node) {
+      // Cleanup when webview is removed from DOM
+      const oldWv = webviewRef.current;
+      if (oldWv) {
+        oldWv.removeEventListener('did-finish-load', handleWebviewLoad);
+        oldWv.removeEventListener('page-title-updated', handlePageTitle);
+        oldWv.removeEventListener('will-navigate', handleWillNavigate);
+        // P1-11: cleanup loading event listeners
+        oldWv.removeEventListener('did-start-loading', handleStartLoading);
+        oldWv.removeEventListener('did-stop-loading', handleStopLoading);
+      }
+      webviewRef.current = null;
+      return;
+    }
     webviewRef.current = node;
     node.addEventListener('did-finish-load', handleWebviewLoad);
     node.addEventListener('page-title-updated', handlePageTitle);
     node.addEventListener('will-navigate', handleWillNavigate);
+    // P1-11: loading progress events
+    node.addEventListener('did-start-loading', handleStartLoading);
+    node.addEventListener('did-stop-loading', handleStopLoading);
     // setWindowOpenHandler MUST run after did-attach (guest WebContents ready)
     node.addEventListener('did-attach', () => {
       try {
@@ -130,14 +158,9 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         }
       } catch {}
     });
-  }, [handleWebviewLoad, handlePageTitle, handleWillNavigate]);
+  }, []); // Stable: handlers are useCallback([]) — never change
 
-  useEffect(() => () => {
-    const wv = webviewRef.current; if (!wv) return;
-    wv.removeEventListener('did-finish-load', handleWebviewLoad);
-    wv.removeEventListener('page-title-updated', handlePageTitle);
-    wv.removeEventListener('will-navigate', handleWillNavigate);
-  }, [handleWebviewLoad, handlePageTitle, handleWillNavigate]);
+  // Remove the separate cleanup useEffect since cleanup is now in wvRefCallback
 
   // ── Sync external URL ──
   useEffect(() => {
@@ -176,9 +199,9 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
           className="flex-1 px-3 py-1.5 rounded text-xs outline-none browser-url-input"
           style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }} placeholder="输入网址..." />
         <button onClick={toggleBookmark} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title={bookmarks.some(b => b.url === url) ? '取消收藏' : '收藏'}>
-          <StarIcon size={14} style={{ color: bookmarks.some(b => b.url === url) ? '#f59e0b' : 'var(--wiki-text2)' }} /></button>
+          <StarIcon size={14} style={{ color: bookmarks.some(b => b.url === url) ? 'var(--wiki-warning)' : 'var(--wiki-text2)' }} /></button>
         <button onClick={() => setShowHistory(!showHistory)} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title="历史记录">
-          <ClockIcon size={14} style={{ color: showHistory ? '#6366f1' : 'var(--wiki-text2)' }} /></button>
+          <ClockIcon size={14} style={{ color: showHistory ? 'var(--wiki-info)' : 'var(--wiki-text2)' }} /></button>
         <button onClick={openExternal} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title="系统浏览器" data-bypass-interceptor>
           <ExternalLinkIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
       </div>
@@ -188,12 +211,29 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         <div className="flex items-center gap-0.5 px-3 py-1.5 flex-shrink-0 overflow-x-auto" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
           {bookmarks.slice(0, 15).map(bm => (
             <div key={bm.url} className="group flex items-center gap-1 px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors flex-shrink-0">
-              <img src={faviconUrl(bm.url)} className="w-3.5 h-3.5" alt="" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src={faviconUrl(bm.url)} className="w-3.5 h-3.5" alt="" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               <button onClick={() => navigateTo(bm.url)} className="text-[11px] text-wiki-text2 hover:text-wiki-text truncate max-w-[120px]">{bm.title}</button>
               <button onClick={() => { setBookmarks(prev => { const n = prev.filter(b => b.url !== bm.url); saveAndSync(BM_KEY, n); return n; }); }}
                 className="hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full text-[10px] text-wiki-text3 hover:text-red-500 flex-shrink-0">×</button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* P1-11: Loading progress bar */}
+      <style>{`
+        @keyframes browser-loading-bar {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(100%); }
+          100% { transform: translateX(400%); }
+        }
+      `}</style>
+      {browserLoading && (
+        <div className="flex-shrink-0 h-0.5 w-full overflow-hidden" style={{ background: 'var(--wiki-surface2)' }}>
+          <div className="h-full w-1/3" style={{
+            background: 'linear-gradient(90deg, transparent, #6366f1, #8b5cf6, transparent)',
+            animation: 'browser-loading-bar 1.5s ease-in-out infinite',
+          }} />
         </div>
       )}
 
@@ -204,7 +244,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
           <div className="flex-1 overflow-y-auto">
             {history.length === 0 ? <div className="text-xs text-wiki-text3 p-4">暂无历史记录</div> : history.slice(0, 50).map(e => (
               <button key={e.url + e.visitedAt} onClick={() => navigateTo(e.url)} className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-wiki-surface2 transition-colors">
-                <img src={faviconUrl(e.url)} className="w-4 h-4 flex-shrink-0" alt="" onError={e2 => { (e2.target as HTMLImageElement).style.display = 'none'; }} />
+                <img src={faviconUrl(e.url)} className="w-4 h-4 flex-shrink-0" alt="" loading="lazy" onError={e2 => { (e2.target as HTMLImageElement).style.display = 'none'; }} />
                 <div className="flex-1 min-w-0"><div className="text-xs text-wiki-text truncate">{e.title}</div><div className="text-[10px] text-wiki-text3 truncate">{e.url}</div></div>
                 <span className="text-[10px] text-wiki-text3 flex-shrink-0">{new Date(e.visitedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
               </button>
@@ -218,12 +258,12 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         url ? <webview key={wvKey.current} ref={wvRefCallback} src={url} className="flex-1 w-full border-0" style={{ height: '100%' }} /> : (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-wiki-text3">
             <div className="text-4xl opacity-30">🌐</div>
-            <div className="text-sm">输入网址开始浏览</div>
+            <div className="text-sm">暂无浏览内容</div>
             {bookmarks.length > 0 && (
               <div className="grid grid-cols-4 gap-3 max-w-lg mt-2">
                 {bookmarks.slice(0, 8).map(bm => (
                   <button key={bm.url} onClick={() => navigateTo(bm.url)} className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-wiki-surface2 transition-colors">
-                    <img src={faviconUrl(bm.url)} className="w-7 h-7 rounded" alt="" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src={faviconUrl(bm.url)} className="w-7 h-7 rounded" alt="" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     <span className="text-[11px] text-wiki-text2 truncate w-20 text-center">{bm.title}</span>
                   </button>
                 ))}

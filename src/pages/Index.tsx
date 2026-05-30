@@ -1,10 +1,20 @@
 import React, { useState, useCallback, useMemo, useEffect, lazy, Suspense } from 'react';
 import Sidebar from '../components/Sidebar';
 import TitleBar from '../components/TitleBar';
+import ProfileWizard from '../components/ProfileWizard';
+import { useAuth } from '../context/AuthContext';
+import { hasProfile } from '../utils/profileStorage';
 import { XIcon, Trash2Icon } from 'lucide-react';
 
+/** Extracted base style for tab bar buttons */
+const TAB_STYLE: React.CSSProperties = {
+  maxWidth: '160px',
+  fontSize: '13px',
+  WebkitAppRegion: 'no-drag',
+};
+
 // Lazy-loaded pages (code splitting for faster initial load)
-const Dashboard = lazy(() => import('./Dashboard'));
+const Home = lazy(() => import('./Home'));
 const Requirements = lazy(() => import('./Requirements'));
 const Knowledge = lazy(() => import('./Knowledge'));
 const Insights = lazy(() => import('./Insights'));
@@ -13,6 +23,7 @@ const Model = lazy(() => import('./Model'));
 const Browser = lazy(() => import('./Browser'));
 const Messages = lazy(() => import('./Messages'));
 const Settings = lazy(() => import('./Settings'));
+const Profile = lazy(() => import('./Profile'));
 
 // Loading fallback spinner
 const Loading = () => (
@@ -36,7 +47,7 @@ interface GlobalTab {
 const MAX_TABS = 10;
 
 const MENU_MAP: Record<string, { type: string; title: string }> = {
-  dashboard: { type: 'dashboard', title: '仪表盘' },
+  home: { type: 'home', title: '首页' },
   requirements: { type: 'requirements', title: '采集库' },
   knowledge: { type: 'knowledge', title: '知识库' },
   insights: { type: 'insights', title: '洞察分析' },
@@ -44,12 +55,23 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
   model: { type: 'model', title: '模型配置' },
   messages: { type: 'messages', title: '消息中心' },
   settings: { type: 'settings', title: '系统设置' },
+  profile: { type: 'profile', title: '用户信息' },
 };
 
 export default function Index() {
-  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'dashboard', title: '仪表盘', type: 'dashboard' }]);
-  const [activeTabId, setActiveTabId] = useState('dashboard');
+  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'home', title: '首页', type: 'home' }]);
+  const [activeTabId, setActiveTabId] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+
+  const { userProfile, saveProfile, isLoading } = useAuth();
+
+  // First-time startup: show wizard if no profile exists
+  useEffect(() => {
+    if (!isLoading && !hasProfile()) {
+      setShowWizard(true);
+    }
+  }, [isLoading]);
 
   // Open a tab by type — if exists, switch to it; else create new
   const openTab = useCallback((type: string, title: string, extra?: Partial<GlobalTab>) => {
@@ -64,6 +86,14 @@ export default function Index() {
     });
   }, []);
 
+  /** Wizard completion handler */
+  const handleWizardComplete = useCallback((profile: Parameters<typeof saveProfile>[0]) => {
+    saveProfile(profile);
+    setShowWizard(false);
+    // Open profile tab after wizard completes
+    openTab('profile', '用户信息');
+  }, [saveProfile, openTab]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs(prev => {
       if (prev.length <= 1) return prev;
@@ -71,7 +101,7 @@ export default function Index() {
       const next = prev.filter(t => t.id !== tabId);
       if (activeTabId === tabId) {
         const newIdx = Math.min(idx, next.length - 1);
-        setActiveTabId(next[newIdx]?.id || 'dashboard');
+        setActiveTabId(next[newIdx]?.id || 'home');
       }
       return next;
     });
@@ -131,13 +161,11 @@ export default function Index() {
         const isActive = activeTabId === tab.id;
         return (
           <div key={tab.id} onClick={() => switchTab(tab.id)}
-            className="flex items-center justify-between gap-1 px-2.5 h-7 rounded-md cursor-pointer select-none transition-colors group flex-1 min-w-0"
+            className="flex items-center justify-between gap-1 px-2.5 h-7 rounded-lg cursor-pointer select-none transition-colors group flex-1 min-w-0"
             style={{
-              maxWidth: '160px',
-              fontSize: '13px',
+              ...TAB_STYLE,
               background: isActive ? 'var(--wiki-surface2)' : 'transparent',
               color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text3)',
-              WebkitAppRegion: 'no-drag',
             } as any}>
             <span className="truncate">{tab.title}</span>
             {tabs.length > 1 && (
@@ -153,8 +181,8 @@ export default function Index() {
         );
       })}
       {tabs.length > 1 && (
-        <button onClick={() => { setTabs([{ id: 'dashboard', title: '仪表盘', type: 'dashboard' }]); setActiveTabId('dashboard'); }}
-          className="px-1.5 h-7 rounded-md text-xs text-wiki-text3 hover:text-red-500 hover:bg-wiki-surface2 flex-shrink-0 flex items-center ml-0.5"
+        <button onClick={() => { setTabs([{ id: 'home', title: '首页', type: 'home' }]); setActiveTabId('home'); }}
+          className="px-1.5 h-7 rounded-lg text-xs text-wiki-text3 hover:text-red-500 hover:bg-wiki-surface2 flex-shrink-0 flex items-center ml-0.5"
           style={{ WebkitAppRegion: 'no-drag' } as any}>
           <Trash2Icon size={12} />
         </button>
@@ -166,8 +194,8 @@ export default function Index() {
   const page = useMemo(() => {
     if (!activeTab) return null;
     switch (activeTab.type) {
-      case 'dashboard':
-        return <Dashboard onOpenSubTab={(title, type, extra) => openTab(type, title, extra)} />;
+      case 'home':
+        return <Home onOpenTab={(type: string) => openTab(type, MENU_MAP[type]?.title || type)} />;
       case 'requirements':
         return <Requirements
           key={activeTab.id}
@@ -209,8 +237,10 @@ export default function Index() {
         return null; // browser tabs rendered separately below (kept alive with display:none)
       case 'settings':
         return <Lazy><Settings /></Lazy>;
+      case 'profile':
+        return <Lazy><Profile /></Lazy>;
       default:
-        return <Dashboard />;
+        return <Home onOpenTab={(type: string) => openTab(type, MENU_MAP[type]?.title || type)} />;
     }
   }, [activeTab, openTab, onCloseSelf]);
 
@@ -231,14 +261,15 @@ export default function Index() {
       {/* Below: Sidebar + Content */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
-          activeTab={activeTab?.type === 'requirements' ? 'requirements' :
-                     activeTab?.type === 'dashboard' ? 'dashboard' :
+          activeTab={                     activeTab?.type === 'home' ? 'home' :
+                     activeTab?.type === 'requirements' ? 'requirements' :
                      activeTab?.type === 'knowledge' ? 'knowledge' :
                      activeTab?.type === 'insights' ? 'insights' :
                      activeTab?.type === 'mcp' ? 'mcp' :
                      activeTab?.type === 'model' ? 'model' :
                      activeTab?.type === 'messages' ? 'messages' :
-                     activeTab?.type === 'settings' ? 'settings' : 'dashboard'}
+                     activeTab?.type === 'settings' ? 'settings' :
+                     activeTab?.type === 'profile' ? 'profile' : 'home'}
           onTabChange={(menuType) => {
             const item = MENU_MAP[menuType];
             if (item) handleMenuClick(item.type, item.title);
@@ -250,7 +281,9 @@ export default function Index() {
         {/* Main content area */}
         <main className="flex-1 overflow-hidden">
           <div className="h-full relative">
-            <Suspense fallback={<Loading />}>{page}</Suspense>
+            <div key={activeTabId} className="h-full page-fade-enter">
+              <Suspense fallback={<Loading />}>{page}</Suspense>
+            </div>
             {/* Browser tabs — always rendered, hidden when inactive (fix #1: keep webview alive) */}
             {tabs.filter(t => t.type === 'browser').map(tab => (
               <div key={tab.id} className="h-full absolute inset-0"
@@ -269,6 +302,13 @@ export default function Index() {
           </div>
         </main>
       </div>
+
+      {/* Profile Wizard — full-screen overlay for first-time setup */}
+      {showWizard && (
+        <div className="fixed inset-0 z-50 bg-wiki-bg">
+          <ProfileWizard onComplete={handleWizardComplete} />
+        </div>
+      )}
     </div>
   );
 }

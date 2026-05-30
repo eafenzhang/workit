@@ -13,14 +13,15 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
-    return stored || 'light';
+    try { return (localStorage.getItem('theme') as Theme | null) || 'light'; } catch { return 'light'; }
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored === 'light' || stored === 'dark') return stored;
-    if (stored === 'neutral' || stored === 'warm' || stored === 'ocean') return 'light';
+    try {
+      const stored = localStorage.getItem('theme') as Theme | null;
+      if (stored === 'light' || stored === 'dark') return stored;
+      if (stored === 'neutral' || stored === 'warm' || stored === 'ocean') return 'light';
+    } catch { /* fall through to media query */ }
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
@@ -51,7 +52,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
-    localStorage.setItem('theme', t);
+    try { localStorage.setItem('theme', t); } catch { /* quota exceeded or private browsing */ }
 
     if (t === 'system') {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -64,15 +65,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [applyTheme]);
 
   useEffect(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored === 'system') {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = (e: MediaQueryListEvent) => {
-        applyTheme(e.matches ? 'dark' : 'light');
-      };
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    }
+    try {
+      const stored = localStorage.getItem('theme') as Theme | null;
+      if (stored === 'system') {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = (e: MediaQueryListEvent) => {
+          applyTheme(e.matches ? 'dark' : 'light');
+        };
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+      }
+    } catch { /* ignore — localStorage unavailable */ }
   }, [applyTheme]);
 
   useEffect(() => {

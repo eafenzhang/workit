@@ -196,14 +196,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const viewType = localView ?? (initialTab?.type || 'requirements');
   const detailReqId = localReqId ?? initialTab?.reqId;
 
-  useEffect(() => {
-    fetchPage(1);
-    const api = (window as any).electronAPI;
-    const unsub = api?.onRequirementsChanged?.(() => fetchPage(1));
-    return () => { if (unsub) unsub(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Keyboard navigation for image preview lightbox
   useEffect(() => {
     if (!previewImage) return;
@@ -217,6 +209,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   }, [previewImage]);
 
   // Fetch single page from server with current filters (server-side pagination)
+  // MUST be defined before the useEffect below that calls fetchPage(1)
   const fetchPage = useCallback(async (pageNum: number) => {
     const params = new URLSearchParams();
     params.set('_page', String(pageNum));
@@ -243,6 +236,15 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
       setCurrentPage(1);
     }
   }, [search, filterStatus, filterPriority, filterCategory, filterAssignee, dateFrom, dateTo, pageSize]);
+
+  // Initial load + subscribe to changes
+  useEffect(() => {
+    fetchPage(1);
+    const api = (window as any).electronAPI;
+    const unsub = api?.onRequirementsChanged?.(() => fetchPage(1));
+    return () => { if (unsub) unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Trigger re-fetch on filter change (reset to page 1)
   useEffect(() => {

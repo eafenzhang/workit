@@ -7,7 +7,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 const QuickCapture = lazy(() => import('./components/QuickCapture'));
 
 const App = () => {
-  const isQCPopup = !!(window as any).electronAPI?.__isQCPopup;
+  const isQCPopup = !!window.electronAPI?.__isQCPopup;
   if (isQCPopup) return <Suspense fallback={null}><QuickCapture /></Suspense>;
 
   const [qcEnabled, setQcEnabled] = useState(false);
