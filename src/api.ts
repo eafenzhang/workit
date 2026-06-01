@@ -32,7 +32,10 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
     const parts = urlPath.replace('/api/', '').split('/');
     const method = opts?.method || 'GET';
     let body = undefined;
-    if (opts?.body && typeof opts.body === 'string') body = JSON.parse(opts.body);
+    if (opts?.body && typeof opts.body === 'string') {
+      try { body = JSON.parse(opts.body); }
+      catch { body = opts.body; }
+    }
     const query: Record<string, string> = {};
     if (queryStr) {
       for (const pair of queryStr.split('&')) {
