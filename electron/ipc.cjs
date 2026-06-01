@@ -551,6 +551,9 @@ function setupIPC(mainWindow, db) {
         }));
       case 'POST': {
         const { name, provider, baseUrl, apiKey, modelId, endpoint } = data || {};
+        // Check for duplicate provider+modelId
+        const existing = query(db, 'SELECT id FROM models WHERE provider = ? AND model_id = ?', [provider || '', modelId || '']);
+        if (existing.length > 0) return { error: '该模型已存在 (#' + existing[0][0] + ')' };
         const displayName = name || (provider + ' - ' + modelId);
         // P0-03: Encrypt API key before storage
         const encryptedKey = encryptApiKey(apiKey || '');

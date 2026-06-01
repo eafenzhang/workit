@@ -81,7 +81,7 @@ export default function Model() {
     setEditingId(m.id);
     setEditProvider(m.provider);
     setForm({
-      apiKey: '',
+      apiKey: m.hasApiKey ? (m.apiKey || '••••••••') : '',
       modelId: m.modelId,
       provider: m.provider,
       customName: '',
@@ -108,7 +108,7 @@ export default function Model() {
       const method = editingId ? 'PUT' : 'POST';
       const body: Record<string, unknown> = { modelId: f.modelId };
       if (editingId) {
-        if (f.apiKey) body.apiKey = f.apiKey;
+        if (f.apiKey && !/^\*{3,}/.test(f.apiKey) && f.apiKey !== '••••••••') body.apiKey = f.apiKey;
         body.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
         body.endpoint = formEndpoint;
       } else {
@@ -238,7 +238,7 @@ export default function Model() {
         </div>
       )}
 
-      {/* Provider grid */}
+      {/* Provider grid — show all presets, click to add/edit */}
       <div className="grid grid-cols-2 gap-3">
         {PROVIDERS.map((p) => {
           const saved = models.find((m) => m.provider === p.id);
@@ -359,8 +359,8 @@ export default function Model() {
 
             {/* Custom provider fields — show when provider is not in presets */}
             {editProvider && !pConfig && (
-              <div className="mb-4 flex gap-3">
-                <div className="flex-1">
+              <div className="mb-4 flex flex-col gap-3">
+                <div>
                   <label className="block text-xs font-medium text-wiki-text3 mb-1">名称</label>
                   <input
                     value={form.customName}
@@ -374,7 +374,7 @@ export default function Model() {
                     }}
                   />
                 </div>
-                <div className="flex-1">
+                <div>
                   <label className="block text-xs font-medium text-wiki-text3 mb-1">API 地址</label>
                   <input
                     value={form.customBaseUrl}
@@ -411,25 +411,12 @@ export default function Model() {
               </select>
             </div>
 
-            {/* API URL */}
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-wiki-text3 mb-1.5">API 地址</label>
-              <input
-                value={isCustom(editProvider) ? form.customBaseUrl : (pConfig?.baseUrl || '')}
-                onChange={(e) => {
-                  if (isCustom(editProvider)) setForm((f) => ({ ...f, customBaseUrl: e.target.value }));
-                }}
-                placeholder="https://api.example.com"
-                className="w-full px-3 py-2 rounded-lg text-xs outline-none disabled:opacity-60"
-                style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-              />
-            </div>
-
             {/* API Key */}
             <div className="mb-6">
               <ApiKeyInput
                 value={form.apiKey}
                 onChange={(v) => setForm((f) => ({ ...f, apiKey: v }))}
+                masked={editingId !== null && form.apiKey === '••••••••'}
               />
             </div>
 

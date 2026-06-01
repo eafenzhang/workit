@@ -4,10 +4,11 @@ import { EyeIcon, EyeOffIcon } from 'lucide-react';
 interface ApiKeyInputProps {
   value: string;
   onChange: (v: string) => void;
+  masked?: boolean;
 }
 
-/** Reusable API Key input with show/hide toggle */
-export default function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
+/** Reusable API Key input with show/hide toggle and saved-key mask support */
+export default function ApiKeyInput({ value, onChange, masked }: ApiKeyInputProps) {
   const [show, setShow] = useState(false);
 
   return (
@@ -18,8 +19,8 @@ export default function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
           type={show ? 'text' : 'password'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="输入 API Key"
-          className="flex-1 px-3 py-2 rounded-lg text-xs outline-none"
+          placeholder={masked ? '输入新 Key 覆盖已保存的 Key' : '输入 API Key'}
+          className="flex-1 px-3 py-2 rounded-lg text-xs outline-none placeholder:text-[10px]"
           style={{
             background: 'var(--wiki-surface2)',
             border: '1px solid var(--wiki-border)',
