@@ -1,368 +1,473 @@
 import { apiFetch, API } from '../api';
 import { useEffect, useState } from 'react';
-import { CpuIcon, PlusIcon, TrashIcon, StarIcon, CheckCircleIcon, KeyIcon, RefreshCwIcon, XIcon, ChevronDownIcon, Circle, EyeIcon, EyeOffIcon } from 'lucide-react';
+import { StarIcon, RefreshCwIcon, PlusIcon, XIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { PROVIDERS, type ProviderConfig, type ModelItem } from '../data/providers';
+import ProviderCard from '../components/ProviderCard';
+import ModelStatsBar from '../components/ModelStatsBar';
+import ApiKeyInput from '../components/ApiKeyInput';
+import ModelSelector from '../components/ModelSelector';
 
-// ── Toast message constants ──
 const TOAST = {
-  saveFirst: '请先保存模型配置',
-  connectionOk: '连接成功',
-  connectionFail: '连接失败，请检查配置',
-  connectionFailSimple: '连接失败',
-  fixErrors: '请修正表单中的错误',
+  deleted: '已删除',
+  saved: '已保存',
   updated: '已更新',
-  added: '添加成功',
-  opFailed: '操作失败',
-  saveFailed: '保存失败',
   setDefault: '已设为默认',
   setDefaultFailed: '设置失败',
-  deleted: '已删除',
-  switched: (name: string) => `已切换到 ${name}`,
-  disabled: '已禁用',
-  enabled: '已启用',
+  connOk: '连接成功',
+  connFail: '连接失败',
+  connFail2: '连接失败',
 } as const;
-interface ModelItem {
-  id: number;
-  name: string;
-  provider: string;
-  baseUrl: string;
-  apiKey: string;
-  hasApiKey: boolean;
-  modelId: string;
-  enabled: boolean;
-  isDefault: boolean;
-  createdAt: string;
-}
-
-interface Provider {
-  id: string;
-  name: string;
-  baseUrl: string;
-  endpoint: string;
-  models: { id: string; name: string }[];
-  authType: string;
-}
-
-const PROVIDER_LIST: Provider[] = [
-  { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/deepseek-chat', endpoint: '/chat/completions', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }, { id: 'deepseek-chat', name: 'DeepSeek Chat' }], authType: 'bearer' },
-  { id: 'minimax', name: 'MiniMax', baseUrl: 'https://api.minimaxi.com/anthropic', endpoint: '/v1/messages', models: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }, { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed' }, { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' }, { id: 'MiniMax-M2.5-lightning', name: 'MiniMax M2.5 Lightning' }], authType: 'bearer' },
-  { id: 'zhipu', name: '智谱 AI', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', endpoint: '/chat/completions', models: [{ id: 'glm-4-plus', name: 'GLM-4 Plus' }, { id: 'glm-4-flash', name: 'GLM-4 Flash' }, { id: 'glm-4v-plus', name: 'GLM-4V Plus' }], authType: 'bearer' },
-  { id: 'moonshot', name: 'Moonshot', baseUrl: 'https://api.moonshot.cn/v1', endpoint: '/chat/completions', models: [{ id: 'moonshot-v1-8k', name: 'Moonshot V1 8K' }, { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K' }, { id: 'moonshot-v1-128k', name: 'Moonshot V1 128K' }], authType: 'bearer' },
-  { id: 'dashscope', name: '阿里云百炼', baseUrl: 'https://dashscope.aliyuncs.com/api/v1', endpoint: '/services/aigc/text-generation/generation', models: [{ id: 'qwen-max', name: 'Qwen Max' }, { id: 'qwen-plus', name: 'Qwen Plus' }, { id: 'qwen-turbo', name: 'Qwen Turbo' }], authType: 'bearer' },
-  { id: 'volcengine', name: '火山引擎', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', endpoint: '/chat/completions', models: [{ id: 'doubao-pro-32k', name: '豆包 Pro 32K' }, { id: 'doubao-pro-128k', name: '豆包 Pro 128K' }, { id: 'doubao-lite-32k', name: '豆包 Lite 32K' }], authType: 'bearer' },
-  { id: 'tencent', name: '腾讯云', baseUrl: 'https://hunyuan.cloud.tencent.com', endpoint: '/hunyuan/v1/chat/completions', models: [{ id: 'hunyuan-pro', name: '混元 Pro' }, { id: 'hunyuan-standard', name: '混元 Standard' }], authType: 'bearer' },
-  { id: 'qianfan', name: '百度千帆', baseUrl: 'https://qianfan.baidubce.com/v2', endpoint: '/chat/completions', models: [{ id: 'ernie-4.0-8k', name: '文心一言 4.0 8K' }, { id: 'ernie-3.5-8k', name: '文心一言 3.5 8K' }], authType: 'bearer' },
-  { id: 'siliconflow', name: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', endpoint: '/chat/completions', models: [{ id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen2.5-72B' }, { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3' }, { id: 'THUDM/GLM-4-9B-Chat', name: 'GLM-4-9B' }], authType: 'bearer' },
-];
 
 export default function Model() {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
-  const [modelDropdown, setModelDropdown] = useState<number | null>(null);
+  const [editProvider, setEditProvider] = useState<string>('');
+  const [form, setForm] = useState({
+    apiKey: '',
+    modelId: '',
+    provider: '',
+    customName: '',
+    customBaseUrl: '',
+  });
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  // P2-5: Show/hide API key toggle
-  const [showApiKey, setShowApiKey] = useState(false);
-  // P2-10: Form validation errors
-  const [errors, setErrors] = useState<{ name?: string; apiKey?: string; baseUrl?: string }>({});
+  const [formEndpoint, setFormEndpoint] = useState('/chat/completions');
 
-  useEffect(() => { fetchModels(); }, []);
+  /* ---- data fetching ---- */
+
+  useEffect(() => {
+    fetchModels();
+  }, []);
 
   const fetchModels = () => {
     setLoading(true);
-    apiFetch(API.models).then(r => r.json()).then(data => {
-      setModels(Array.isArray(data) ? data : []);
-      setLoading(false);
-    }).catch(() => { setLoading(false); }); // 后端未就绪时静默处理
+    apiFetch(API.models)
+      .then((r) => r.json())
+      .then((d) => {
+        setModels(Array.isArray(d) ? d : []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   };
 
-  const handleProviderChange = (providerId: string) => {
-    const provider = PROVIDER_LIST.find(p => p.id === providerId);
-    setForm(f => ({ ...f, provider: providerId, modelId: provider?.models[0]?.id || '' }));
+  /* ---- modal helpers ---- */
+
+  const openAdd = (pid?: string) => {
+    setEditingId(null);
+    if (pid) {
+      setEditProvider(pid);
+      const p = PROVIDERS.find((x) => x.id === pid);
+      setForm({
+        apiKey: '', modelId: p?.models[0]?.id || 'custom',
+        provider: pid, customName: '', customBaseUrl: '',
+      });
+      setFormEndpoint(p?.endpoint || '/chat/completions');
+    } else {
+      // Custom provider mode
+      setEditProvider('custom');
+      setForm({
+        apiKey: '', modelId: 'custom',
+        provider: 'custom-' + Date.now(), customName: '', customBaseUrl: '',
+      });
+      setFormEndpoint('/chat/completions');
+    }
+    setShowModal(true);
   };
 
-  const handleTestConnection = async () => {
-    const newErrors: { name?: string; apiKey?: string; baseUrl?: string } = {};
-    if (!form.apiKey.trim()) newErrors.apiKey = '请输入 API Key';
-    const provider = PROVIDER_LIST.find(p => p.id === form.provider);
-    const baseUrl = provider?.baseUrl || '';
-    if (baseUrl && !/^https?:\/\/.+/.test(baseUrl)) newErrors.baseUrl = 'URL 格式不正确';
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+  const openEdit = (m: ModelItem) => {
+    setEditingId(m.id);
+    setEditProvider(m.provider);
+    setForm({
+      apiKey: '',
+      modelId: m.modelId,
+      provider: m.provider,
+      customName: '',
+      customBaseUrl: m.baseUrl,
+    });
+    setFormEndpoint(m.endpoint || '/chat/completions');
+    setShowModal(true);
+  };
+
+  /* ---- actions ---- */
+
+  const handleSave = async () => {
+    const f = form;
+    if (!f.apiKey.trim() && !editingId) {
+      toast.error('请输入 API Key');
+      return;
+    }
+    setSaving(true);
+    const isCustom = !PROVIDERS.find((p) => p.id === f.provider);
+    const p = PROVIDERS.find((x) => x.id === f.provider);
+    const mn = p?.models.find((m) => m.id === f.modelId)?.name || f.modelId;
+    try {
+      const url = editingId ? API.modelsById(editingId) : API.models;
+      const method = editingId ? 'PUT' : 'POST';
+      const body: Record<string, unknown> = { modelId: f.modelId };
+      if (editingId) {
+        if (f.apiKey) body.apiKey = f.apiKey;
+        body.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
+        body.endpoint = formEndpoint;
+      } else {
+        body.name = isCustom ? f.customName : `${p?.name} - ${mn}`;
+        body.provider = f.provider;
+        body.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
+        body.endpoint = formEndpoint;
+        body.apiKey = f.apiKey;
+      }
+      const r = await apiFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.success) {
+        toast.success(editingId ? TOAST.updated : TOAST.saved);
+        fetchModels();
+        setShowModal(false);
+      } else {
+        toast.error(d.error || '操作失败');
+      }
+    } catch {
+      toast.error('保存失败');
+    }
+    setSaving(false);
+  };
+
+  const testConn = async () => {
+    if (!form.apiKey.trim()) {
+      toast.error('请输入 API Key');
+      return;
+    }
     setTesting(true);
     try {
-      let modelIdToTest = editingId;
-      // P0-07: For new models, save first to get an ID so the backend can look up the decrypted key
-      if (!modelIdToTest) {
-        const modelName = provider?.models.find(m => m.id === form.modelId)?.name || form.modelId;
-        const saveRes = await apiFetch(API.models, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `${provider?.name} - ${modelName}`, provider: form.provider,
-            baseUrl: provider?.baseUrl || '', apiKey: form.apiKey, modelId: form.modelId,
-          }),
-        });
-        const saveData = await saveRes.json();
-        if (saveData?.id) {
-          modelIdToTest = saveData.id;
-          setEditingId(saveData.id);
-          fetchModels();
-        } else {
-          toast.error(TOAST.saveFirst);
-          setTesting(false);
-          return;
-        }
+      const isCustom = !PROVIDERS.find((p) => p.id === form.provider);
+      const p = PROVIDERS.find((x) => x.id === form.provider);
+      const mn = p?.models.find((m) => m.id === form.modelId)?.name || form.modelId;
+      const r = await apiFetch(API.models, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: form.provider,
+          baseUrl: isCustom ? form.customBaseUrl : p?.baseUrl || '',
+          apiKey: form.apiKey,
+          modelId: form.modelId,
+          name: isCustom ? form.customName : `${p?.name} - ${mn}`,
+        }),
+      });
+      const d = await r.json();
+      if (d?.id) {
+        const ok = await (window as any).electronAPI?.testModelConnection?.(d.id);
+        toast.success(ok ? TOAST.connOk : TOAST.connFail);
+        fetchModels();
+      } else {
+        toast.error('请先保存');
       }
-      const ok = await window.electronAPI?.testModelConnection?.(modelIdToTest);
-      if (ok) toast.success(TOAST.connectionOk);
-      else toast.error(TOAST.connectionFail);
     } catch {
-      toast.error(TOAST.connectionFailSimple);
+      toast.error(TOAST.connFail2);
     }
     setTesting(false);
   };
 
-  const handleSubmit = async () => {
-    // P2-10: Validate before saving
-    const newErrors: { name?: string; apiKey?: string; baseUrl?: string } = {};
-    if (!editingId && !form.apiKey.trim()) newErrors.apiKey = '请输入 API Key';
-    const provider = PROVIDER_LIST.find(p => p.id === form.provider);
-    const baseUrl = provider?.baseUrl || '';
-    if (baseUrl && !/^https?:\/\/.+/.test(baseUrl)) newErrors.baseUrl = 'URL 格式不正确';
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-      toast.error(TOAST.fixErrors);
-      return;
-    }
-    setSaving(true);
-    const modelName = provider?.models.find(m => m.id === form.modelId)?.name || form.modelId;
-
-    const url = editingId ? API.modelsById(editingId) : API.models;
-    const method = editingId ? 'PUT' : 'POST';
-    const body: Record<string, string> = { modelId: form.modelId };
-    if (editingId) {
-      if (form.apiKey) body.apiKey = form.apiKey;
-    } else {
-      body.name = `${provider?.name} - ${modelName}`;
-      body.provider = form.provider;
-      body.baseUrl = provider?.baseUrl || '';
-      body.apiKey = form.apiKey;
-    }
-
-    try {
-      const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(editingId ? TOAST.updated : TOAST.added);
-        setShowModal(false);
-        setEditingId(null);
-        setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' });
-        fetchModels();
-      } else {
-        toast.error(data.error || TOAST.opFailed);
-      }
-    } catch {
-      toast.error(TOAST.saveFailed);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEdit = (m: ModelItem) => {
-    setEditingId(m.id);
-    setForm({ provider: m.provider, modelId: m.modelId, apiKey: '' });
-    setShowModal(true);
-  };
-
   const setDefault = async (id: number) => {
-    const res = await apiFetch(API.modelsById(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isDefault: true }) });
-    const data = await res.json();
-    if (data.success) { toast.success(TOAST.setDefault); fetchModels(); }
-    else toast.error(data.error || TOAST.setDefaultFailed);
+    const r = await apiFetch(API.modelsById(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_default: true }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      toast.success(TOAST.setDefault);
+      fetchModels();
+    } else {
+      toast.error(d.error || TOAST.setDefaultFailed);
+    }
   };
 
-  const deleteModel = async (id: number) => {
-    if (!confirm('确定删除该模型配置？')) return;
-    const res = await apiFetch(API.modelsById(id), { method: 'DELETE' });
-    const data = await res.json();
-    if (data.success) { toast.success(TOAST.deleted); fetchModels(); }
+  const toggleModel = async (m: ModelItem) => {
+    await apiFetch(API.modelsById(m.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !m.enabled }),
+    });
+    fetchModels();
   };
 
-  const currentProvider = PROVIDER_LIST.find(p => p.id === form.provider);
-  const currentModels = currentProvider?.models || [];
+  const delModel = async (id: number) => {
+    if (!confirm('确定删除？')) return;
+    await apiFetch(API.modelsById(id), { method: 'DELETE' });
+    toast.success(TOAST.deleted);
+    fetchModels();
+  };
+
+  /* ---- derived ---- */
+
+  const isCustom = (provider: string) => !PROVIDERS.find((p) => p.id === provider);
+  const pConfig: ProviderConfig | null = editProvider ? PROVIDERS.find((p) => p.id === editProvider) ?? null : null;
+
+  /* ---- render ---- */
 
   return (
     <div className="flex flex-col gap-6 p-8 h-full overflow-y-auto scrollbar-thin">
+      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-wiki-text">模型配置</h1>
-          <p className="text-sm text-wiki-text2 mt-1">支持国内主流大模型供应商</p>
+          <p className="text-sm text-wiki-text2 mt-1">接入主流大模型</p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm({ provider: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: '' }); setErrors({}); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-          <PlusIcon size={16} />添加配置
+        <button
+          onClick={() => openAdd()}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
+        >
+          <PlusIcon size={16} />
+          自定义添加
         </button>
       </div>
 
-      {/* Default Banner */}
-      {models.find(m => m.isDefault) && (
-        <div className="flex items-center gap-3 p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
-          <StarIcon size={18} style={{ color: 'var(--wiki-text)' }} />
-          <span className="text-sm text-wiki-text">默认模型：</span>
-          <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>{models.find(m => m.isDefault)?.name}</span>
+      {/* Stats bar */}
+      <ModelStatsBar models={models} />
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCwIcon size={24} className="animate-spin" style={{ color: 'var(--wiki-text3)' }} />
         </div>
       )}
 
-      {models.length === 0 && !loading && (
-        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <CpuIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
-          <p className="mt-4 text-wiki-text2 text-sm">暂无模型配置</p>
-          <p className="mt-1 text-wiki-text3 text-xs">点击「添加配置」添加你的第一个模型</p>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4">
-        {models.map(m => (
-          <div key={m.id} className="rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: m.hasApiKey ? 'var(--wiki-surface2)' : 'rgba(239,68,68,0.1)' }}>
-                {m.hasApiKey ? <CheckCircleIcon size={24} style={{ color: 'var(--wiki-success)' }} /> : <Circle size={24} style={{ color: 'var(--wiki-danger)' }} />}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-semibold text-wiki-text">{m.name}</span>
-                  {m.isDefault && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>默认</span>}
-                  {!m.enabled && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>已禁用</span>}
-                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{m.provider}</span>
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-wiki-text3">
-                  <span>{m.baseUrl}</span>
-                  <span className="flex items-center gap-1">
-                    {m.hasApiKey ? <KeyIcon size={10} style={{ color: 'var(--wiki-success)' }} /> : <KeyIcon size={10} style={{ color: 'var(--wiki-danger)' }} />}
-                    {m.hasApiKey ? '已配置 Key' : '未配置'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Model Selector */}
-                <div className="relative">
-                  <button onClick={() => setModelDropdown(modelDropdown === m.id ? null : m.id)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
-                    {/* P0-08: Use model's own provider for dropdown, not form.provider */}
-                    <span>{(PROVIDER_LIST.find(p => p.id === m.provider)?.models || []).find(x => x.id === m.modelId)?.name || m.modelId}</span>
-                    <ChevronDownIcon size={14} />
-                  </button>
-                  {modelDropdown === m.id && (
-                    <div className="absolute top-full mt-1 right-0 w-56 rounded-lg py-1 z-50" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                      {/* P0-08: Use model's own provider for dropdown list */}
-                      {(PROVIDER_LIST.find(p => p.id === m.provider)?.models || []).map(pm => (
-                        <button key={pm.id} onClick={async () => {
-                          setModelDropdown(null);
-                          if (pm.id !== m.modelId) {
-                            await apiFetch(API.modelsById(m.id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: pm.id }) });
-                            toast.success(TOAST.switched(pm.name));
-                            fetchModels();
-                          }
-                        }} className="w-full px-3 py-2 text-left text-sm hover:bg-wiki-surface2 flex items-center justify-between" style={{ color: 'var(--wiki-text)' }}>
-                          <div><div>{pm.name}</div><div className="text-xs text-wiki-text3">{pm.id}</div></div>
-                          {pm.id === m.modelId && <CheckCircleIcon size={14} style={{ color: 'var(--wiki-text)' }} />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {!m.isDefault && (
-                  <button onClick={() => setDefault(m.id)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>设为默认</button>
-                )}
-                <button onClick={async () => {
-                  await apiFetch(API.modelsById(m.id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !m.enabled }) });
-                  toast.success(m.enabled ? TOAST.disabled : TOAST.enabled);
-                  fetchModels();
-                }} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: m.enabled ? 'var(--wiki-danger-bg)' : 'var(--wiki-success-bg)', color: m.enabled ? 'var(--wiki-danger)' : 'var(--wiki-success)' }}>
-                  {m.enabled ? '禁用' : '启用'}
-                </button>
-                <button onClick={() => handleEdit(m)} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>编辑</button>
-                <button onClick={() => deleteModel(m.id)} className="p-2 rounded-lg hover:bg-wiki-surface2 transition-colors">
-                  <TrashIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Provider grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {PROVIDERS.map((p) => {
+          const saved = models.find((m) => m.provider === p.id);
+          return (
+            <ProviderCard
+              key={p.id}
+              provider={p}
+              saved={saved}
+              onClick={() => (saved ? openEdit(saved) : openAdd(p.id))}
+              onSetDefault={saved && !saved.isDefault ? () => setDefault(saved.id) : undefined}
+            />
+          );
+        })}
       </div>
 
-      {loading && <div className="flex items-center justify-center py-8"><RefreshCwIcon size={24} className="animate-spin" style={{ color: 'var(--wiki-text3)' }} /></div>}
+      {/* Configured custom providers */}
+      {models.filter((m) => isCustom(m.provider)).length > 0 && (
+        <div>
+          <div className="text-xs font-medium text-wiki-text3 mb-2">自定义供应商</div>
+          <div className="grid grid-cols-2 gap-3">
+            {models
+              .filter((m) => isCustom(m.provider))
+              .map((m) => (
+                <div
+                  key={m.id}
+                  className="rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:brightness-95"
+                  style={{
+                    background: 'var(--wiki-surface)',
+                    border: `1px solid ${m.isDefault ? 'var(--wiki-warning)' : 'var(--wiki-border)'}`,
+                  }}
+                  onClick={() => openEdit(m)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-wiki-text">{m.name}</span>
+                      {m.isDefault && <StarIcon size={12} style={{ color: 'var(--wiki-warning)' }} />}
+                    </div>
+                    <div className="text-xs text-wiki-text3 mt-0.5">{m.baseUrl}</div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleModel(m);
+                      }}
+                      className="text-xs px-2 py-1 rounded"
+                      style={{
+                        background: m.enabled ? 'var(--wiki-danger-bg)' : 'var(--wiki-success-bg)',
+                        color: m.enabled ? 'var(--wiki-danger)' : 'var(--wiki-success)',
+                      }}
+                    >
+                      {m.enabled ? '禁用' : '启用'}
+                    </button>
+                    {!m.isDefault && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDefault(m.id);
+                        }}
+                        className="text-xs px-2 py-1 rounded"
+                        style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}
+                      >
+                        默认
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        delModel(m.id);
+                      }}
+                      className="p-1 rounded hover:bg-wiki-surface2"
+                    >
+                      <XIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
-      {/* Modal */}
+      {/* ============ ConfigModal ============ */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }}>
-          <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'var(--wiki-overlay-heavy)' }}
+        >
+          <div
+            className="w-[480px] rounded-xl p-6 max-h-[85vh] overflow-y-auto"
+            style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}
+          >
+            {/* Modal header */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-wiki-text">{editingId ? '编辑模型配置' : '添加模型配置'}</h2>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setErrors({}); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
+              <h2 className="text-lg font-semibold text-wiki-text">
+                {editingId ? '编辑模型配置' : '添加模型配置'}
+              </h2>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-1 rounded-lg hover:bg-wiki-surface2"
+              >
                 <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
 
-            {/* Provider */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>供应商</label>
-              <div className="grid grid-cols-3 gap-2">
-                {PROVIDER_LIST.map(p => (
-                  <button key={p.id} onClick={() => handleProviderChange(p.id)}
-                    className="px-3 py-2 rounded-lg text-xs text-left" style={{
-                      background: form.provider === p.id ? 'var(--wiki-surface2)' : 'var(--wiki-surface)',
-                      border: `1px solid ${form.provider === p.id ? 'var(--wiki-border)' : 'var(--wiki-border)'}`,
-                      color: 'var(--wiki-text)',
-                    }}>
-                    {p.name}
-                  </button>
-                ))}
+            {/* Provider name (add & edit mode) */}
+            {editProvider && pConfig && (
+              <div className="mb-4 px-3 py-2 rounded-lg" style={{ background: 'var(--wiki-surface2)' }}>
+                <div className="text-xs font-semibold text-wiki-text">{pConfig.name}</div>
+                <div className="text-[10px] text-wiki-text3">{pConfig.baseUrl}</div>
               </div>
+            )}
+            {editProvider && !pConfig && (
+              <div className="mb-4 px-3 py-2 rounded-lg" style={{ background: 'var(--wiki-surface2)' }}>
+                <div className="text-xs font-semibold text-wiki-text">{form.customName || '自定义供应商'}</div>
+                <div className="text-[10px] text-wiki-text3">自行配置 API 地址和模型</div>
+              </div>
+            )}
+
+            {/* Custom provider fields — show when provider is not in presets */}
+            {editProvider && !pConfig && (
+              <div className="mb-4 flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-wiki-text3 mb-1">名称</label>
+                  <input
+                    value={form.customName}
+                    onChange={(e) => setForm((f) => ({ ...f, customName: e.target.value }))}
+                    placeholder="供应商名称"
+                    className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                    style={{
+                      background: 'var(--wiki-surface2)',
+                      border: '1px solid var(--wiki-border)',
+                      color: 'var(--wiki-text)',
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-wiki-text3 mb-1">API 地址</label>
+                  <input
+                    value={form.customBaseUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, customBaseUrl: e.target.value }))}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                    style={{
+                      background: 'var(--wiki-surface2)',
+                      border: '1px solid var(--wiki-border)',
+                      color: 'var(--wiki-text)',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Model selector */}
+            <div className="mb-4">
+              <ModelSelector
+                models={pConfig?.models ?? []}
+                value={form.modelId}
+                onChange={(v) => setForm((f) => ({ ...f, modelId: v }))}
+              />
             </div>
 
-            {/* Model */}
+            {/* Protocol type */}
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>模型</label>
-              <select value={form.modelId} onChange={e => setForm(f => ({ ...f, modelId: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
-                {currentModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <label className="block text-xs font-medium text-wiki-text3 mb-1.5">协议类型</label>
+              <select value={formEndpoint} onChange={(e) => setFormEndpoint(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>
+                <option value="/chat/completions">OpenAI 兼容 (/chat/completions)</option>
+                <option value="/v1/messages">Anthropic 协议 (/v1/messages)</option>
               </select>
+            </div>
+
+            {/* API URL */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-wiki-text3 mb-1.5">API 地址</label>
+              <input
+                value={isCustom(editProvider) ? form.customBaseUrl : (pConfig?.baseUrl || '')}
+                onChange={(e) => {
+                  if (isCustom(editProvider)) setForm((f) => ({ ...f, customBaseUrl: e.target.value }));
+                }}
+                placeholder="https://api.example.com"
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none disabled:opacity-60"
+                style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+              />
             </div>
 
             {/* API Key */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--wiki-text)' }}>API Key</label>
-              <div className="relative">
-                <input type={showApiKey ? 'text' : 'password'} value={form.apiKey} onChange={e => { setForm(f => ({ ...f, apiKey: e.target.value })); setErrors(prev => ({ ...prev, apiKey: undefined })); }}
-                  placeholder={editingId ? '不修改请留空' : '输入 API Key'}
-                  className="w-full px-3 py-2 pr-10 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', border: errors.apiKey ? '1px solid var(--wiki-danger)' : '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-wiki-surface2 transition-colors"
-                  title={showApiKey ? '隐藏 API Key' : '显示 API Key'}
-                  aria-label={showApiKey ? '隐藏 API Key' : '显示 API Key'}
-                >
-                  {showApiKey ? <EyeOffIcon size={14} style={{ color: 'var(--wiki-text3)' }} /> : <EyeIcon size={14} style={{ color: 'var(--wiki-text3)' }} />}
-                </button>
-              </div>
-              {errors.apiKey && <div className="text-xs mt-1" style={{ color: 'var(--wiki-danger)' }}>{errors.apiKey}</div>}
+              <ApiKeyInput
+                value={form.apiKey}
+                onChange={(v) => setForm((f) => ({ ...f, apiKey: v }))}
+              />
             </div>
 
-            <div className="flex gap-3 mb-4">
-              <button onClick={handleTestConnection} disabled={testing}
-                className="flex-1 py-2 rounded-lg text-xs font-medium border transition-colors"
-                style={{ background: testing ? 'var(--wiki-surface2)' : 'transparent', color: testing ? 'var(--wiki-text3)' : 'var(--wiki-text)', borderColor: 'var(--wiki-border)' }}>
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={testConn}
+                disabled={testing}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+                style={{
+                  background: 'var(--wiki-surface2)',
+                  color: 'var(--wiki-text2)',
+                  border: '1px solid var(--wiki-border)',
+                }}
+              >
+                <RefreshCwIcon size={14} className={testing ? 'animate-spin' : ''} />
                 {testing ? '测试中...' : '测试连接'}
               </button>
-              <button onClick={handleSubmit} disabled={saving}
-                className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: saving ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: saving ? 'var(--wiki-text3)' : 'var(--wiki-bg)' }}>
-                {saving ? '保存中...' : (editingId ? '保存修改' : '添加')}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+                style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
+              >
+                {saving ? '保存中...' : editingId ? '更新' : '添加'}
               </button>
+              {editingId && (
+                <button
+                  onClick={() => {
+                    delModel(editingId);
+                    setShowModal(false);
+                  }}
+                  className="px-4 py-2.5 rounded-lg text-sm font-medium"
+                  style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}
+                >
+                  <XIcon size={14} />
+                </button>
+              )}
             </div>
           </div>
         </div>

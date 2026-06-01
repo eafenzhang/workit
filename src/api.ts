@@ -81,6 +81,12 @@ export const API = {
   mcpById: (id: number) => `/api/mcp/${id}`,
   mcpToken: (serverId: number) => `/api/mcp/${serverId}/token`,
   mcpServers: '/api/mcp_servers',
+  skills: '/api/skills',
+  skillsById: (id: string) => `/api/skills/${id}`,
+  plugins: '/api/claude_code_plugins',
+  pluginsById: (id: string) => `/api/claude_code_plugins/${id}`,
+  reqModules: '/api/requirement_modules',
+  reqModulesById: (id: number) => `/api/requirement_modules/${id}`,
   insights: {
     kpis: '/api/insights/kpis',
     charts: '/api/insights/charts',

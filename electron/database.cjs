@@ -9,7 +9,7 @@ let _dbPath = '';
 let _saveTimer = null;
 
 // P0-01: Whitelist for dynamic table names used in SQL
-const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models', 'knowledge_categories'];
+const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models', 'knowledge_categories', 'skills', 'claude_code_plugins', 'requirement_modules'];
 
 // P1-09: Whitelist for allowed IPC methods on db-query
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -134,6 +134,40 @@ async function initDatabase(userDataPath) {
     command TEXT NOT NULL, args TEXT DEFAULT '[]', env TEXT DEFAULT '{}', enabled INTEGER DEFAULT 0,
     config TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
+  db.run(`CREATE TABLE IF NOT EXISTS skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS claude_code_plugins (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS requirement_modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+  // Seed default modules if table is empty
+  const modCount = db.exec("SELECT COUNT(*) FROM requirement_modules")[0]?.values[0][0] || 0;
+  if (modCount === 0) {
+    const defaults = ['系统后台', '机构后台', '品牌门店', '收银终端', '用户端', '开放平台'];
+    const stmt = db.prepare('INSERT INTO requirement_modules (name, sort_order) VALUES (?, ?)');
+    defaults.forEach((name, i) => stmt.run([name, i]));
+    stmt.free();
+  }
   db.run(`CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, provider TEXT NOT NULL,
     base_url TEXT DEFAULT '', api_key TEXT DEFAULT '', model_id TEXT NOT NULL,
@@ -185,6 +219,14 @@ async function initDatabase(userDataPath) {
   } catch (e) {
     // Column may already exist — ignore
     log('initDatabase: content_blocks migration (column may already exist)', e);
+  }
+
+  // Migrate: add endpoint column to models table
+  try {
+    db.run("ALTER TABLE models ADD COLUMN endpoint TEXT DEFAULT '/chat/completions'");
+    log('initDatabase: endpoint column added to models');
+  } catch (e) {
+    // Column may already exist — ignore
   }
 
   // Performance: add index for list query ORDER BY created_at DESC
@@ -279,10 +321,10 @@ function getDefaultModel(db) {
       return null;
     }
     log('getDefaultModel: using first enabled model: ' + any[0][1]);
-    return { baseUrl: any[0][3], apiKey: decryptApiKey(any[0][4]), modelId: any[0][5] };
+    return { baseUrl: any[0][3], apiKey: decryptApiKey(any[0][4]), modelId: any[0][5], endpoint: any[0][10] || '' };
   }
   log('getDefaultModel: using default model: ' + rows[0][1]);
-  return { baseUrl: rows[0][3], apiKey: decryptApiKey(rows[0][4]), modelId: rows[0][5] };
+  return { baseUrl: rows[0][3], apiKey: decryptApiKey(rows[0][4]), modelId: rows[0][5], endpoint: rows[0][10] || '' };
 }
 
 async function callAI(db, prompt) {
@@ -306,13 +348,13 @@ async function callAI(db, prompt) {
  * @returns {Promise<{content?: string, error?: string}>} The AI response content or an error
  */
 async function chatWithAI(db, { providerId, modelId, messages, systemPrompt }) {
-  // If provider/model specified, look up that specific config
+  // Look up model by provider + model_id (not database row id)
   let model;
   if (providerId && modelId) {
-    const rows = query(db, 'SELECT baseUrl, apiKey, modelId FROM models WHERE id = ?', [providerId]);
+    const rows = query(db, 'SELECT base_url, api_key, model_id, endpoint FROM models WHERE provider = ? AND model_id = ? AND enabled = 1 LIMIT 1', [providerId, modelId]);
     if (rows.length > 0) {
       const apiKey = decryptApiKey(rows[0][1]);
-      model = { baseUrl: rows[0][0], apiKey: apiKey, modelId: modelId };
+      model = { baseUrl: rows[0][0], apiKey: apiKey, modelId: rows[0][2], endpoint: rows[0][3] || '' };
     }
   }
   if (!model) model = getDefaultModel(db);
@@ -344,9 +386,10 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt }) {
  * @throws {Error} If the API returns an error or unexpected format
  */
 async function _callModel(model, messages) {
-  const isAnthropic = model.baseUrl.includes('anthropic');
+  const isAnthropic = model.endpoint?.includes('messages') || model.baseUrl.includes('anthropic');
   let url = model.baseUrl.replace(/\/+$/, '');
-  if (isAnthropic) url += '/v1/messages';
+  if (model.endpoint) url += model.endpoint;
+  else if (isAnthropic) url += '/v1/messages';
   else url += '/v1/chat/completions';
 
   const headers = { 'Content-Type': 'application/json' };
@@ -430,6 +473,22 @@ function formatUserProfile(r) {
   };
 }
 
+function formatSkill(r) {
+  return {
+    id: r[0], name: r[1], description: r[2], source: r[3],
+    enabled: r[4] === 1, config: (() => { try { return JSON.parse(r[5]||'{}'); } catch { return {}; } })(),
+    createdAt: r[6], updatedAt: r[7],
+  };
+}
+
+function formatPlugin(r) {
+  return {
+    id: r[0], name: r[1], description: r[2], source: r[3],
+    enabled: r[4] === 1, config: (() => { try { return JSON.parse(r[5]||'{}'); } catch { return {}; } })(),
+    createdAt: r[6], updatedAt: r[7],
+  };
+}
+
 module.exports = {
   ALLOWED_TABLES,
   ALLOWED_METHODS,
@@ -447,4 +506,6 @@ module.exports = {
   formatReqList,
   formatDoc,
   formatUserProfile,
+  formatSkill,
+  formatPlugin,
 };

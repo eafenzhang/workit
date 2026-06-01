@@ -440,59 +440,18 @@ export default function QuickCapture() {
     <>
       {!isStandalone && enabled && (
       <div
-        className="fixed z-40 flex items-center gap-0"
-        style={{
-          left: (() => { try { return localStorage.getItem('qc-float-x') || 'auto'; } catch { return 'auto'; } })(),
-          top: (() => { try { return localStorage.getItem('qc-float-y') || 'auto'; } catch { return 'auto'; } })(),
-          right: (() => { const x = (() => { try { return localStorage.getItem('qc-float-x'); } catch { return null; } })(); return x ? 'auto' : '24px'; })(),
-          bottom: (() => { const y = (() => { try { return localStorage.getItem('qc-float-y'); } catch { return null; } })(); return y ? 'auto' : '24px'; })(),
-        }}
+        className="fixed z-40"
+        style={{ right: '24px', bottom: '24px' }}
       >
-        {/* Clickable button area — not draggable */}
+        {/* Quick capture button */}
         <button
           onClick={handleFloatClick}
           className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 opacity-80 hover:opacity-100"
           style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
-          title="快速采集（点击采集，拖拽右侧手柄移动）"
+          title="快速采集"
         >
           <ClipboardPasteIcon size={20} style={{ color: 'var(--wiki-bg)' }} />
         </button>
-        {/* Drag handle — only this area triggers dragging */}
-        <div
-          className="w-4 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-r-full opacity-60 hover:opacity-100 transition-opacity flex-shrink-0"
-          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}
-          title="拖拽移动浮窗"
-          onMouseDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            const parent = e.currentTarget.parentElement!;
-            const startX = e.clientX, startY = e.clientY;
-            const rect = parent.getBoundingClientRect();
-            const offsetX = startX - rect.left, offsetY = startY - rect.top;
-            const onMove = (ev: MouseEvent) => {
-              parent.style.left = (ev.clientX - offsetX) + 'px';
-              parent.style.top = (ev.clientY - offsetY) + 'px';
-              parent.style.right = 'auto';
-              parent.style.bottom = 'auto';
-            };
-            const onUp = () => {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              try { localStorage.setItem('qc-float-x', parent.style.left); localStorage.setItem('qc-float-y', parent.style.top); } catch {}
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          }}
-        >
-          <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" opacity="0.8">
-            <circle cx="2" cy="2" r="1.2" />
-            <circle cx="6" cy="2" r="1.2" />
-            <circle cx="2" cy="7" r="1.2" />
-            <circle cx="6" cy="7" r="1.2" />
-            <circle cx="2" cy="12" r="1.2" />
-            <circle cx="6" cy="12" r="1.2" />
-          </svg>
-        </div>
       </div>
       )}
 
@@ -507,12 +466,7 @@ export default function QuickCapture() {
                 <span className="text-sm font-semibold text-wiki-text">快速采集</span>
               </div>
               {!isStandalone && (
-              <button onClick={() => {
-                // P1-08: Confirm before closing QC window if there's content
-                const hasContent = captured?.items.some(i => i.type !== 'text' || i.content.trim()) || desc.trim();
-                if (hasContent && !window.confirm('关闭窗口将丢失已采集的内容，是否继续？')) return;
-                setShowModal(false); setCaptured(null); setDesc('');
-              }} className="p-1 rounded-lg hover:bg-wiki-surface2">
+              <button onClick={() => { setShowModal(false); setCaptured(null); setDesc(''); }} className="p-1 rounded-lg hover:bg-wiki-surface2">
                 <XIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
               </button>
               )}
@@ -684,10 +638,7 @@ export default function QuickCapture() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  // P1-08: Confirm before closing QC window if there's content
-                  const hasContent = captured?.items.some(i => i.type !== 'text' || i.content.trim()) || desc.trim();
                   const close = () => { if (isStandalone) window.electronAPI?.closeQCForm?.(); else { setShowModal(false); setCaptured(null); setDesc(''); } };
-                  if (hasContent && !window.confirm('关闭窗口将丢失已采集的内容，是否继续？')) return;
                   close();
                 }}
                 className="flex-1 py-2 rounded-lg text-xs"

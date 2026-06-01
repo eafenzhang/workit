@@ -200,6 +200,9 @@
     @apply border-border outline-ring/50;
   }
   html, body {
+    height: 100%;
+  }
+  #root {
     overflow: hidden;
     height: 100%;
   }
@@ -360,4 +363,19 @@ select option {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--wiki-text3);
+}
+
+/* Portal mount point for dropdowns/overlays that escape overflow clipping */
+#portal-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 99999;
+  pointer-events: none;
+}
+#portal-root > * {
+  pointer-events: auto;
 }

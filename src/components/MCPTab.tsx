@@ -1,6 +1,6 @@
 import { apiFetch, API } from '../api';
 import { useEffect, useState } from 'react';
-import { ServerIcon, PlusIcon, TrashIcon, XIcon, KeyIcon, CheckCircleIcon, CircleIcon, PlugIcon, DownloadIcon, UploadIcon, EditIcon } from 'lucide-react';
+import { ServerIcon, PlusIcon, TrashIcon, XIcon, KeyIcon, CheckCircleIcon, PlugIcon, DownloadIcon, UploadIcon, EditIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ── Toast message constants ──
@@ -18,6 +18,7 @@ const TOAST = {
   saveFailed: '保存失败',
   dataError: (msg: string) => msg || '添加失败',
 } as const;
+
 interface MCPServer {
   id: number;
   name: string;
@@ -30,13 +31,13 @@ interface MCPServer {
   createdAt: string;
 }
 
-export default function MCP() {
+export default function MCPTab() {
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [showAdd, setShowAdd] = useState(false);
-  // P1-01: editingId for edit mode — non-null means editing existing server
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showToken, setShowToken] = useState<number | null>(null);
   const [tokenInput, setTokenInput] = useState('');
+  const [errors, setErrors] = useState<{ name?: string; command?: string }>({});
 
   useEffect(() => {
     fetchServers();
@@ -85,10 +86,11 @@ export default function MCP() {
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `mcp-servers-${new Date().toISOString().slice(0,10)}.json`;
+    a.href = url; a.download = `mcp-servers-${new Date().toISOString().slice(0, 10)}.json`;
     a.click(); URL.revokeObjectURL(url);
     toast.success(TOAST.configExported);
   };
+
   const handleImport = () => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = '.json';
@@ -105,7 +107,7 @@ export default function MCP() {
       if (!Array.isArray(configs)) return toast.error(TOAST.invalidConfig);
       let imported = 0;
       for (const cfg of configs) {
-        await apiFetch(API.mcpServers, { method: 'POST', body: JSON.stringify(cfg) });
+        await apiFetch(API.mcp, { method: 'POST', body: JSON.stringify(cfg) });
         imported++;
       }
       toast.success(TOAST.imported(imported));
@@ -114,37 +116,44 @@ export default function MCP() {
     input.click();
   };
 
+  const handleAdd = () => {
+    setEditingId(null);
+    setShowAdd(true);
+    setErrors({});
+  };
+
   return (
-    <div className="flex flex-col gap-6 p-8 h-full overflow-y-auto scrollbar-thin">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-wiki-text">MCP工具</h1>
-          <p className="text-sm text-wiki-text2 mt-1">管理和配置 MCP 服务器</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleImport} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
-            <UploadIcon size={14} />导入
-          </button>
-          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
-            <DownloadIcon size={14} />导出
-          </button>
-          <button onClick={() => { setEditingId(null); setShowAdd(true); setErrors({}); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium"
-            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-            <PlusIcon size={16} />添加服务
-          </button>
-        </div>
+    <>
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 px-8 py-3">
+        <button onClick={handleImport}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+          <UploadIcon size={14} />导入
+        </button>
+        <button onClick={handleExport}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+          <DownloadIcon size={14} />导出
+        </button>
+        <button onClick={handleAdd}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          <PlusIcon size={16} />添加服务
+        </button>
       </div>
 
+      {/* Empty state */}
       {servers.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 mx-8 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <ServerIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-wiki-text2 text-sm">暂无 MCP 服务</p>
           <p className="mt-1 text-wiki-text3 text-xs">点击「添加服务」开始配置</p>
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
+      {/* Server list */}
+      <div className="flex flex-col gap-4 px-8 pb-8">
         {servers.map((server) => (
           <div key={server.id} className="rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center gap-4">
@@ -178,7 +187,6 @@ export default function MCP() {
                 >
                   {server.enabled ? '禁用' : '启用'}
                 </button>
-                {/* P1-01: Edit button to enter edit mode */}
                 <button onClick={() => { setEditingId(server.id); setShowAdd(true); }} className="p-2 rounded-lg hover:bg-wiki-surface2 transition-colors">
                   <EditIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
                 </button>
@@ -226,15 +234,14 @@ export default function MCP() {
         </div>
       )}
 
-      {/* Add Server Modal */}
-      {/* P1-01: Pass editingId and server data for edit mode */}
+      {/* Add / Edit Server Modal */}
       {showAdd && <AddServerModal
         onClose={() => { setShowAdd(false); setEditingId(null); setErrors({}); }}
         onAdd={fetchServers}
         editingId={editingId}
         editData={editingId ? servers.find(s => s.id === editingId) || null : null}
       />}
-    </div>
+    </>
   );
 }
 
@@ -262,7 +269,6 @@ function AddServerModal({ onClose, onAdd, editingId, editData }: {
       return;
     }
     setSaving(true);
-    // P1-01: Use PUT for edit, POST for create
     const url = isEdit ? API.mcpById(editingId) : API.mcp;
     const method = isEdit ? 'PUT' : 'POST';
     const body = isEdit
@@ -293,7 +299,6 @@ function AddServerModal({ onClose, onAdd, editingId, editData }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
       <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-6">
-          {/* P1-01: Dynamic title based on mode */}
           <h2 className="text-lg font-semibold text-wiki-text">{isEdit ? '编辑服务' : '添加 MCP 服务器'}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-wiki-surface2">
             <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />

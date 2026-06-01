@@ -1,89 +1,20 @@
 sequenceDiagram
-    participant User
-    participant HomePage as Home.tsx
-    participant HomeInput as HomeInput.tsx
-    participant LS as localStorage
-    participant IndexPage as Index.tsx
+    participant Page as Model.tsx
+    participant API as apiFetch
+    participant Backend as /api/models
+    participant DB as SQLite
 
-    User->>HomeInput: 输入文本 + Enter
-    HomeInput->>HomePage: onSend(content)
-    HomePage->>HomePage: 生成 userMessage (id, role:'user', content, timestamp)
-    HomePage->>LS: 追加到对话历史
-    HomePage->>HomePage: 生成 assistant placeholder (P0: 静态回复)
-    HomePage->>LS: 追加 assistant 回复
-    HomePage->>HomePage: setMessages 更新 UI
-    HomePage->>HomePage: scrollToBottom()
+    Page->>API: GET /api/models
+    API->>Backend: 查询所有模型配置
+    Backend->>DB: SELECT * FROM models
+    DB-->>Backend: rows
+    Backend-->>API: ModelItem[]
+    API-->>Page: setModels(data)
 
----
+    Page->>API: GET /api/models/providers/list
+    API->>Backend: 获取供应商列表
+    Backend-->>API: ProviderConfig[]
+    API-->>Page: setProviders(data)
 
-sequenceDiagram
-    participant Insights as Insights.tsx
-    participant apiFetch as api.ts
-    participant IPC as electron/ipc.cjs
-    participant DB as database.cjs
-
-    Insights->>Insights: useEffect → fetchData()
-    
-    par 并行请求
-        Insights->>apiFetch: GET /api/insights/kpis
-        apiFetch->>IPC: db-query(GET, insights/kpis)
-        IPC->>DB: query (4-KPI stats)
-        DB-->>IPC: InsightKPI[4]
-        IPC-->>apiFetch: result
-        apiFetch-->>Insights: kpis
-
-        Insights->>apiFetch: GET /api/insights/charts
-        apiFetch->>IPC: db-query(GET, insights/charts)
-        IPC->>DB: query (areaData + barData + pieData)
-        DB-->>IPC: InsightChartData
-        IPC-->>apiFetch: result
-        apiFetch-->>Insights: charts
-
-        Insights->>apiFetch: GET /api/insights/activities?limit=20
-        apiFetch->>IPC: db-query(GET, insights/activities)
-        IPC->>DB: query (最近20条操作)
-        DB-->>IPC: ActivityItem[20]
-        IPC-->>apiFetch: result
-        apiFetch-->>Insights: activities
-
-        Insights->>apiFetch: GET /api/insights/ai-insights
-        apiFetch->>IPC: db-query(GET, insights/ai-insights)
-        IPC-->>apiFetch: cached insights
-        apiFetch-->>Insights: aiInsights
-    end
-
-    Insights->>Insights: setState 更新 UI (KPI → 图表 → AI洞察 → 活动时间线)
-
----
-
-sequenceDiagram
-    participant App as main.tsx
-    participant Auth as AuthContext
-    participant Index as Index.tsx
-    participant Home as Home.tsx
-    participant LS as localStorage
-
-    App->>Auth: AuthProvider 挂载
-    Auth->>LS: 读取 userProfile
-    Auth->>App: isLoading → false
-    App->>Index: 渲染 Index
-    Index->>Index: useState tabs = [{id:'home', title:'首页', type:'home'}]
-    Index->>Index: activeTabId = 'home'
-    Index->>Index: useMemo → page = <Home />
-    Index->>Home: lazy load + render
-    Home->>LS: 读取对话历史
-    Home->>Home: 渲染欢迎语 + 输入框 + 快捷入口
-
----
-
-sequenceDiagram
-    participant User
-    participant Sidebar
-    participant Index as Index.tsx
-
-    User->>Sidebar: 点击「首页」图标
-    Sidebar->>Index: onTabChange('home')
-    Index->>Index: MENU_MAP['home'] → {type:'home', title:'首页'}
-    Index->>Index: openTab('home', '首页')
-    Index->>Index: 定位到已有 home tab 或新建
-    Index->>Index: setActiveTabId → 切换到 home
+    Page->>Page: getTokenStats() from localStorage
+    Page->>Page: 渲染 StatsBar + ProviderGrid

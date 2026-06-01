@@ -16,6 +16,8 @@ const {
   getDefaultModel,
   encryptApiKey,
   decryptApiKey,
+  formatSkill,
+  formatPlugin,
 } = require('./database.cjs');
 const { getMainWindow, getQCWindow } = require('./window.cjs');
 
@@ -77,16 +79,18 @@ function setupIPC(mainWindow, db) {
   // P0-07: Test model connection — look up decrypted API key by modelId from DB
   ipcMain.handle('test-model-connection', async (_, modelId) => {
     try {
-      const rows = query(db, 'SELECT base_url, api_key, model_id FROM models WHERE id = ?', [modelId]);
+      const rows = query(db, 'SELECT base_url, api_key, model_id, endpoint FROM models WHERE id = ?', [modelId]);
       if (!rows.length) { log('Model test: model not found id=' + modelId); return false; }
       const baseUrl = rows[0][0];
       const apiKey = decryptApiKey(rows[0][1]);
       const modelIdFromDb = rows[0][2];
+      const endpoint = rows[0][3];
       if (!apiKey) { log('Model test: no API key for id=' + modelId); return false; }
 
-      const isAnthropic = baseUrl.includes('anthropic');
+      const isAnthropic = (endpoint || '').includes('messages') || baseUrl.includes('anthropic');
       let url = baseUrl.replace(/\/+$/, '');
-      if (isAnthropic) url += '/v1/messages';
+      if (endpoint) url += endpoint;
+      else if (isAnthropic) url += '/v1/messages';
       else url += '/v1/chat/completions';
 
       log('Model test: ' + url);
@@ -128,6 +132,12 @@ function setupIPC(mainWindow, db) {
         return handleDocuments(method, data, id);
       case 'mcp':
         return handleMcp(method, data, id);
+      case 'skills':
+        return handleSkills(method, data, id);
+      case 'claude_code_plugins':
+        return handlePlugins(method, data, id);
+      case 'requirement_modules':
+        return handleModules(method, data, id);
       case 'models':
         return handleModels(method, data, id);
       case 'insights/kpis': {
@@ -536,21 +546,20 @@ function setupIPC(mainWindow, db) {
       case 'GET':
         return query(db, 'SELECT * FROM models ORDER BY is_default DESC, id DESC').map(r => ({
           id: r[0], name: r[1], provider: r[2], baseUrl: r[3], apiKey: r[4] ? (() => { try { const dec = decryptApiKey(r[4]); return '******' + (dec ? dec.slice(-4) : ''); } catch { return '******'; } })() : '',
-          hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], createdAt: r[9],
+          hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], endpoint: r[10] || '/chat/completions', createdAt: r[9],
         }));
       case 'POST': {
-        const { name, provider, baseUrl, apiKey, modelId } = data || {};
+        const { name, provider, baseUrl, apiKey, modelId, endpoint } = data || {};
         const displayName = name || (provider + ' - ' + modelId);
         // P0-03: Encrypt API key before storage
         const encryptedKey = encryptApiKey(apiKey || '');
-        run(db, 'INSERT INTO models (name, provider, base_url, api_key, model_id, enabled) VALUES (?,?,?,?,?,1)',
-          [displayName, provider||'', baseUrl||'', encryptedKey, modelId||'']);
-        // P1-03: Fixed wrong table name — was 'documents', should be 'models'
+        run(db, 'INSERT INTO models (name, provider, base_url, api_key, model_id, endpoint, enabled) VALUES (?,?,?,?,?,?,1)',
+          [displayName, provider||'', baseUrl||'', encryptedKey, modelId||'', endpoint||'/chat/completions']);
         return { success: true, id: query(db, 'SELECT MAX(id) FROM models')[0][0] };
       }
       case 'PUT': {
         if (!id) return { error: 'No id' };
-        const { is_default, apiKey, modelId, name, enabled } = data || {};
+        const { is_default, apiKey, modelId, name, enabled, endpoint } = data || {};
         if (is_default) run(db, 'UPDATE models SET is_default = 0');
         // P0-02: Use field whitelist for Models PUT to prevent SQL injection
         const fields = []; const vals = [];
@@ -560,6 +569,7 @@ function setupIPC(mainWindow, db) {
         if (modelId !== undefined) { fields.push('model_id=?'); vals.push(modelId); }
         if (is_default !== undefined) { fields.push('is_default=?'); vals.push(is_default?1:0); }
         if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
+        if (endpoint !== undefined) { fields.push('endpoint=?'); vals.push(endpoint); }
         if (fields.length) { vals.push(id); run(db, `UPDATE models SET ${fields.join(',')} WHERE id=?`, vals); }
         return { success: true };
       }
@@ -567,6 +577,117 @@ function setupIPC(mainWindow, db) {
       default: return { error: 'Unknown method' };
     }
     } catch (e) { log('handleModels ERROR', e); return { error: 'Failed to load', message: e.message }; }
+  }
+
+  function handleSkills(method, data, id) {
+    try {
+      switch (method) {
+        case 'GET':
+          if (id) {
+            const r = query(db, 'SELECT * FROM skills WHERE id = ?', [id]);
+            return r.length ? formatSkill(r[0]) : { error: 'Not found' };
+          }
+          return query(db, 'SELECT * FROM skills ORDER BY created_at DESC').map(formatSkill);
+        case 'POST': {
+          const { name, description, source, enabled, config } = data || {};
+          const genId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+          run(db, 'INSERT INTO skills (id, name, description, source, enabled, config) VALUES (?,?,?,?,?,?)',
+            [genId, name||'', description||'', source||'', enabled !== false ? 1 : 0, JSON.stringify(config||{})]);
+          return { success: true, id: genId };
+        }
+        case 'PUT': {
+          if (!id) return { error: 'No id' };
+          const { name, description, source, enabled, config } = data || {};
+          const fields = [];
+          const values = [];
+          if (name !== undefined) { fields.push('name=?'); values.push(name); }
+          if (description !== undefined) { fields.push('description=?'); values.push(description); }
+          if (source !== undefined) { fields.push('source=?'); values.push(source); }
+          if (enabled !== undefined) { fields.push('enabled=?'); values.push(enabled ? 1 : 0); }
+          if (config !== undefined) { fields.push('config=?'); values.push(JSON.stringify(config)); }
+          if (fields.length === 0) return { error: 'No fields to update' };
+          fields.push("updated_at=datetime('now','localtime')");
+          values.push(id);
+          run(db, `UPDATE skills SET ${fields.join(',')} WHERE id=?`, values);
+          return { success: true };
+        }
+        case 'DELETE':
+          if (id) run(db, 'DELETE FROM skills WHERE id = ?', [id]);
+          return { success: true };
+        default: return { error: 'Unknown method' };
+      }
+    } catch (e) { log('handleSkills ERROR', e); return []; }
+  }
+
+  function handlePlugins(method, data, id) {
+    try {
+      switch (method) {
+        case 'GET':
+          if (id) {
+            const r = query(db, 'SELECT * FROM claude_code_plugins WHERE id = ?', [id]);
+            return r.length ? formatPlugin(r[0]) : { error: 'Not found' };
+          }
+          return query(db, 'SELECT * FROM claude_code_plugins ORDER BY created_at DESC').map(formatPlugin);
+        case 'POST': {
+          const { name, description, source, enabled, config } = data || {};
+          const genId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+          run(db, 'INSERT INTO claude_code_plugins (id, name, description, source, enabled, config) VALUES (?,?,?,?,?,?)',
+            [genId, name||'', description||'', source||'', enabled !== false ? 1 : 0, JSON.stringify(config||{})]);
+          return { success: true, id: genId };
+        }
+        case 'PUT': {
+          if (!id) return { error: 'No id' };
+          const { name, description, source, enabled, config } = data || {};
+          const fields = [];
+          const values = [];
+          if (name !== undefined) { fields.push('name=?'); values.push(name); }
+          if (description !== undefined) { fields.push('description=?'); values.push(description); }
+          if (source !== undefined) { fields.push('source=?'); values.push(source); }
+          if (enabled !== undefined) { fields.push('enabled=?'); values.push(enabled ? 1 : 0); }
+          if (config !== undefined) { fields.push('config=?'); values.push(JSON.stringify(config)); }
+          if (fields.length === 0) return { error: 'No fields to update' };
+          fields.push("updated_at=datetime('now','localtime')");
+          values.push(id);
+          run(db, `UPDATE claude_code_plugins SET ${fields.join(',')} WHERE id=?`, values);
+          return { success: true };
+        }
+        case 'DELETE':
+          if (id) run(db, 'DELETE FROM claude_code_plugins WHERE id = ?', [id]);
+          return { success: true };
+        default: return { error: 'Unknown method' };
+      }
+    } catch (e) { log('handlePlugins ERROR', e); return []; }
+  }
+
+  function handleModules(method, data, id) {
+    try {
+      switch (method) {
+        case 'GET':
+          if (id) {
+            const r = query(db, 'SELECT * FROM requirement_modules WHERE id = ?', [id]);
+            return r.length ? { id: r[0][0], name: r[0][1], sortOrder: r[0][2] } : { error: 'Not found' };
+          }
+          return query(db, 'SELECT * FROM requirement_modules ORDER BY sort_order').map(r => ({ id: r[0], name: r[1], sortOrder: r[2] }));
+        case 'POST': {
+          const { name } = data || {};
+          if (!name || !name.trim()) return { error: '名称不能为空' };
+          run(db, 'INSERT INTO requirement_modules (name) VALUES (?)', [name.trim()]);
+          const newId = query(db, 'SELECT MAX(id) FROM requirement_modules')[0][0];
+          return { success: true, id: newId };
+        }
+        case 'PUT': {
+          if (!id) return { error: 'No id' };
+          const { name } = data || {};
+          if (!name || !name.trim()) return { error: '名称不能为空' };
+          run(db, 'UPDATE requirement_modules SET name = ? WHERE id = ?', [name.trim(), id]);
+          return { success: true };
+        }
+        case 'DELETE':
+          if (id) run(db, 'DELETE FROM requirement_modules WHERE id = ?', [id]);
+          return { success: true };
+        default: return { error: 'Unknown method' };
+      }
+    } catch (e) { log('handleModules ERROR', e); return []; }
   }
 }
 

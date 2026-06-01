@@ -18,7 +18,7 @@ const Home = lazy(() => import('./Home'));
 const Requirements = lazy(() => import('./Requirements'));
 const Knowledge = lazy(() => import('./Knowledge'));
 const Insights = lazy(() => import('./Insights'));
-const MCP = lazy(() => import('./MCP'));
+const AppEcosystem = lazy(() => import('./AppEcosystem'));
 const Model = lazy(() => import('./Model'));
 const Browser = lazy(() => import('./Browser'));
 const Messages = lazy(() => import('./Messages'));
@@ -51,11 +51,11 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
   requirements: { type: 'requirements', title: '采集库' },
   knowledge: { type: 'knowledge', title: '知识库' },
   insights: { type: 'insights', title: '洞察分析' },
-  mcp: { type: 'mcp', title: 'MCP工具' },
+  mcp: { type: 'mcp', title: '应用生态' },
   model: { type: 'model', title: '模型配置' },
   messages: { type: 'messages', title: '消息中心' },
   settings: { type: 'settings', title: '系统设置' },
-  profile: { type: 'profile', title: '用户信息' },
+  profile: { type: 'profile', title: '用户Agent' },
 };
 
 export default function Index() {
@@ -91,7 +91,7 @@ export default function Index() {
     saveProfile(profile);
     setShowWizard(false);
     // Open profile tab after wizard completes
-    openTab('profile', '用户信息');
+    openTab('profile', '用户Agent');
   }, [saveProfile, openTab]);
 
   const closeTab = useCallback((tabId: string) => {
@@ -157,6 +157,7 @@ export default function Index() {
   // Build tab bar content for TitleBar
   const tabBar = useMemo(() => (
     <div className="flex items-center h-full gap-0.5 w-full overflow-hidden">
+      <div className="flex items-center h-full gap-0.5 flex-1 overflow-hidden">
       {tabs.map(tab => {
         const isActive = activeTabId === tab.id;
         return (
@@ -170,21 +171,27 @@ export default function Index() {
             <span className="truncate">{tab.title}</span>
             {tabs.length > 1 && (
               <button onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
-                className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0 transition-opacity duration-150"
-                style={{ opacity: isActive ? 1 : 0 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = '0'; }}>
-                <XIcon size={10} />
+                className="w-5 h-5 rounded-sm flex items-center justify-center flex-shrink-0 transition-colors"
+                style={{ opacity: isActive ? 1 : 0, background: 'transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#ef444420'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'inherit'; }}
+                title="关闭标签页">
+                <XIcon size={13} />
               </button>
             )}
           </div>
         );
       })}
+      </div>
+      {/* Close all tabs — browser-style, same size/position */}
       {tabs.length > 1 && (
         <button onClick={() => { setTabs([{ id: 'home', title: '首页', type: 'home' }]); setActiveTabId('home'); }}
-          className="px-1.5 h-7 rounded-lg text-xs text-wiki-text3 hover:text-red-500 hover:bg-wiki-surface2 flex-shrink-0 flex items-center ml-0.5"
-          style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <Trash2Icon size={12} />
+          className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors"
+          style={{ WebkitAppRegion: 'no-drag', color: 'var(--wiki-text3)' } as any}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface2)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--wiki-text3)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          title="关闭全部标签页">
+          <Trash2Icon size={14} />
         </button>
       )}
     </div>
@@ -228,7 +235,7 @@ export default function Index() {
       case 'insights':
         return <Lazy><Insights /></Lazy>;
       case 'mcp':
-        return <Lazy><MCP /></Lazy>;
+        return <Lazy><AppEcosystem /></Lazy>;
       case 'model':
         return <Lazy><Model /></Lazy>;
       case 'messages':
@@ -279,7 +286,7 @@ export default function Index() {
         />
 
         {/* Main content area */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 min-h-0">
           <div className="h-full relative">
             <div key={activeTabId} className="h-full page-fade-enter">
               <Suspense fallback={<Loading />}>{page}</Suspense>

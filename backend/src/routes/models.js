@@ -5,113 +5,16 @@ const app = express.Router();
 
 // 国内主流大模型供应商配置
 export const PROVIDERS = {
-  deepseek: {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
-      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
-      { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-    ],
-    authType: 'bearer',
-  },
-  minimax: {
-    id: 'minimax',
-    name: 'MiniMax',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    endpoint: '/v1/messages',
-    models: [
-      { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
-      { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed' },
-      { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' },
-      { id: 'MiniMax-M2.5-lightning', name: 'MiniMax M2.5 Lightning' },
-    ],
-    authType: 'bearer',
-  },
-  zhipu: {
-    id: 'zhipu',
-    name: '智谱 AI',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'glm-4-plus', name: 'GLM-4 Plus' },
-      { id: 'glm-4-flash', name: 'GLM-4 Flash' },
-      { id: 'glm-4v-plus', name: 'GLM-4V Plus' },
-    ],
-    authType: 'bearer',
-  },
-  moonshot: {
-    id: 'moonshot',
-    name: 'Moonshot',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K' },
-      { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K' },
-      { id: 'moonshot-v1-128k', name: 'Moonshot V1 128K' },
-    ],
-    authType: 'bearer',
-  },
-  dashscope: {
-    id: 'dashscope',
-    name: '阿里云百炼',
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-    endpoint: '/services/aigc/text-generation/generation',
-    models: [
-      { id: 'qwen-max', name: 'Qwen Max' },
-      { id: 'qwen-plus', name: 'Qwen Plus' },
-      { id: 'qwen-turbo', name: 'Qwen Turbo' },
-    ],
-    authType: 'bearer',
-  },
-  volcengine: {
-    id: 'volcengine',
-    name: '火山引擎',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'doubao-pro-32k', name: '豆包 Pro 32K' },
-      { id: 'doubao-pro-128k', name: '豆包 Pro 128K' },
-      { id: 'doubao-lite-32k', name: '豆包 Lite 32K' },
-    ],
-    authType: 'bearer',
-  },
-  tencent: {
-    id: 'tencent',
-    name: '腾讯云',
-    baseUrl: 'https://hunyuan.cloud.tencent.com',
-    endpoint: '/hunyuan/v1/chat/completions',
-    models: [
-      { id: 'hunyuan-pro', name: '混元 Pro' },
-      { id: 'hunyuan-standard', name: '混元 Standard' },
-    ],
-    authType: 'bearer',
-  },
-  qianfan: {
-    id: 'qianfan',
-    name: '百度千帆',
-    baseUrl: 'https://qianfan.baidubce.com/v2',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'ernie-4.0-8k', name: '文心一言 4.0 8K' },
-      { id: 'ernie-3.5-8k', name: '文心一言 3.5 8K' },
-    ],
-    authType: 'bearer',
-  },
-  siliconflow: {
-    id: 'siliconflow',
-    name: '硅基流动',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    endpoint: '/chat/completions',
-    models: [
-      { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen2.5-72B' },
-      { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3' },
-      { id: 'THUDM/GLM-4-9B-Chat', name: 'GLM-4-9B' },
-    ],
-    authType: 'bearer',
-  },
+  deepseek: { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', endpoint: '/chat/completions', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }], authType: 'bearer' },
+  minimax: { id: 'minimax', name: 'MiniMax', baseUrl: 'https://api.minimaxi.com/anthropic', endpoint: '/v1/messages', models: [{ id: 'MiniMax-M3', name: 'MiniMax M3' }, { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' }], authType: 'bearer' },
+  mimo: { id: 'mimo', name: 'Mimo AI', baseUrl: 'https://api.mimoai.com', endpoint: '/chat/completions', models: [{ id: 'mimo-v2.5-pro', name: 'Mimo V2.5 Pro' }, { id: 'mimo-v2.5-flash', name: 'Mimo V2.5 Flash' }], authType: 'bearer' },
+  zhipu: { id: 'zhipu', name: '智谱 AI', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', endpoint: '/chat/completions', models: [{ id: 'glm-5', name: 'GLM-5' }, { id: 'glm-5-flash', name: 'GLM-5 Flash' }], authType: 'bearer' },
+  moonshot: { id: 'moonshot', name: 'Moonshot', baseUrl: 'https://api.moonshot.cn/v1', endpoint: '/chat/completions', models: [{ id: 'kimi-k2.6', name: 'Kimi K2.6' }, { id: 'kimi-k2.5', name: 'Kimi K2.5' }, { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K' }], authType: 'bearer' },
+  dashscope: { id: 'dashscope', name: '阿里云百炼', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', endpoint: '/chat/completions', models: [{ id: 'qwen3.7-max', name: 'Qwen3.7 Max' }, { id: 'qwen3.7-plus', name: 'Qwen3.7 Plus' }], authType: 'bearer' },
+  volcengine: { id: 'volcengine', name: '火山引擎', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', endpoint: '/chat/completions', models: [{ id: 'doubao-seed-2.0-32k', name: '豆包 Seed 2.0 Pro' }, { id: 'doubao-seed-2.0-lite', name: '豆包 Seed 2.0 Lite' }], authType: 'bearer' },
+  tencent: { id: 'tencent', name: '腾讯混元', baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1', endpoint: '/chat/completions', models: [{ id: 'hunyuan-turbos-latest', name: '混元 TurboS' }, { id: 'hunyuan-lite', name: '混元 Lite' }], authType: 'bearer' },
+  qianfan: { id: 'qianfan', name: '百度千帆', baseUrl: 'https://qianfan.baidubce.com/v2', endpoint: '/chat/completions', models: [{ id: 'ernie-5.1', name: 'ERNIE 5.1' }, { id: 'ernie-5.0', name: 'ERNIE 5.0' }], authType: 'bearer' },
+  siliconflow: { id: 'siliconflow', name: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', endpoint: '/chat/completions', models: [{ id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3' }, { id: 'Qwen/Qwen3-235B-A22B', name: 'Qwen3 235B' }], authType: 'bearer' },
 };
 
 // 列表

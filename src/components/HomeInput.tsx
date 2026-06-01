@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowUpIcon, PowerIcon } from 'lucide-react';
-import { apiFetch, API } from '../api';
+import { apiFetch } from '../api';
 
 export interface HomeSendPayload {
   content: string;
@@ -24,14 +24,9 @@ interface ProviderEntry { id: string; name: string; models: { id: string; name: 
 function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabled, onProviderChange, onMcpToggle }: HomeInputProps) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [hasMcp, setHasMcp] = useState(false);
 
   useEffect(() => {
-    apiFetch(API.models).then((list: any) => {
-      const arr = Array.isArray(list) ? list : [];
-      setProviders(arr.map((m: any) => ({ id: m.id, name: m.name, models: m.models || [] })));
-    }).catch(() => {});
     apiFetch('/api/mcp_servers').then((list: any) => {
       setHasMcp(Array.isArray(list) && list.length > 0);
     }).catch(() => {});
@@ -51,7 +46,7 @@ function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabl
 
   return (
     <div data-cmp="HomeInput" className="w-full max-w-2xl mx-auto">
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+      <div className="rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <textarea
           ref={textareaRef}
           value={value}
@@ -68,25 +63,7 @@ function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabl
           style={{ color: 'var(--wiki-text)', maxHeight: '160px' }}
         />
         <div className="flex items-center justify-between px-2 pb-2 gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {/* Provider/Model selector — native select for reliability */}
-            <select
-              value={selectedProvider + '|' + selectedModel}
-              onChange={(e) => {
-                const [pid, mid] = e.target.value.split('|');
-                onProviderChange(pid, mid);
-              }}
-              className="text-xs rounded-lg px-2 py-1 outline-none cursor-pointer min-w-0"
-              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)', maxWidth: '180px' }}
-            >
-              {providers.map(p =>
-                p.models.map(m => (
-                  <option key={p.id + '|' + m.id} value={p.id + '|' + m.id}>
-                    {p.name} / {m.name}
-                  </option>
-                ))
-              )}
-            </select>
+          <div className="flex items-center gap-1.5">
             {/* MCP toggle */}
             <button
               onClick={onMcpToggle}

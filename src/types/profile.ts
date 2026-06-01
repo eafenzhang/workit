@@ -3,7 +3,8 @@ export interface UserProfile {
   nickname: string;
   role: string; // '市场'|'产品'|'研发'|'测试'|'技术'|''
   personality: string;
-  memorySkills: string;
+  memory: string;       // Agent memory / context
+  skills: string;       // Agent skills / capabilities
   avatarColor: string;
   createdAt: string;
   updatedAt: string;
@@ -18,7 +19,8 @@ export interface RolePreset {
   label: string;
   icon: string;
   personality: string;
-  memorySkills: string;
+  memory: string;
+  skills: string;
   avatarColor: string;
   description: string;
 }

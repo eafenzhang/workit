@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { DatabaseIcon, LightbulbIcon, HomeIcon, SparklesIcon, SettingsIcon, ServerIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
+import { DatabaseIcon, LightbulbIcon, HomeIcon, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -15,7 +15,7 @@ const navItems = [
   { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
   { id: 'insights', label: `洞察分析`, icon: LightbulbIcon, color: 'var(--wiki-success)', path: '/insights' },
   { id: 'model', label: `模型配置`, icon: CpuIcon, color: 'var(--wiki-warning)', path: '/model' },
-  { id: 'mcp', label: `MCP工具`, icon: ServerIcon, color: 'var(--wiki-danger)', path: '/mcp' },
+  { id: 'mcp', label: `应用生态`, icon: PackageIcon, color: 'var(--wiki-danger)', path: '/mcp' },
   { id: 'messages', label: `消息中心`, icon: MessageSquareIcon, color: '#ec4899', path: '/messages' },
 ];
 
@@ -57,18 +57,20 @@ function Sidebar({
 
   const isActive = (item: typeof navItems[0]) => item.id === activeTab;
 
-  const width = collapsed ? '48px' : '52px';
-  const minWidth = collapsed ? '48px' : '52px';
+  const width = collapsed ? '0px' : '52px';
+  const minWidth = collapsed ? '0px' : '52px';
+  const opacity = collapsed ? 0 : 1;
 
   return (
     <aside
       data-cmp="Sidebar"
-      className="flex flex-col h-full relative transition-[width,min-width] duration-300 ease-in-out"
+      className="flex flex-col h-full relative transition-[width,min-width,opacity] duration-300 ease-in-out"
       style={{
         ...ASIDE_STYLE,
         width,
         minWidth,
-        borderRight: '1px solid var(--wiki-border)',
+        opacity,
+        borderRight: collapsed ? 'none' : '1px solid var(--wiki-border)',
       }}
     >
       {/* Nav */}
@@ -131,8 +133,8 @@ function Sidebar({
           onClick={handleProfileClick}
           className="flex items-center justify-center px-1.5 rounded-lg transition-all duration-200 hover:bg-wiki-surface2 w-full focus:outline-none relative group"
           style={{ height: '44px' }}
-          title="用户信息"
-          aria-label="用户信息"
+          title="用户Agent"
+          aria-label="用户Agent"
         >
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }} aria-hidden="true">
@@ -141,7 +143,7 @@ function Sidebar({
             </svg>
           </div>
           <span className="absolute left-full ml-2 px-2 py-1 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-50"
-            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>用户信息</span>
+            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>用户Agent</span>
         </button>
       </div>
     </aside>
