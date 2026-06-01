@@ -240,6 +240,11 @@ async function initDatabase(userDataPath) {
   db.run('CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type)');
   db.run('CREATE INDEX IF NOT EXISTS idx_documents_featured ON documents(featured)');
 
+  // Fix minimax base URL if it was set to the wrong value
+  db.run("UPDATE models SET base_url = 'https://api.minimax.chat/v1' WHERE base_url = 'https://api.minimaxi.com/anthropic'");
+  // Fix deepseek base URL — v4 models require /v1 prefix
+  db.run("UPDATE models SET base_url = 'https://api.deepseek.com/v1' WHERE base_url = 'https://api.deepseek.com' AND provider = 'deepseek'");
+
   saveDb(db);
   log('initDatabase: success, path=' + dbPath);
   return db;
@@ -388,9 +393,23 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt }) {
 async function _callModel(model, messages) {
   const isAnthropic = model.endpoint?.includes('messages') || model.baseUrl.includes('anthropic');
   let url = model.baseUrl.replace(/\/+$/, '');
-  if (model.endpoint) url += model.endpoint;
-  else if (isAnthropic) url += '/v1/messages';
-  else url += '/v1/chat/completions';
+  if (model.endpoint) {
+    // Prevent double version prefix: baseUrl/v1 + endpoint/v1/messages → /v1/v1/messages
+    const ep = model.endpoint;
+    const m = url.match(/\/v\d+$/);
+    if (m && ep.startsWith(m[0] + '/')) {
+      url = url.slice(0, -m[0].length) + ep;
+    } else {
+      url += ep;
+    }
+  } else if (isAnthropic) url += '/v1/messages';
+  else {
+    // Strip trailing /v1 to avoid double-prefix (e.g., baseUrl/v1 + /v1/chat/completions)
+    if (!url.endsWith('/v1')) url += '/v1';
+    url += '/chat/completions';
+  }
+
+  log('_callModel URL: ' + url + ' | modelId=' + model.modelId + ' | endpoint=' + (model.endpoint || '(none)'));
 
   const headers = { 'Content-Type': 'application/json' };
   if (isAnthropic) {
@@ -405,7 +424,12 @@ async function _callModel(model, messages) {
     : { model: model.modelId, messages, max_tokens: 4000, temperature: 0.7 };
 
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); }
+  catch {
+    const text = await res.text().catch(() => '');
+    throw new Error('模型返回非 JSON: HTTP ' + res.status + ' ' + res.statusText + (text ? ' — ' + text.substring(0, 200) : ''));
+  }
   log('chatWithAI response status=' + res.status + ' preview=' + JSON.stringify(data).substring(0, 300));
 
   if (data.choices?.[0]?.message?.content) return data.choices[0].message.content.trim();

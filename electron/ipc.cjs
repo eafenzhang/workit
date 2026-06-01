@@ -560,11 +560,12 @@ function setupIPC(mainWindow, db) {
       }
       case 'PUT': {
         if (!id) return { error: 'No id' };
-        const { is_default, apiKey, modelId, name, enabled, endpoint } = data || {};
+        const { is_default, apiKey, modelId, name, enabled, endpoint, baseUrl } = data || {};
         if (is_default) run(db, 'UPDATE models SET is_default = 0');
         // P0-02: Use field whitelist for Models PUT to prevent SQL injection
         const fields = []; const vals = [];
         if (name !== undefined) { fields.push('name=?'); vals.push(name); }
+        if (baseUrl !== undefined) { fields.push('base_url=?'); vals.push(baseUrl); }
         // P0-03: Encrypt API key on update
         if (apiKey !== undefined) { fields.push('api_key=?'); vals.push(encryptApiKey(apiKey)); }
         if (modelId !== undefined) { fields.push('model_id=?'); vals.push(modelId); }

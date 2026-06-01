@@ -43,7 +43,7 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
+    baseUrl: 'https://api.deepseek.com/v1',
     endpoint: '/chat/completions',
     brandColor: '#4F46E5',
     models: [
@@ -55,8 +55,8 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'minimax',
     name: 'MiniMax',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    endpoint: '/v1/messages',
+    baseUrl: 'https://api.minimax.chat/v1',
+    endpoint: '/chat/completions',
     brandColor: '#F59E0B',
     models: [
       { id: 'MiniMax-M3', name: 'MiniMax M3' },

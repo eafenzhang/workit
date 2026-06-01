@@ -136,7 +136,7 @@ function Home({ onOpenTab }: HomeProps) {
 
       let replyContent: string;
       if (api?.chatSend) {
-        const result = await api.chatSend({ providerId: payload.providerId, modelId: payload.modelId, messages: conversation, systemPrompt });
+        const result = await api.chatSend({ providerId: selectedProvider, modelId: selectedModel, messages: conversation, systemPrompt });
         replyContent = result?.content || result?.error || '模型返回为空';
       } else {
         replyContent = 'AI 对话未就绪（请在模型配置中设置 API Key）';

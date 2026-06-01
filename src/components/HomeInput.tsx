@@ -19,9 +19,7 @@ interface HomeInputProps {
   onMcpToggle: () => void;
 }
 
-interface ProviderEntry { id: string; name: string; models: { id: string; name: string }[] }
-
-function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabled, onProviderChange, onMcpToggle }: HomeInputProps) {
+function HomeInput({ onSend, disabled, mcpEnabled, onMcpToggle }: HomeInputProps) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [hasMcp, setHasMcp] = useState(false);
@@ -35,10 +33,10 @@ function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabl
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend({ content: trimmed, providerId: selectedProvider, modelId: selectedModel, mcpEnabled });
+    onSend({ content: trimmed, providerId: '', modelId: '', mcpEnabled });
     setValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-  }, [value, disabled, selectedProvider, selectedModel, mcpEnabled, onSend]);
+  }, [value, disabled, mcpEnabled, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -64,11 +62,10 @@ function HomeInput({ onSend, disabled, selectedProvider, selectedModel, mcpEnabl
         />
         <div className="flex items-center justify-between px-2 pb-2 gap-2">
           <div className="flex items-center gap-1.5">
-            {/* MCP toggle */}
             <button
               onClick={onMcpToggle}
               title={mcpEnabled ? 'MCP 已开启' : 'MCP 已关闭'}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs flex-shrink-0 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors"
               style={{
                 background: mcpEnabled ? 'var(--wiki-text)' : 'var(--wiki-surface2)',
                 color: mcpEnabled ? 'var(--wiki-bg)' : 'var(--wiki-text3)',
