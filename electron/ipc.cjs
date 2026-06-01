@@ -131,6 +131,7 @@ function setupIPC(mainWindow, db) {
       case 'documents':
         return handleDocuments(method, data, id);
       case 'mcp':
+      case 'mcp_servers':
         return handleMcp(method, data, id);
       case 'skills':
         return handleSkills(method, data, id);
