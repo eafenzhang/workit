@@ -16,12 +16,12 @@ async function call(method: string, table: string, data?: any, id?: number | str
   if (id !== undefined) url += `/${id}`;
   if (method === 'GET') {
     const res = await fetch(url);
-    return res.json();
+    return res.text().then(t => { try { return JSON.parse(t); } catch { return t; } });
   }
   opts.method = method;
   if (data) opts.body = JSON.stringify(data);
   const res = await fetch(url, opts);
-  return res.json();
+  return res.text().then(t => { try { return JSON.parse(t); } catch { return t; } });
 }
 
 // Drop-in replacement for fetch('/api/...') for existing pages
@@ -61,7 +61,9 @@ export async function apiFetch(url: string, opts?: RequestInit): Promise<any> {
     return { json: () => Promise.resolve(data), data };
   }
   const res = await fetch(url, opts);
-  const data = await res.json();
+  let data: any;
+  try { data = await res.json(); }
+  catch { data = await res.text(); }
   return { json: () => Promise.resolve(data), data };
 }
 
