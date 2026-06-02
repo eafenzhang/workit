@@ -19,7 +19,7 @@ const SKILL_TEMPLATE = [
   { name: 'image-skill', description: '图片处理能力', source: 'marketplace', config: {} },
 ];
 
-export default function SkillsTab() {
+export default function SkillsTab({ hideToolbar }: { hideToolbar?: boolean }) {
   const [items, setItems] = useState<SkillItem[]>([]);
   const [showImport, setShowImport] = useState(false);
 
@@ -60,20 +60,16 @@ export default function SkillsTab() {
 
   return (
     <div className="flex flex-col">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-8 py-3">
-        <button
-          onClick={() => setShowImport(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-          style={{
-            background: 'var(--wiki-surface2)',
-            color: 'var(--wiki-text2)',
-            border: '1px solid var(--wiki-border)',
-          }}
-        >
+      {/* Toolbar — import top-right */}
+      {!hideToolbar && (
+      <div className="flex items-center justify-end gap-2 px-8 py-3">
+        <button onClick={() => setShowImport(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <UploadIcon size={14} />一键导入
         </button>
       </div>
+      )}
 
       {/* Empty state */}
       {items.length === 0 && (

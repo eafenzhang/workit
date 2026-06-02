@@ -20,6 +20,7 @@ export default defineConfig({
   build: {
     target: 'chrome126',
     modulePreload: false,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks(id: string) {

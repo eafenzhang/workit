@@ -6,7 +6,7 @@ export interface HomeSendPayload {
   content: string;
   providerId: string;
   modelId: string;
-  mcpEnabled: boolean;
+  toolsEnabled: boolean;
 }
 
 interface HomeInputProps {
@@ -14,29 +14,40 @@ interface HomeInputProps {
   disabled?: boolean;
   selectedProvider: string;
   selectedModel: string;
-  mcpEnabled: boolean;
+  toolsEnabled: boolean;
   onProviderChange: (pid: string, mid: string) => void;
-  onMcpToggle: () => void;
+  onToolsToggle: () => void;
 }
 
-function HomeInput({ onSend, disabled, mcpEnabled, onMcpToggle }: HomeInputProps) {
+function HomeInput({ onSend, disabled, selectedProvider, selectedModel, toolsEnabled, onToolsToggle }: HomeInputProps) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [hasMcp, setHasMcp] = useState(false);
+  const [hasTools, setHasTools] = useState(false);
 
   useEffect(() => {
-    apiFetch('/api/mcp_servers').then((list: any) => {
-      setHasMcp(Array.isArray(list) && list.length > 0);
+    // Check if any tools/skills/plugins are configured
+    Promise.all([
+      apiFetch('/api/mcp_servers').then(r => r.data).catch(() => []),
+      apiFetch('/api/cli_tools').then(r => r.data).catch(() => []),
+      apiFetch('/api/skills').then(r => r.data).catch(() => []),
+      apiFetch('/api/claude_code_plugins').then(r => r.data).catch(() => []),
+    ]).then(([mcp, cli, skills, plugins]: any[]) => {
+      setHasTools(
+        (Array.isArray(mcp) && mcp.length > 0) ||
+        (Array.isArray(cli) && cli.length > 0) ||
+        (Array.isArray(skills) && skills.length > 0) ||
+        (Array.isArray(plugins) && plugins.length > 0)
+      );
     }).catch(() => {});
   }, []);
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend({ content: trimmed, providerId: '', modelId: '', mcpEnabled });
+    onSend({ content: trimmed, providerId: selectedProvider, modelId: selectedModel, toolsEnabled });
     setValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-  }, [value, disabled, mcpEnabled, onSend]);
+  }, [value, disabled, toolsEnabled, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -63,17 +74,17 @@ function HomeInput({ onSend, disabled, mcpEnabled, onMcpToggle }: HomeInputProps
         <div className="flex items-center justify-between px-2 pb-2 gap-2">
           <div className="flex items-center gap-1.5">
             <button
-              onClick={onMcpToggle}
-              title={mcpEnabled ? 'MCP 已开启' : 'MCP 已关闭'}
+              onClick={onToolsToggle}
+              title={toolsEnabled ? '工具/技能已开启' : '工具/技能已关闭'}
               className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors"
               style={{
-                background: mcpEnabled ? 'var(--wiki-text)' : 'var(--wiki-surface2)',
-                color: mcpEnabled ? 'var(--wiki-bg)' : 'var(--wiki-text3)',
-                display: hasMcp ? 'flex' : 'none',
+                background: toolsEnabled ? 'var(--wiki-text)' : 'var(--wiki-surface2)',
+                color: toolsEnabled ? 'var(--wiki-bg)' : 'var(--wiki-text3)',
+                display: hasTools ? 'flex' : 'none',
               }}
             >
               <PowerIcon size={11} />
-              <span>MCP</span>
+              <span>工具</span>
             </button>
           </div>
           <button

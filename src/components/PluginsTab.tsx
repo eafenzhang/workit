@@ -19,7 +19,7 @@ const PLUGIN_TEMPLATE = [
   { name: 'test-generator', description: '自动生成测试', source: 'built-in', config: { version: '1.0.0' } },
 ];
 
-export default function PluginsTab() {
+export default function PluginsTab({ hideToolbar }: { hideToolbar?: boolean }) {
   const [items, setItems] = useState<PluginItem[]>([]);
   const [showImport, setShowImport] = useState(false);
 
@@ -60,20 +60,16 @@ export default function PluginsTab() {
 
   return (
     <div className="flex flex-col">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-8 py-3">
-        <button
-          onClick={() => setShowImport(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-          style={{
-            background: 'var(--wiki-surface2)',
-            color: 'var(--wiki-text2)',
-            border: '1px solid var(--wiki-border)',
-          }}
-        >
+      {/* Toolbar — import top-right */}
+      {!hideToolbar && (
+      <div className="flex items-center justify-end gap-2 px-8 py-3">
+        <button onClick={() => setShowImport(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <UploadIcon size={14} />一键导入
         </button>
       </div>
+      )}
 
       {/* Empty state */}
       {items.length === 0 && (

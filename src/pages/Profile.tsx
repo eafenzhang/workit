@@ -1,25 +1,30 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
+import { SaveIcon, RotateCcwIcon, MegaphoneIcon, LightbulbIcon, Code2Icon, BugIcon, CpuIcon, SparklesIcon, Wand2Icon, ImportIcon, XIcon, Trash2Icon, BrainIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import type { UserProfile, RoleKey } from '../types/profile';
+import { ROLE_PRESETS, getRolePreset } from '../data/rolePresets';
+import { resetProfile as clearStorage } from '../utils/profileStorage';
+import { apiFetch, API } from '../api';
+import Avatar from '../components/Avatar';
 
-// ── Toast message constants ──
 const TOAST = {
   nicknameShort: '昵称至少 2 个字符',
   nicknameLong: '昵称最多 20 个字符',
   roleRequired: '请选择角色',
   saved: '已保存',
   reset: '已重置',
+  memoryGenerated: '已从对话记录生成记忆',
+  personalityGenerated: '已基于角色生成人格',
+  skillsImported: '已导入技能',
+  memoryCleared: '已清空长期记忆',
 } as const;
-
-import { SaveIcon, RotateCcwIcon, MegaphoneIcon, LightbulbIcon, Code2Icon, BugIcon, CpuIcon } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import type { UserProfile, RoleKey } from '../types/profile';
-import { ROLE_PRESETS, getRolePreset } from '../data/rolePresets';
-import { resetProfile as clearStorage } from '../utils/profileStorage';
-import Avatar from '../components/Avatar';
 
 const ROLE_ICONS: Record<string, typeof MegaphoneIcon> = {
   Megaphone: MegaphoneIcon, Lightbulb: LightbulbIcon, Code2: Code2Icon, Bug: BugIcon, Cpu: CpuIcon,
 };
+
+interface EcosystemSkill { id: string; name: string; description: string; enabled: boolean; }
 
 export default function Profile() {
   const { userProfile, saveProfile, resetProfile } = useAuth();
@@ -31,6 +36,10 @@ export default function Profile() {
   const [skills, setSkills] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [initialised, setInitialised] = useState(false);
+  // Skills import modal
+  const [showSkillsModal, setShowSkillsModal] = useState(false);
+  const [ecoSkills, setEcoSkills] = useState<EcosystemSkill[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (userProfile && !initialised) {
@@ -48,12 +57,81 @@ export default function Profile() {
   const handleRoleChange = useCallback((newRole: string) => {
     if (newRole === role) return;
     const hasExistingConfig = personality.trim() || memory.trim() || skills.trim();
-    if (hasExistingConfig && !window.confirm('切换角色将重置当前人格设定、记忆和技能，是否继续？')) return;
+    if (hasExistingConfig && !window.confirm('切换角色将重置当前人格、记忆和技能，是否继续？')) return;
     const preset = getRolePreset(newRole);
     if (preset) { setRole(preset.key); setPersonality(preset.personality); setMemory(preset.memory); setSkills(preset.skills); }
     else setRole(newRole as RoleKey);
     setIsDirty(true);
   }, [role, personality, memory, skills]);
+
+  // ── Auto-generate personality from role ──
+  const regeneratePersonality = () => {
+    const preset = role ? getRolePreset(role) : null;
+    if (!preset) { toast.error('请先选择角色'); return; }
+    setPersonality(preset.personality);
+    markDirty();
+    toast.success(TOAST.personalityGenerated);
+  };
+
+  // ── Auto-generate memory from conversation history ──
+  const generateMemory = () => {
+    try {
+      const raw = localStorage.getItem('home_conversations');
+      if (!raw) { toast.error('暂无对话记录'); return; }
+      const convs: Array<{ messages: Array<{ role: string; content: string }> }> = JSON.parse(raw);
+      // Extract key themes from user messages
+      const userMsgs = convs.flatMap(c => c.messages.filter(m => m.role === 'user').map(m => m.content));
+      if (userMsgs.length === 0) { toast.error('暂无对话记录'); return; }
+      // Simple extraction: collect significant topics
+      const topics = new Set<string>();
+      const keywords = ['偏好', '习惯', '任务', '项目', '分析', '报告', '审查', '评估', '开发', '部署', '测试', '文档'];
+      for (const msg of userMsgs.slice(-30)) {
+        for (const kw of keywords) {
+          if (msg.includes(kw)) topics.add(`关注${kw}相关事项`);
+        }
+      }
+      let summary = '';
+      if (topics.size > 0) {
+        summary = '根据对话记录：\n' + [...topics].slice(0, 10).join('\n');
+      } else {
+        const recent = userMsgs.slice(-5).map(m => m.length > 50 ? m.slice(0, 50) + '...' : m);
+        summary = '最近对话摘要：\n' + recent.join('\n');
+      }
+      setMemory(summary);
+      markDirty();
+      toast.success(TOAST.memoryGenerated);
+    } catch { toast.error('无法读取对话记录'); }
+  };
+
+  // ── Skills import from App Ecosystem ──
+  const openSkillsModal = async () => {
+    try {
+      const r = await apiFetch(API.skills);
+      const list: EcosystemSkill[] = (await r.json()) || [];
+      setEcoSkills(list.filter(s => s.enabled));
+      setSelectedSkillIds(new Set());
+      setShowSkillsModal(true);
+    } catch { toast.error('无法加载技能列表'); }
+  };
+
+  const toggleSkillSelect = (id: string) => {
+    setSelectedSkillIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const importSkills = () => {
+    if (selectedSkillIds.size === 0) { toast.error('请选择技能'); return; }
+    const imported = ecoSkills.filter(s => selectedSkillIds.has(s.id)).map(s => s.name + '：' + s.description);
+    const existing = skills.trim() ? skills.split('\n').filter(Boolean) : [];
+    const merged = [...existing, ...imported].filter((v, i, a) => a.indexOf(v) === i);
+    setSkills(merged.join('\n'));
+    setShowSkillsModal(false);
+    markDirty();
+    toast.success(TOAST.skillsImported);
+  };
 
   const handleSave = useCallback(() => {
     const t = nickname.trim();
@@ -73,11 +151,55 @@ export default function Profile() {
     setIsDirty(false); setInitialised(false); toast.success(TOAST.reset);
   }, [resetProfile]);
 
-  const preset = role ? getRolePreset(role) : null;
-  const RoleIcon = preset ? ROLE_ICONS[preset.icon] : null;
+  const [activeTab, setActiveTab] = useState<'personality' | 'memory' | 'skills'>('personality');
+
+  // ── Persistent memory management ──
+  interface MemoryEntry { id: number; key: string; value: string; source: string; createdAt: string; updatedAt: string; }
+  const [persistentMemories, setPersistentMemories] = useState<MemoryEntry[]>([]);
+  const [memoriesLoaded, setMemoriesLoaded] = useState(false);
+
+  const loadPersistentMemories = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.memoryGetAll) return;
+    try {
+      const list = await api.memoryGetAll();
+      setPersistentMemories(Array.isArray(list) ? list : []);
+      setMemoriesLoaded(true);
+    } catch { setMemoriesLoaded(true); }
+  }, []);
+
+  const handleDeleteMemory = useCallback(async (key: string) => {
+    const api = (window as any).electronAPI;
+    if (!api?.memoryDelete) return;
+    await api.memoryDelete(key);
+    setPersistentMemories(prev => prev.filter(m => m.key !== key));
+    toast.success('已删除');
+  }, []);
+
+  const handleClearMemories = useCallback(async () => {
+    if (!confirm('确定清空全部长期记忆？')) return;
+    const api = (window as any).electronAPI;
+    if (!api?.memoryClear) return;
+    await api.memoryClear();
+    setPersistentMemories([]);
+    toast.success(TOAST.memoryCleared);
+  }, []);
+
+  // Load persistent memories when memory tab is active
+  useEffect(() => {
+    if (activeTab === 'memory' && !memoriesLoaded) {
+      loadPersistentMemories();
+    }
+  }, [activeTab, memoriesLoaded, loadPersistentMemories]);
+
+  const TABS = [
+    { id: 'personality' as const, label: '人格', icon: SparklesIcon, hint: '基于角色生成' },
+    { id: 'memory' as const, label: '记忆', icon: Wand2Icon, hint: '从对话生成' },
+    { id: 'skills' as const, label: '技能', icon: ImportIcon, hint: '从生态导入' },
+  ];
+
   const C = {
     input: { background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' },
-    card: { background: 'var(--wiki-surface2)' },
     chip: { background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' },
   };
 
@@ -112,29 +234,116 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Personality */}
-        <div className="p-5 rounded-xl mb-4" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <label className="block text-xs font-medium text-wiki-text3 mb-2">人格设定</label>
-          <textarea value={personality} onChange={e => { setPersonality(e.target.value); markDirty(); }} rows={2} placeholder="描述 Agent 的人格特征" className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-none" style={C.input} />
-        </div>
+        {/* Tabbed: 人格 / 记忆 / 技能 */}
+        <div className="rounded-xl mb-4" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="flex" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+            {TABS.map(t => {
+              const Icon = t.icon;
+              const active = activeTab === t.id;
+              return (
+                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors"
+                  style={{
+                    color: active ? 'var(--wiki-text)' : 'var(--wiki-text3)',
+                    borderBottom: active ? '2px solid var(--wiki-text)' : '2px solid transparent',
+                  }}>
+                  <Icon size={13} />{t.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="p-5">
+            {activeTab === 'personality' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-wiki-text3">人格特征</span>
+                  <button onClick={regeneratePersonality}
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
+                    style={{ color: 'var(--wiki-text3)' }}>
+                    <SparklesIcon size={12} />基于角色生成
+                  </button>
+                </div>
+                <textarea value={personality} onChange={e => { setPersonality(e.target.value); markDirty(); }} rows={3}
+                  placeholder="Agent 的人格特征，描述说话风格、思维方式和行为模式"
+                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical" style={C.input} />
+              </div>
+            )}
+            {activeTab === 'memory' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-wiki-text3">上下文记忆</span>
+                  <button onClick={generateMemory}
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
+                    style={{ color: 'var(--wiki-text3)' }}>
+                    <Wand2Icon size={12} />从对话生成
+                  </button>
+                </div>
+                <textarea value={memory} onChange={e => { setMemory(e.target.value); markDirty(); }} rows={5}
+                  placeholder="Agent 的上下文记忆，如用户偏好、工作习惯、项目背景"
+                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical" style={C.input} />
 
-        {/* Memory */}
-        <div className="p-5 rounded-xl mb-4" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <label className="block text-xs font-medium text-wiki-text3 mb-2">记忆</label>
-          <textarea value={memory} onChange={e => { setMemory(e.target.value); markDirty(); }} rows={2} placeholder="Agent 的上下文记忆，如偏好、习惯、知识" className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical" style={C.input} />
-        </div>
-
-        {/* Skills */}
-        <div className="p-5 rounded-xl mb-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-          <label className="block text-xs font-medium text-wiki-text3 mb-2">技能</label>
-          <textarea value={skills} onChange={e => { setSkills(e.target.value); markDirty(); }} rows={3} placeholder="每行一个技能" className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical mb-3" style={C.input} />
-          {skills.trim() && (
-            <div className="flex flex-wrap gap-1.5">
-              {skills.split('\n').filter(Boolean).map((s, i) => (
-                <span key={i} className="text-xs px-2 py-1 rounded-lg" style={C.chip}>{s}</span>
-              ))}
-            </div>
-          )}
+                {/* ── Persistent Long-Term Memories ── */}
+                <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <BrainIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--wiki-text2)' }}>长期记忆</span>
+                      <span className="text-[10px]" style={{ color: 'var(--wiki-text3)' }}>(自动提取 · 数据库持久化)</span>
+                    </div>
+                    {persistentMemories.length > 0 && (
+                      <button onClick={handleClearMemories}
+                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                        style={{ color: 'var(--wiki-danger)' }}>
+                        <Trash2Icon size={12} />清空全部
+                      </button>
+                    )}
+                  </div>
+                  {persistentMemories.length === 0 ? (
+                    <div className="text-xs py-3 text-center rounded-lg" style={{ color: 'var(--wiki-text3)', background: 'var(--wiki-surface2)' }}>
+                      {memoriesLoaded ? '暂无长期记忆，开始对话后将自动提取' : '加载中...'}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin">
+                      {persistentMemories.map(m => (
+                        <div key={m.id} className="group flex items-start gap-2 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-wiki-surface2"
+                          style={{ border: '1px solid var(--wiki-border)' }}>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
+                            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>{m.key}</span>
+                          <span className="text-xs flex-1 min-w-0" style={{ color: 'var(--wiki-text2)' }}>{m.value}</span>
+                          <button onClick={() => handleDeleteMemory(m.key)}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all flex-shrink-0">
+                            <XIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {activeTab === 'skills' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-wiki-text3">技能列表</span>
+                  <button onClick={openSkillsModal}
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
+                    style={{ color: 'var(--wiki-text3)' }}>
+                    <ImportIcon size={12} />从生态导入
+                  </button>
+                </div>
+                <textarea value={skills} onChange={e => { setSkills(e.target.value); markDirty(); }} rows={5}
+                  placeholder="每行一个技能，或点击「从生态导入」选择已安装的技能"
+                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical mb-3" style={C.input} />
+                {skills.trim() && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {skills.split('\n').filter(Boolean).map((s, i) => (
+                      <span key={i} className="text-xs px-2 py-1 rounded-lg" style={C.chip}>{s}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Actions */}
@@ -146,6 +355,54 @@ export default function Profile() {
             <RotateCcwIcon size={14} />重置
           </button>
         </div>
+
+        {/* ── Skills Import Modal ── */}
+        {showSkillsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }}>
+            <div className="w-[420px] max-h-[60vh] rounded-xl flex flex-col" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <div className="flex items-center justify-between p-4" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+                <h3 className="text-sm font-semibold text-wiki-text">从应用生态导入技能</h3>
+                <button onClick={() => setShowSkillsModal(false)} className="p-1 rounded hover:bg-wiki-surface2">
+                  <XIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                {ecoSkills.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-wiki-text3">暂无已启用的技能，请先在应用生态中添加</div>
+                ) : (
+                  ecoSkills.map(s => {
+                    const sel = selectedSkillIds.has(s.id);
+                    return (
+                      <div key={s.id}
+                        onClick={() => toggleSkillSelect(s.id)}
+                        className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors"
+                        style={{ background: sel ? 'var(--wiki-surface2)' : 'transparent' }}>
+                        <div className="w-5 h-5 rounded border flex items-center justify-center flex-shrink-0"
+                          style={{ background: sel ? 'var(--wiki-text)' : 'transparent', borderColor: sel ? 'var(--wiki-text)' : 'var(--wiki-border)' }}>
+                          {sel && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--wiki-bg)" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-wiki-text">{s.name}</div>
+                          <div className="text-[11px] text-wiki-text3 truncate">{s.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="flex gap-2 p-3" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+                <button onClick={() => setShowSkillsModal(false)}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium"
+                  style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>取消</button>
+                <button onClick={importSkills} disabled={selectedSkillIds.size === 0}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+                  style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                  导入 {selectedSkillIds.size > 0 ? `(${selectedSkillIds.size})` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,99 +1,91 @@
 classDiagram
-    class ModelItem {
-        +number id
-        +string name
-        +string provider
-        +string baseUrl
-        +string apiKey
-        +boolean hasApiKey
-        +string modelId
-        +boolean enabled
-        +boolean isDefault
-        +string createdAt
+    class McpClientManager {
+        -static instance: McpClientManager
+        -clients: Map~number, Client~
+        -transports: Map~number, StdioClientTransport~
+        -serverStates: Map~number, McpServerState
+        -reconnectTimers: Map~number, NodeJS.Timeout
+        -reconnectAttempts: Map~number, number
+        -mainWindow: BrowserWindow
+        +static getInstance(): McpClientManager
+        +initialize(mainWindow: BrowserWindow): Promise~void~
+        +loadAllEnabledServers(db: Database): Promise~void~
+        +connectServer(serverConfig: McpServerConfig): Promise~void~
+        +disconnectServer(serverId: number): Promise~void~
+        +onServerConfigChanged(event: ConfigChangeEvent): Promise~void~
+        +getAllToolsForLLM(format: "openai"|"anthropic"): ToolDefinition[]
+        +executeTool(serverId: number, toolName: string, args: object): Promise~ToolResult~
+        +getAllStatus(): McpServerState[]
+        +shutdown(): Promise~void~
+        -createClient(serverConfig: McpServerConfig): Promise~Client~
+        -fetchTools(client: Client): Promise~McpTool~
+        -pushStatus(serverId: number): void
+        -pushTools(serverId: number): void
+        -scheduleReconnect(serverId: number): void
+        -clearReconnect(serverId: number): void
     }
 
-    class ProviderConfig {
-        +string id
-        +string name
-        +string baseUrl
-        +string endpoint
-        +ModelOption[] models
-        +string authType
+    class McpServerConfig {
+        +id: number
+        +name: string
+        +type: string
+        +command: string
+        +args: string
+        +env: string
+        +enabled: boolean
+        +config: string
     }
 
-    class ModelOption {
-        +string id
-        +string name
+    class McpServerState {
+        +serverId: number
+        +serverName: string
+        +status: "disconnected"|"connecting"|"connected"|"error"
+        +error: string?
+        +toolCount: number
+        +tools: McpTool[]
     }
 
-    class TokenStats {
-        +getStats() Record~string, number~
-        +getTotal() number
+    class McpTool {
+        +name: string
+        +description: string
+        +inputSchema: object
     }
 
-    class ConfigFormData {
-        +string apiKey
-        +string modelId
-        +string provider
-        +string customName
-        +string customBaseUrl
+    class ConfigChangeEvent {
+        +type: "insert"|"update"|"delete"|"toggle"
+        +serverId: number
+        +oldConfig: McpServerConfig?
+        +newConfig: McpServerConfig?
     }
 
-    class ProviderLogoProps {
-        +string providerId
-        +number size
+    class ToolDefinition~OpenAI~ {
+        +type: "function"
+        +function: FunctionDef
     }
 
-    class StatsBarProps {
-        +ModelItem[] models
-        +TokenStats tokenStats
+    class FunctionDef {
+        +name: string
+        +description: string
+        +parameters: object
     }
 
-    class ProviderCardProps {
-        +ProviderConfig provider
-        +ModelItem savedConfig
-        +function onClick
+    class ToolCallResult {
+        +tool_call_id: string
+        +role: "tool"
+        +content: string
     }
 
-    class ApiKeyInputProps {
-        +string value
-        +function onChange
+    class ToolCallLoopState {
+        +messages: Message[]
+        +round: number
+        +maxRounds: number
+        +usedTools: Set~string~
     }
 
-    class ModelSelectorProps {
-        +ProviderConfig provider
-        +string value
-        +function onChange
-        +boolean isCustom
-    }
-
-    class ProviderSelectorProps {
-        +ProviderConfig[] providers
-        +string selectedId
-        +function onSelect
-    }
-
-    class CustomProviderFieldsProps {
-        +string name
-        +string baseUrl
-        +function onNameChange
-        +function onBaseUrlChange
-    }
-
-    class ConfigModalProps {
-        +boolean open
-        +ModelItem editingModel
-        +function onClose
-        +function onSaved
-        +ProviderConfig[] providers
-    }
-
-    ProviderConfig "1" *-- "1..*" ModelOption : models
-    ModelItem ..> ProviderConfig : provider字段匹配
-    ConfigFormData ..> ProviderConfig : provider字段匹配
-    ConfigModalProps --> ModelItem : editingModel
-    ConfigModalProps --> ProviderConfig : providers
-    ProviderCardProps --> ProviderConfig : provider
-    ProviderCardProps --> ModelItem : savedConfig
-    ModelSelectorProps --> ProviderConfig : provider
-    ProviderSelectorProps --> ProviderConfig : providers
+    McpClientManager "1" --> "*" McpServerState : manages
+    McpServerState "1" --> "*" McpTool : contains
+    McpClientManager "1" --> "*" McpServerConfig : reads
+    McpClientManager ..> ConfigChangeEvent : receives
+    McpClientManager ..> ToolDefinition : produces
+    McpClientManager ..> ToolCallResult : produces
+    ToolCallLoopState ..> ToolCallResult : accumulates

@@ -37,3 +37,5 @@ auto-imports.d.ts
 !build/*.png
 .claude/
 UPDATE_MEMORY.md
+workit.db
+workit/

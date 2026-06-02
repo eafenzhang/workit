@@ -3,6 +3,15 @@ import { XIcon, UploadIcon, FileTextIcon, CheckCircleIcon, AlertCircleIcon } fro
 import { toast } from 'sonner';
 import { apiFetch } from '../api';
 
+/** Strip surrounding angle brackets from token-like strings (common paste error from docs like "<ghp_xxx>") */
+function stripBracketTokens(env: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(env)) {
+    out[k] = typeof v === 'string' ? v.replace(/^<|>$/g, '') : v;
+  }
+  return out;
+}
+
 interface ImportModalProps {
   open: boolean;
   onClose: () => void;
@@ -110,17 +119,39 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
     }
     try {
       const parsed = JSON.parse(sourceText);
-      if (!Array.isArray(parsed)) {
-        setParseError('JSON 内容必须是数组格式');
+      let items: Record<string, any>[];
+
+      // Detect {"mcpServers": {name: config, ...}} format (Claude Desktop / MCP standard)
+      if (typeof parsed === 'object' && parsed !== null && parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+        items = Object.entries(parsed.mcpServers).map(([name, config]) => {
+          const cfg = typeof config === 'object' && config !== null ? config : {};
+          return {
+            name,
+            type: cfg.type || 'stdio',
+            command: cfg.command || '',
+            args: cfg.args || [],
+            env: stripBracketTokens(cfg.env || {}),
+            config: cfg.config || {},
+            description: cfg.description || `${name} MCP 服务`,
+            source: 'import',
+          };
+        });
+      } else if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        // Single object → auto-wrap as array
+        items = [parsed];
+      } else {
+        setParseError('JSON 内容必须是数组、对象或 mcpServers 格式');
         return;
       }
-      if (parsed.length === 0) {
+      if (items.length === 0) {
         setParseError('数组不能为空');
         return;
       }
-      setParsedItems(parsed);
+      setParsedItems(items);
       // Initially select all items
-      setSelectedIndices(new Set(parsed.map((_, i) => i)));
+      setSelectedIndices(new Set(items.map((_, i) => i)));
     } catch (err: any) {
       setParseError(`JSON 解析失败: ${err.message}`);
     }
@@ -175,6 +206,8 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
     handleClose();
   };
 
+  const hasDescription = parsedItems?.some(item => item.description !== undefined) ?? false;
+  const hasSource = parsedItems?.some(item => item.source !== undefined) ?? false;
   const selectedCount = selectedIndices.size;
 
   return (
@@ -314,8 +347,8 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
                     <tr style={{ borderBottom: '1px solid var(--wiki-border)' }}>
                       <th className="w-10 px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}></th>
                       <th className="px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}>名称</th>
-                      <th className="px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}>描述</th>
-                      <th className="px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}>来源</th>
+                      {hasDescription && <th className="px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}>描述</th>}
+                      {hasSource && <th className="px-3 py-2 text-left" style={{ color: 'var(--wiki-text3)' }}>来源</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -342,12 +375,16 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
                         <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--wiki-text)' }}>
                           {item.name || <span style={{ color: 'var(--wiki-text3)' }}>—</span>}
                         </td>
-                        <td className="px-3 py-2.5 max-w-[160px] truncate" style={{ color: 'var(--wiki-text2)' }}>
-                          {item.description || <span style={{ color: 'var(--wiki-text3)' }}>—</span>}
-                        </td>
-                        <td className="px-3 py-2.5" style={{ color: 'var(--wiki-text3)' }}>
-                          {item.source || '—'}
-                        </td>
+                        {hasDescription && (
+                          <td className="px-3 py-2.5 max-w-[160px] truncate" style={{ color: 'var(--wiki-text2)' }}>
+                            {item.description || <span style={{ color: 'var(--wiki-text3)' }}>—</span>}
+                          </td>
+                        )}
+                        {hasSource && (
+                          <td className="px-3 py-2.5" style={{ color: 'var(--wiki-text3)' }}>
+                            {item.source || '—'}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

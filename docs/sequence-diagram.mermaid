@@ -1,20 +1,91 @@
 sequenceDiagram
-    participant Page as Model.tsx
-    participant API as apiFetch
-    participant Backend as /api/models
-    participant DB as SQLite
+    participant App as Electron App
+    participant DB as database.cjs
+    participant IPC as ipc.cjs
+    participant MCM as McpClientManager
+    participant MCP as MCP Server Process
+    participant LLM as LLM API
+    participant UI as Renderer (Home)
 
-    Page->>API: GET /api/models
-    API->>Backend: 查询所有模型配置
-    Backend->>DB: SELECT * FROM models
-    DB-->>Backend: rows
-    Backend-->>API: ModelItem[]
-    API-->>Page: setModels(data)
+    Note over App,UI: === 流程1: 应用启动 → MCP 自动连接 ===
 
-    Page->>API: GET /api/models/providers/list
-    API->>Backend: 获取供应商列表
-    Backend-->>API: ProviderConfig[]
-    API-->>Page: setProviders(data)
+    App->>IPC: app.whenReady()
+    IPC->>DB: 初始化数据库
+    IPC->>MCM: initialize(mainWindow)
+    MCM->>DB: SELECT * FROM mcp_servers WHERE enabled=1
+    DB-->>MCM: enabledServers[]
 
-    Page->>Page: getTokenStats() from localStorage
-    Page->>Page: 渲染 StatsBar + ProviderGrid
+    loop 每个启用的 server
+        MCM->>MCM: connectServer(config)
+        MCM->>MCM: pushStatus → "connecting"
+        MCM->>MCP: spawn(command, args) → StdioClientTransport
+        MCM->>MCP: client.connect(transport) [timeout:10s]
+        alt 连接成功
+            MCM->>MCP: client.request("tools/list")
+            MCP-->>MCM: tools[]
+            MCM->>MCM: cache tools, set status "connected"
+            MCM->>MCM: pushStatus + pushTools
+        else 连接失败/超时
+            MCM->>MCM: set status "error", pushStatus
+            MCM->>MCM: scheduleReconnect(serverId)
+        end
+    end
+
+    Note over App,UI: === 流程2: 配置热更新 → 自动重连 ===
+
+    UI->>IPC: mcp:update (enabled toggle)
+    IPC->>DB: UPDATE mcp_servers
+    DB-->>IPC: updated config
+    IPC->>MCM: onServerConfigChanged({type:"update"})
+
+    alt enabled: false→true 或 command/args变更
+        MCM->>MCM: disconnectServer → connectServer
+        MCM-->>UI: pushStatus + pushTools
+    else enabled: true→false
+        MCM->>MCM: disconnectServer + clearReconnect
+        MCM-->>UI: pushStatus → "disconnected"
+    end
+
+    Note over App,UI: === 流程3: LLM 工具注入与调用循环 ===
+
+    UI->>IPC: chatWithAI(messages, options)
+    IPC->>MCM: getAllToolsForLLM("openai")
+    MCM-->>IPC: ToolDefinition[] (serverName__toolName)
+
+    loop 工具调用循环 (round=0..4, max=5)
+        IPC->>LLM: _callModel(messages, {tools, tool_choice:"auto"})
+        LLM-->>IPC: response
+
+        alt response.tool_calls 存在 且 round < 5
+            IPC->>IPC: round++
+            loop 每个 tool_call
+                IPC->>IPC: parseToolName → {serverName, toolName}
+                IPC->>MCM: executeTool(serverId, toolName, args)
+                MCM->>MCP: client.callTool(toolName, args)
+                MCP-->>MCM: result
+                MCM-->>IPC: ToolCallResult
+                IPC->>IPC: messages.push(tool_result)
+                IPC-->>UI: chat:tool-progress
+            end
+        else 无 tool_calls 或 round >= 5
+            IPC-->>UI: 最终文本响应
+        end
+    end
+
+    Note over App,UI: === 流程4: 断线重连 (P1) ===
+
+    MCP-->>MCM: 进程意外退出 (close event)
+    MCM->>MCM: set status "error", pushStatus
+    MCM->>MCM: scheduleReconnect(serverId)
+
+    loop 指数退避 (1s→2s→4s→8s→...→max30s)
+        MCM->>MCM: wait(delay)
+        MCM->>MCP: spawn + connect [timeout:10s]
+        alt 重连成功
+            MCM->>MCP: tools/list
+            MCM->>MCM: clearReconnect, pushStatus "connected"
+        else 重连失败
+            MCM->>MCM: delay = min(delay*2, 30000)
+            MCM->>MCM: pushStatus "error"
+        end
+    end

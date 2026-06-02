@@ -3,14 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@font-face {
-  font-family: "Barlow-Regular_2";
-  src: url("/fonts/Barlow-Regular_2.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
 @theme inline {
   --font-sans: var(--fontSans);
   --radius-sm: calc(var(--radius) - 4px);
@@ -68,7 +60,7 @@
 
 /* Light mode - Clean white, minimal accent */
 :root {
-  --fontSans: "Barlow-Regular_2";
+  --fontSans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --radius: 0.5rem;
 
   /* Light theme - Neutral white, minimal colors */
@@ -316,7 +308,7 @@
 [data-theme="warm"],
 [data-theme="ocean"],
 [data-theme="minimal"] {
-  --fontSans: "Barlow-Regular_2";
+  --fontSans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --radius: 0.5rem;
   --shadow-x: 0px;
   --shadow-y: 0px;
@@ -347,22 +339,6 @@ select option {
 }
 .page-fade-enter {
   animation: pageFadeIn 0.2s ease-out;
-}
-
-/* P2-16: Global scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--wiki-border);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--wiki-text3);
 }
 
 /* Portal mount point for dropdowns/overlays that escape overflow clipping */

@@ -138,37 +138,29 @@ export default function Model() {
   };
 
   const testConn = async () => {
-    if (!form.apiKey.trim()) {
-      toast.error('请输入 API Key');
-      return;
-    }
+    if (!form.apiKey.trim()) { toast.error('请输入 API Key'); return; }
     setTesting(true);
     try {
-      const isCustom = !PROVIDERS.find((p) => p.id === form.provider);
-      const p = PROVIDERS.find((x) => x.id === form.provider);
-      const mn = p?.models.find((m) => m.id === form.modelId)?.name || form.modelId;
-      const r = await apiFetch(API.models, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: form.provider,
-          baseUrl: isCustom ? form.customBaseUrl : p?.baseUrl || '',
-          apiKey: form.apiKey,
-          modelId: form.modelId,
-          name: isCustom ? form.customName : `${p?.name} - ${mn}`,
-        }),
-      });
-      const d = await r.json();
-      if (d?.id) {
-        const ok = await (window as any).electronAPI?.testModelConnection?.(d.id);
-        toast.success(ok ? TOAST.connOk : TOAST.connFail);
-        fetchModels();
-      } else {
-        toast.error('请先保存');
+      let modelIdToTest = editingId;
+      if (!modelIdToTest) {
+        // New config: save first to get an ID for testing
+        const p = PROVIDERS.find((x) => x.id === form.provider);
+        const mn = p?.models.find((m) => m.id === form.modelId)?.name || form.modelId;
+        const r = await apiFetch(API.models, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: form.provider, baseUrl: p?.baseUrl || form.customBaseUrl || '',
+            apiKey: form.apiKey, modelId: form.modelId,
+            name: p ? `${p.name} - ${mn}` : (form.customName || `${form.provider} - ${form.modelId}`),
+          }),
+        });
+        const d = await r.json();
+        if (d?.id) { modelIdToTest = d.id; fetchModels(); }
+        else { toast.error('请先保存'); setTesting(false); return; }
       }
-    } catch {
-      toast.error(TOAST.connFail2);
-    }
+      const ok = await (window as any).electronAPI?.testModelConnection?.(modelIdToTest);
+      toast.success(ok ? TOAST.connOk : TOAST.connFail);
+    } catch { toast.error(TOAST.connFail2); }
     setTesting(false);
   };
 

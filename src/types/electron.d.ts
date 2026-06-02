@@ -52,7 +52,14 @@ declare global {
     dbQuery: (method: string, table: string, params: { data?: any; id?: number | string }) => Promise<any>;
 
     /** Send chat message to AI model */
-    chatSend: (payload: { providerId?: string; modelId?: string; messages: { role: string; content: string }[]; systemPrompt?: string }) => Promise<{ content?: string; error?: string }>;
+    chatSend: (payload: { providerId?: string; modelId?: string; messages: { role: string; content: string }[]; systemPrompt?: string; toolsEnabled?: boolean }) => Promise<{ content?: string; error?: string; toolCallHistory?: any[] }>;
+    
+    // ── Agent Memory ──
+    memoryGetAll: () => Promise<{ id: number; key: string; value: string; source: string; createdAt: string; updatedAt: string }[]>;
+    memoryUpsert: (key: string, value: string, source?: string) => Promise<{ created?: boolean; updated?: boolean; key: string }>;
+    memoryDelete: (key: string) => Promise<{ deleted: boolean; key: string }>;
+    memoryClear: () => Promise<{ cleared: boolean }>;
+    memorySummary: () => Promise<string>;
     /** Test connection to a specific model configuration by ID */
     testModelConnection: (modelId: number) => Promise<boolean>;
     /** Get application settings */

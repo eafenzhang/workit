@@ -36,7 +36,8 @@
     "sonner": "^2.0.7",
     "sql.js": "^1.14.1",
     "tailwindcss": "^4.1.17",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -65,13 +66,14 @@
     "directories": {
       "output": "release"
     },
-    "asar": false,
+    "asar": true,
     "asarUnpack": [
       "**/electron/**/*"
     ],
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "node_modules/@modelcontextprotocol/**/*",
       "build/icon.png",
       "build/icon.ico",
       "package.json"

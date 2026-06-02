@@ -60,10 +60,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installExtension: (extId, dataUrl) => ipcRenderer.invoke('install-extension', extId, dataUrl),
   /** Send chat message to AI — returns { content: string } | { error: string } */
   chatSend: (payload) => ipcRenderer.invoke('chat:send', payload),
+  // ── Agent Memory ──
+  memoryGetAll: () => ipcRenderer.invoke('memory:getAll'),
+  memoryUpsert: (key, value, source) => ipcRenderer.invoke('memory:upsert', { key, value, source }),
+  memoryDelete: (key) => ipcRenderer.invoke('memory:delete', key),
+  memoryClear: () => ipcRenderer.invoke('memory:clear'),
+  memorySummary: () => ipcRenderer.invoke('memory:summary'),
   // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
   onRequirementsChanged: (cb) => {
     const handler = () => cb();
     ipcRenderer.on('requirements-changed', handler);
     return () => ipcRenderer.removeListener('requirements-changed', handler);
   },
+  // ── MCP Runtime ──
+  /** Subscribe to MCP server status updates. Returns unsubscribe function. */
+  mcpSubscribeStatus: (cb) => {
+    const handler = (_event, data) => cb(data);
+    ipcRenderer.on('mcp:status-update', handler);
+    return () => ipcRenderer.removeListener('mcp:status-update', handler);
+  },
+  /** Get MCP tools from all connected servers */
+  mcpGetTools: () => ipcRenderer.invoke('mcp:get-tools'),
+  /** Get MCP connection status snapshots */
+  mcpGetStatus: () => ipcRenderer.invoke('mcp:get-status'),
+  /** Get tools for a specific MCP server (detail panel) */
+  mcpGetServerTools: (serverId) => ipcRenderer.invoke('mcp:get-server-tools', serverId),
+  /** Execute a tool call on a connected MCP server */
+  mcpExecuteTool: (serverId, toolName, args) => ipcRenderer.invoke('mcp:execute-tool', serverId, toolName, args),
+  /** Connect to a specific MCP server */
+  mcpConnect: (serverId) => ipcRenderer.invoke('mcp:connect', serverId),
+  /** Disconnect from a specific MCP server */
+  mcpDisconnect: (serverId) => ipcRenderer.invoke('mcp:disconnect', serverId),
 });
