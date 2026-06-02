@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon } from 'lucide-react';
+import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon } from 'lucide-react';
 import HomeInput, { type HomeSendPayload } from '../components/HomeInput';
 import PortalDropdown from '../components/PortalDropdown';
+import { toast } from 'sonner';
 import { apiFetch, API } from '../api';
 import { getGreeting, getTodayDate, generateMessageId, WELCOME_MESSAGES } from '../data/homeDefaults';
 
@@ -18,6 +19,13 @@ interface HomeMessage {
   role: 'user' | 'assistant';
   content: string;
   time: string;
+  _meta?: {
+    type?: 'tool_call' | 'final_response';
+    toolName?: string;
+    args?: Record<string, any>;
+    result?: string;
+    toolCallCount?: number;
+  };
 }
 
 const LS_KEY = 'home_messages';
@@ -28,8 +36,65 @@ function formatTime(date: Date): string { return `${String(date.getHours()).padS
 interface Conversation { id: string; title: string; messages: HomeMessage[]; createdAt: string; }
 const CONV_KS = 'home_conversations';
 
+// ── Simple memory extraction from conversation ──
+// Extracts key facts/preferences from user messages using pattern matching.
+// This runs client-side for performance — no extra AI call needed.
+function extractMemoryFacts(messages: HomeMessage[]): { key: string; value: string }[] {
+  const userMsgs = messages.filter(m => m.role === 'user').map(m => m.content);
+  const facts: { key: string; value: string }[] = [];
+
+  // Pattern: "我喜欢/习惯/偏好/想要..." — capture as preference
+  const preferenceMatch = userMsgs.join('\n').match(/(?:我喜欢|我习惯|我偏好|我想要|我希望|我倾向于|我一般)([^。\n]{3,60})[。\n]/g);
+  if (preferenceMatch) {
+    for (const m of preferenceMatch.slice(-5)) {
+      const cleaned = m.replace(/^(?:我喜欢|我习惯|我偏好|我想要|我希望|我倾向于|我一般)/, '').replace(/[。\n]$/, '').trim();
+      if (cleaned.length >= 3) facts.push({ key: '偏好', value: cleaned });
+    }
+  }
+
+  // Pattern: project/task mentions
+  const projectMatch = userMsgs.join('\n').match(/(?:项目|开发|构建|需求|部署|测试|上线)(?:[^。\n]*)[：:]\s*([^。\n]{3,60})/g);
+  if (projectMatch) {
+    for (const m of projectMatch.slice(-3)) {
+      const cleaned = m.replace(/[。\n]$/, '').trim();
+      if (cleaned.length >= 5) facts.push({ key: '当前工作', value: cleaned });
+    }
+  }
+
+  // Pattern: naming convention — "叫我/称呼我/我是"
+  const nameMatch = userMsgs.join('\n').match(/(?:叫我|称呼我|我是|我叫)([^。\n]{2,10})[。\n]/);
+  if (nameMatch && nameMatch[1].trim().length >= 2) {
+    facts.push({ key: '称呼', value: nameMatch[1].trim() });
+  }
+
+  // Pattern: tech stack mentions
+  const techMatch = userMsgs.join('\n').match(/(?:技术栈|框架|语言|工具)\s*(?:是|用|使用|采用)?\s*([^。\n]{3,30})/g);
+  if (techMatch) {
+    for (const m of techMatch.slice(-2)) {
+      const cleaned = m.trim();
+      if (cleaned.length >= 5) facts.push({ key: '技术偏好', value: cleaned });
+    }
+  }
+
+  // Deduplicate by key
+  const seen = new Set<string>();
+  return facts.filter(f => {
+    const k = `${f.key}:${f.value}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 function loadConversations(): Conversation[] {
-  try { const r = localStorage.getItem(CONV_KS); return r ? JSON.parse(r) : []; } catch { return []; }
+  try {
+    const r = localStorage.getItem(CONV_KS);
+    if (!r) return [];
+    const convs: Conversation[] = JSON.parse(r);
+    // Sort newest first by createdAt (descending)
+    convs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return convs;
+  } catch { return []; }
 }
 const MAX_CONVERSATIONS = 50;
 
@@ -40,6 +105,42 @@ function saveConversations(convs: Conversation[]): void {
 
 interface HomeProps { onOpenTab?: (type: string, title: string, extra?: Record<string, any>) => void; }
 
+/** Tool call bubble with collapsible result */
+function ToolCallBubble({ msg }: { msg: HomeMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[85%]">
+        <div className="px-3 py-2 rounded-lg text-xs flex items-center gap-2"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+          <WrenchIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
+          <span className="font-mono text-xs" style={{ color: 'var(--wiki-text)' }}>
+            调用工具: {msg._meta?.toolName}
+          </span>
+        </div>
+        <div className="mt-1">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded transition-colors"
+            style={{ color: 'var(--wiki-text3)' }}
+          >
+            {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}
+            {expanded ? '收起结果' : '查看结果'}
+          </button>
+          {expanded && msg._meta?.result && (
+            <pre className="mt-1 p-2 rounded text-xs max-h-40 overflow-y-auto"
+              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', whiteSpace: 'pre-wrap', border: '1px solid var(--wiki-border)' }}>
+              {msg._meta.result.length > 2000
+                ? msg._meta.result.substring(0, 2000) + '\n\n[结果已截断，完整长度: ' + msg._meta.result.length + ' 字符]'
+                : msg._meta.result}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Home({ onOpenTab }: HomeProps) {
   const { userProfile } = useAuth();
   const [messages, setMessages] = useState<HomeMessage[]>([]);
@@ -49,12 +150,23 @@ function Home({ onOpenTab }: HomeProps) {
   // Provider / Model / MCP state (lifted from HomeInput)
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
-  const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [toolsEnabled, setToolsEnabled] = useState(false);
 
   // Conversation management
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+
+  // ── Agent Memory state ──
+  const [memorySummary, setMemorySummary] = useState<string>('');
+
+  // Load memories from database on mount
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (api?.memorySummary) {
+      api.memorySummary().then((s: string) => { if (s) setMemorySummary(s); }).catch(() => {});
+    }
+  }, []);
 
   // Model data & dropdown state (flat list from API, grouped by provider for display)
   interface FlatModel { id: number; provider: string; modelId: string; name: string; enabled: boolean; isDefault: boolean }
@@ -95,8 +207,7 @@ function Home({ onOpenTab }: HomeProps) {
       for (const m of p.models) {
         if (p.provider === selectedProvider && String(m.modelId) === selectedModel) {
           const name = m.name.includes(' - ') ? m.name.split(' - ').pop()! : m.name;
-          const providerName = PROVIDER_NAMES[p.provider] || p.provider;
-          return `${providerName} / ${name}`;
+          return name;
         }
       }
     }
@@ -109,18 +220,19 @@ function Home({ onOpenTab }: HomeProps) {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
-  // Build agent system prompt from user role profile
+  // Build agent system prompt from user role profile + persistent memories
   const buildSystemPrompt = useCallback(() => {
     const p = userProfile;
     if (!p || !p.role) return '';
     const parts = [`你是 ${p.nickname || 'Workit'}，你的身份角色是「${p.role}」。`];
     if (p.personality) parts.push(`专业背景：${p.personality}`);
-    if (p.memory) parts.push(`记忆：${p.memory}`);
+    if (p.memory) parts.push(`[[用户画像记忆]] ${p.memory}`);
+    if (memorySummary) parts.push(`[[长期记忆]] ${memorySummary}`);
     if (p.skills) parts.push(`技能：${p.skills}`);
     parts.push(`对话要求：请严格以「${p.role}」角色的专业视角回答问题，使用中文，保持专业但友好的语气。`);
     parts.push('当用户咨询与你角色无关的问题时，也应从你角色的专业角度给出建议。');
     return parts.join('\n');
-  }, [userProfile]);
+  }, [userProfile, memorySummary]);
 
   const handleSend = useCallback(async (payload: HomeSendPayload) => {
     const now = new Date();
@@ -136,8 +248,41 @@ function Home({ onOpenTab }: HomeProps) {
 
       let replyContent: string;
       if (api?.chatSend) {
-        const result = await api.chatSend({ providerId: selectedProvider, modelId: selectedModel, messages: conversation, systemPrompt });
+        const result = await api.chatSend({
+          providerId: selectedProvider,
+          modelId: selectedModel,
+          messages: conversation,
+          systemPrompt,
+          toolsEnabled: toolsEnabled,
+        });
         replyContent = result?.content || result?.error || '模型返回为空';
+
+        // ── Append tool call history as additional messages ──
+        const toolHistory = result?.toolCallHistory;
+        if (toolHistory && Array.isArray(toolHistory) && toolHistory.length > 0) {
+          const toolMsgs: HomeMessage[] = [];
+          for (const tc of toolHistory) {
+            toolMsgs.push({
+              id: generateMessageId(),
+              role: 'assistant' as const,
+              content: `[MCP Tool] ${tc.toolName}`,
+              time: formatTime(new Date()),
+              _meta: { type: 'tool_call', toolName: tc.toolName, args: tc.args, result: tc.result },
+            });
+          }
+          const assistantMsg: HomeMessage = {
+            id: generateMessageId(),
+            role: 'assistant',
+            content: replyContent,
+            time: formatTime(new Date()),
+            _meta: { type: 'final_response', toolCallCount: toolHistory.length },
+          };
+          const final = [...newMessages, ...toolMsgs, assistantMsg];
+          setMessages(final);
+          saveConversation(final);
+          autoExtractMemories(final);
+          return;
+        }
       } else {
         replyContent = 'AI 对话未就绪（请在模型配置中设置 API Key）';
       }
@@ -145,25 +290,51 @@ function Home({ onOpenTab }: HomeProps) {
       const assistantMsg: HomeMessage = { id: generateMessageId(), role: 'assistant', content: replyContent, time: formatTime(new Date()) };
       const final = [...newMessages, assistantMsg];
       setMessages(final);
-      // Auto-save: create conversation if none exists
-      let convId = activeConvId;
-      if (!convId) {
-        convId = generateMessageId();
-        setActiveConvId(convId);
-      }
-      setConversations(prev => {
-        const updated = prev.map(c => c.id === convId ? { ...c, messages: final, title: final[0]?.content?.slice(0, 30) || c.title } : c);
-        if (!updated.find(c => c.id === convId)) {
-          updated.push({ id: convId!, title: final[0]?.content?.slice(0, 30) || '新对话', messages: final, createdAt: new Date().toISOString() });
-        }
-        saveConversations(updated);
-        return updated;
-      });
+      saveConversation(final);
+      // Auto-extract memories from this conversation
+      autoExtractMemories(final);
     } catch (e: any) {
       const errMsg: HomeMessage = { id: generateMessageId(), role: 'assistant', content: `请求失败：${e.message || '未知错误'}`, time: formatTime(new Date()) };
       setMessages(prev => [...prev, errMsg]);
     } finally { setSending(false); }
-  }, [messages, buildSystemPrompt, activeConvId]);
+  }, [messages, buildSystemPrompt, activeConvId, selectedProvider, selectedModel, toolsEnabled]);
+
+  // Helper to save conversation (extracted for reuse)
+  const saveConversation = useCallback((finalMessages: HomeMessage[]) => {
+    let convId = activeConvId;
+    if (!convId) {
+      convId = generateMessageId();
+      setActiveConvId(convId);
+    }
+    setConversations(prev => {
+      const updated = prev.map(c => c.id === convId ? { ...c, messages: finalMessages, title: finalMessages[0]?.content?.slice(0, 30) || c.title } : c);
+      if (!updated.find(c => c.id === convId)) {
+        updated.push({ id: convId!, title: finalMessages[0]?.content?.slice(0, 30) || '新对话', messages: finalMessages, createdAt: new Date().toISOString() });
+      }
+      saveConversations(updated);
+      return updated;
+    });
+  }, [activeConvId]);
+
+  // Auto-extract key facts from conversation and persist to database
+  const autoExtractMemories = useCallback(async (finalMessages: HomeMessage[]) => {
+    const api = (window as any).electronAPI;
+    if (!api?.memoryUpsert) return;
+    const facts = extractMemoryFacts(finalMessages);
+    for (const fact of facts) {
+      try {
+        const source = finalMessages[0]?.content?.slice(0, 30) || '对话';
+        await api.memoryUpsert(fact.key, fact.value, source);
+      } catch {}
+    }
+    // Reload memory summary for next system prompt
+    if (facts.length > 0 && api?.memorySummary) {
+      try {
+        const s = await api.memorySummary();
+        if (s) setMemorySummary(s);
+      } catch {}
+    }
+  }, []);
 
   const handleNewChat = useCallback(() => {
     if (messages.length > 0 && activeConvId) {
@@ -194,6 +365,16 @@ function Home({ onOpenTab }: HomeProps) {
     setConversations(prev => { const next = prev.filter(c => c.id !== id); saveConversations(next); return next; });
     if (activeConvId === id) { setActiveConvId(null); setMessages([]); }
   }, [activeConvId]);
+
+  const handleClearHistory = useCallback(() => {
+    if (!confirm('确定清空全部历史对话？')) return;
+    setConversations([]);
+    saveConversations([]);
+    setActiveConvId(null);
+    setMessages([]);
+    setShowHistory(false);
+    toast.success('历史对话已清空');
+  }, []);
 
   const hasMessages = messages.length > 0;
 
@@ -284,13 +465,22 @@ function Home({ onOpenTab }: HomeProps) {
                     </div>
                   ))
                 )}
+                {conversations.length > 0 && (
+                  <div className="sticky bottom-0 px-4 py-2" style={{ background: 'var(--wiki-surface)', borderTop: '1px solid var(--wiki-border)' }}>
+                    <button onClick={handleClearHistory}
+                      className="flex items-center gap-1.5 text-xs w-full justify-center py-1.5 rounded hover:bg-red-50 transition-colors"
+                      style={{ color: 'var(--wiki-danger)' }}>
+                      <Trash2Icon size={12} />清空全部
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
       {/* Scrollable content */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-6">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin px-6">
         {!hasMessages ? (
           <div className="flex flex-col items-center justify-center h-full gap-8">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -302,23 +492,38 @@ function Home({ onOpenTab }: HomeProps) {
               onSend={handleSend}
               selectedProvider={selectedProvider}
               selectedModel={selectedModel}
-              mcpEnabled={mcpEnabled}
+              toolsEnabled={toolsEnabled}
               onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-              onMcpToggle={() => setMcpEnabled(!mcpEnabled)}
+              onToolsToggle={() => setToolsEnabled(!toolsEnabled)}
             />
           </div>
         ) : (
-          <div className="flex flex-col gap-4 py-4 max-w-2xl mx-auto">
+          <div className="flex flex-col gap-4 py-4 max-w-2xl mx-auto w-full">
             {messages.map(msg => {
               const isUser = msg.role === 'user';
+              const isToolCall = msg._meta?.type === 'tool_call';
+              const isFinalResponse = msg._meta?.type === 'final_response';
+
+              // Tool call bubble
+              if (isToolCall) {
+                return <ToolCallBubble key={msg.id} msg={msg} />;
+              }
+
+              // Regular message bubble
               return (
                 <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
                   <div className="relative max-w-[80%]">
+                    {isFinalResponse && msg._meta?.toolCallCount && (
+                      <div className="text-xs mb-1 flex items-center gap-1" style={{ color: 'var(--wiki-text3)' }}>
+                        <WrenchIcon size={10} />
+                        <span>已通过 {msg._meta.toolCallCount} 次工具调用获取信息</span>
+                      </div>
+                    )}
                     <div className="px-4 py-2.5 rounded-xl text-sm leading-relaxed whitespace-pre-wrap break-words"
                       style={{ background: isUser ? 'var(--wiki-text)' : 'var(--wiki-surface2)', color: isUser ? 'var(--wiki-bg)' : 'var(--wiki-text)', borderBottomRightRadius: isUser ? '4px' : undefined, borderBottomLeftRadius: isUser ? undefined : '4px' }}>
                       {msg.content}
                     </div>
-                    <div className={`text-xs mt-1 flex items-center gap-2 justify-end`} style={{ color: 'var(--wiki-text3)' }}>
+                    <div className="text-xs mt-1 flex items-center gap-2 justify-end" style={{ color: 'var(--wiki-text3)' }}>
                       <span>{msg.time}</span>
                     </div>
                   </div>
@@ -343,9 +548,9 @@ function Home({ onOpenTab }: HomeProps) {
             disabled={sending}
             selectedProvider={selectedProvider}
             selectedModel={selectedModel}
-            mcpEnabled={mcpEnabled}
+            toolsEnabled={toolsEnabled}
             onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-            onMcpToggle={() => setMcpEnabled(!mcpEnabled)}
+            onMcpToggle={() => setMcpEnabled(!toolsEnabled)}
           />
         </div>
       )}

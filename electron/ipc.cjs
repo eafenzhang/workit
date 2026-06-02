@@ -18,8 +18,15 @@ const {
   decryptApiKey,
   formatSkill,
   formatPlugin,
+  formatCliTool,
+  getMemories,
+  upsertMemory,
+  deleteMemory,
+  clearMemories,
+  getMemorySummary,
 } = require('./database.cjs');
 const { getMainWindow, getQCWindow } = require('./window.cjs');
+const { McpClientManager } = require('./mcp-manager.cjs');
 
 function setupIPC(mainWindow, db) {
   let insightsCache = null;
@@ -69,11 +76,32 @@ function setupIPC(mainWindow, db) {
     } catch (e) { return { error: e.message }; }
   });
 
-  // Chat with AI — uses conversation history + user agent config
-  ipcMain.handle('chat:send', async (_, { providerId, modelId, messages, systemPrompt }) => {
+  // Chat with AI — uses conversation history + user agent config + tools/skills/plugins
+  ipcMain.handle('chat:send', async (_, { providerId, modelId, messages, systemPrompt, toolsEnabled }) => {
     try {
-      return await chatWithAI(db, { providerId, modelId, messages, systemPrompt });
+      return await chatWithAI(db, { providerId, modelId, messages, systemPrompt, toolsEnabled });
     } catch (e) { return { error: e.message }; }
+  });
+
+  // ── Agent Memory IPC handlers ──
+  ipcMain.handle('memory:getAll', async () => {
+    try { return getMemories(db); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('memory:upsert', async (_, { key, value, source }) => {
+    try { return upsertMemory(db, { key, value, source }); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('memory:delete', async (_, key) => {
+    try { return deleteMemory(db, key); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('memory:clear', async () => {
+    try { return clearMemories(db); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('memory:summary', async () => {
+    try { return getMemorySummary(db); } catch (e) { return { error: e.message }; }
   });
 
   // P0-07: Test model connection — look up decrypted API key by modelId from DB
@@ -123,6 +151,61 @@ function setupIPC(mainWindow, db) {
     }
   });
 
+  // ── MCP Runtime IPC Handlers ─────────────────────────────────────
+  const mcpManager = McpClientManager.getInstance();
+
+  // Get all tools from connected MCP servers
+  ipcMain.handle('mcp:get-tools', async () => {
+    try {
+      return { tools: mcpManager.getTools() };
+    } catch (e) { return { error: e.message }; }
+  });
+
+  // Get status snapshot for all MCP servers
+  ipcMain.handle('mcp:get-status', async () => {
+    try {
+      return mcpManager.getStatusSnapshot();
+    } catch (e) { return { error: e.message }; }
+  });
+
+  // Get tools for a specific MCP server (detail panel)
+  ipcMain.handle('mcp:get-server-tools', async (_, serverId) => {
+    try {
+      return mcpManager.getServerTools(serverId);
+    } catch (e) { return { error: e.message }; }
+  });
+
+  // Execute a tool call on a connected MCP server
+  ipcMain.handle('mcp:execute-tool', async (_, serverId, toolName, args) => {
+    try {
+      return await mcpManager.executeToolCall(Number(serverId), toolName, args);
+    } catch (e) { return { success: false, error: e.message }; }
+  });
+
+  // Connect to a specific MCP server by id
+  ipcMain.handle('mcp:connect', async (_, serverId) => {
+    try {
+      const rows = query(db, 'SELECT * FROM mcp_servers WHERE id = ?', [Number(serverId)]);
+      if (!rows.length) return { success: false, error: 'MCP server not found' };
+      const row = rows[0];
+      const config = {
+        name: row[1],
+        command: row[3],
+        args: (() => { try { return JSON.parse(row[4] || '[]'); } catch { return []; } })(),
+        env: (() => { try { return JSON.parse(row[5] || '{}'); } catch { return {}; } })(),
+      };
+      return await mcpManager.connect(Number(serverId), config);
+    } catch (e) { return { success: false, error: e.message }; }
+  });
+
+  // Disconnect from a specific MCP server by id
+  ipcMain.handle('mcp:disconnect', async (_, serverId) => {
+    try {
+      await mcpManager.disconnect(Number(serverId));
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  });
+
   async function handleDbQuery(method, table, data, id) {
     table = String(table || '').split('?')[0];
     switch (table) {
@@ -137,6 +220,8 @@ function setupIPC(mainWindow, db) {
         return handleSkills(method, data, id);
       case 'claude_code_plugins':
         return handlePlugins(method, data, id);
+      case 'cli_tools':
+        return handleCliTools(method, data, id);
       case 'requirement_modules':
         return handleModules(method, data, id);
       case 'models':
@@ -523,6 +608,7 @@ function setupIPC(mainWindow, db) {
       case 'PUT': {
         if (!id) return { error: 'No id' };
         const { enabled, config, name, type, command, args, env } = data || {};
+        const oldRow = query(db, 'SELECT * FROM mcp_servers WHERE id = ?', [id])[0];
         // P0-02: Use field whitelist for MCP PUT to prevent SQL injection
         const fields = []; const vals = [];
         if (enabled !== undefined) { fields.push('enabled=?'); vals.push(enabled?1:0); }
@@ -533,9 +619,56 @@ function setupIPC(mainWindow, db) {
         if (args !== undefined) { fields.push('args=?'); vals.push(JSON.stringify(args)); }
         if (env !== undefined) { fields.push('env=?'); vals.push(JSON.stringify(env)); }
         if (fields.length) { vals.push(id); run(db, `UPDATE mcp_servers SET ${fields.join(',')} WHERE id=?`, vals); }
+
+        // ── Notify MCP manager of config changes ──
+        if (oldRow) {
+          const oldEnabled = !!oldRow[6];
+          const oldCommand = oldRow[3];
+          const oldArgsStr = oldRow[4] || '[]';
+          const oldEnvStr = oldRow[5] || '{}';
+          const oldName = oldRow[1];
+          const newEnabled = enabled !== undefined ? !!enabled : oldEnabled;
+          const newCommand = command !== undefined ? command : oldCommand;
+          const newArgsStr = args !== undefined ? JSON.stringify(args) : oldArgsStr;
+          const newEnvStr = env !== undefined ? JSON.stringify(env) : oldEnvStr;
+          const newName = name !== undefined ? name : oldName;
+
+          const configChanged = (newCommand !== oldCommand || newArgsStr !== oldArgsStr || newEnvStr !== oldEnvStr);
+          const nameChanged = (newName !== oldName);
+
+          // If name, command, or args changed while connected → reconnect
+          if ((configChanged || nameChanged) && newEnabled) {
+            log('McpNotify: config changed for server #' + id + ', reconnecting');
+            const parsedArgs = (() => { try { return JSON.parse(newArgsStr); } catch { return []; } })();
+            const parsedEnv = (() => { try { return JSON.parse(newEnvStr); } catch { return {}; } })();
+            mcpManager.connect(id, { command: newCommand, args: parsedArgs, env: parsedEnv, name: newName }).catch(e => {
+              log('McpNotify: reconnect failed for #' + id, e);
+            });
+          } else if (oldEnabled && !newEnabled) {
+            // Enabled → Disabled: disconnect
+            log('McpNotify: disabling server #' + id);
+            mcpManager.disconnect(id).catch(e => log('McpNotify: disconnect error', e));
+          } else if (!oldEnabled && newEnabled) {
+            // Disabled → Enabled: connect
+            log('McpNotify: enabling server #' + id);
+            const parsedArgs = (() => { try { return JSON.parse(newArgsStr); } catch { return []; } })();
+            const parsedEnv = (() => { try { return JSON.parse(newEnvStr); } catch { return {}; } })();
+            mcpManager.connect(id, { command: newCommand, args: parsedArgs, env: parsedEnv, name: newName }).catch(e => {
+              log('McpNotify: connect failed for #' + id, e);
+            });
+          }
+        }
+
         return { success: true };
       }
-      case 'DELETE': { if (id) run(db, 'DELETE FROM mcp_servers WHERE id = ?', [id]); return { success: true }; }
+      case 'DELETE': {
+        if (id) {
+          // Disconnect before deleting
+          mcpManager.disconnect(id).catch(e => log('McpNotify: disconnect on delete error', e));
+          run(db, 'DELETE FROM mcp_servers WHERE id = ?', [id]);
+        }
+        return { success: true };
+      }
       default: return { error: 'Unknown method' };
     }
     } catch (e) { log('handleMcp ERROR', e); return { error: 'Failed to load', message: e.message }; }
@@ -662,6 +795,46 @@ function setupIPC(mainWindow, db) {
         default: return { error: 'Unknown method' };
       }
     } catch (e) { log('handlePlugins ERROR', e); return []; }
+  }
+
+  function handleCliTools(method, data, id) {
+    try {
+      switch (method) {
+        case 'GET':
+          if (id) {
+            const r = query(db, 'SELECT * FROM cli_tools WHERE id = ?', [id]);
+            return r.length ? formatCliTool(r[0]) : { error: 'Not found' };
+          }
+          return query(db, 'SELECT * FROM cli_tools ORDER BY created_at DESC').map(formatCliTool);
+        case 'POST': {
+          const { name, description, source, enabled, config } = data || {};
+          const genId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+          run(db, 'INSERT INTO cli_tools (id, name, description, source, enabled, config) VALUES (?,?,?,?,?,?)',
+            [genId, name||'', description||'', source||'', enabled !== false ? 1 : 0, JSON.stringify(config||{})]);
+          return { success: true, id: genId };
+        }
+        case 'PUT': {
+          if (!id) return { error: 'No id' };
+          const { name, description, source, enabled, config } = data || {};
+          const fields = [];
+          const values = [];
+          if (name !== undefined) { fields.push('name=?'); values.push(name); }
+          if (description !== undefined) { fields.push('description=?'); values.push(description); }
+          if (source !== undefined) { fields.push('source=?'); values.push(source); }
+          if (enabled !== undefined) { fields.push('enabled=?'); values.push(enabled ? 1 : 0); }
+          if (config !== undefined) { fields.push('config=?'); values.push(JSON.stringify(config)); }
+          if (fields.length === 0) return { error: 'No fields to update' };
+          fields.push("updated_at=datetime('now','localtime')");
+          values.push(id);
+          run(db, `UPDATE cli_tools SET ${fields.join(',')} WHERE id=?`, values);
+          return { success: true };
+        }
+        case 'DELETE':
+          if (id) run(db, 'DELETE FROM cli_tools WHERE id = ?', [id]);
+          return { success: true };
+        default: return { error: 'Unknown method' };
+      }
+    } catch (e) { log('handleCliTools ERROR', e); return []; }
   }
 
   function handleModules(method, data, id) {

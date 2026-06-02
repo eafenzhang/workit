@@ -9,7 +9,7 @@ let _dbPath = '';
 let _saveTimer = null;
 
 // P0-01: Whitelist for dynamic table names used in SQL
-const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models', 'knowledge_categories', 'skills', 'claude_code_plugins', 'requirement_modules'];
+const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models', 'knowledge_categories', 'skills', 'claude_code_plugins', 'cli_tools', 'requirement_modules'];
 
 // P1-09: Whitelist for allowed IPC methods on db-query
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -154,6 +154,16 @@ async function initDatabase(userDataPath) {
     created_at TEXT DEFAULT (datetime('now','localtime')),
     updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cli_tools (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
   db.run(`CREATE TABLE IF NOT EXISTS requirement_modules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -207,6 +217,21 @@ async function initDatabase(userDataPath) {
     }
     db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (1)");
     currentVersion = 1;
+  }
+
+  // Migration v2 — agent_memories table for AI long-term memory
+  if (currentVersion < 2) {
+    log('initDatabase: running migration v2 (agent_memories)');
+    db.run(`CREATE TABLE IF NOT EXISTS agent_memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE,
+      value TEXT NOT NULL DEFAULT '',
+      source TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (2)");
+    currentVersion = 2;
   }
 
   // Migrate old status
@@ -335,14 +360,17 @@ function getDefaultModel(db) {
 async function callAI(db, prompt) {
   const model = getDefaultModel(db);
   if (!model || !model.apiKey) return null;
-  return _callModel(model, [{ role: 'user', content: prompt }]);
+  const result = await _callModel(model, [{ role: 'user', content: prompt }]);
+  return result ? result.content : null;
 }
 
 /**
- * Chat with full conversation history, system prompt, and custom model selection.
+ * Chat with full conversation history, system prompt, custom model selection,
+ * and MCP tool calling support.
  *
  * Looks up the model configuration by providerId (the DB model row id), decrypts the
  * API key, builds a message list with optional system prompt, and delegates to _callModel.
+ * If MCP tools are available, injects them and handles tool calling loops (max 5 rounds).
  *
  * @param {object} db - The SQL.js database instance
  * @param {object} options
@@ -350,29 +378,161 @@ async function callAI(db, prompt) {
  * @param {string} [options.modelId] - Override the model identifier (e.g. "deepseek-chat")
  * @param {Array<{role: string, content: string}>} options.messages - Conversation messages
  * @param {string} [options.systemPrompt] - Optional system-level prompt
- * @returns {Promise<{content?: string, error?: string}>} The AI response content or an error
+ * @param {boolean} [options.mcpEnabled] - Whether to include MCP tools
+ * @returns {Promise<{content?: string, error?: string, toolCallHistory?: Array}>} The AI response content or an error
  */
-async function chatWithAI(db, { providerId, modelId, messages, systemPrompt }) {
+async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcpEnabled, toolsEnabled }) {
   // Look up model by provider + model_id (not database row id)
   let model;
+  let isAnthropic = false;
   if (providerId && modelId) {
     const rows = query(db, 'SELECT base_url, api_key, model_id, endpoint FROM models WHERE provider = ? AND model_id = ? AND enabled = 1 LIMIT 1', [providerId, modelId]);
     if (rows.length > 0) {
       const apiKey = decryptApiKey(rows[0][1]);
       model = { baseUrl: rows[0][0], apiKey: apiKey, modelId: rows[0][2], endpoint: rows[0][3] || '' };
+      isAnthropic = (rows[0][0] || '').includes('anthropic');
     }
   }
   if (!model) model = getDefaultModel(db);
+  if (model) {
+    isAnthropic = isAnthropic || (model.baseUrl || '').includes('anthropic') || (model.endpoint || '').includes('messages');
+  }
   if (!model || !model.apiKey) return { error: '未配置 API Key' };
 
   // Build message list with system prompt
+  let effectiveSystemPrompt = systemPrompt || '';
+
+  // ── Skills / Plugins → inject into system prompt ──
+  if (toolsEnabled) {
+    try {
+      const skillsCtx = getSkillsSystemPrompt(db);
+      const pluginsCtx = getPluginsSystemPrompt(db);
+      if (skillsCtx) effectiveSystemPrompt = (effectiveSystemPrompt ? effectiveSystemPrompt + '\n\n' : '') + skillsCtx;
+      if (pluginsCtx) effectiveSystemPrompt = (effectiveSystemPrompt ? effectiveSystemPrompt + '\n\n' : '') + pluginsCtx;
+    } catch (e) { log('chatWithAI: skills/plugins inject skipped', e); }
+  }
+
   const msgs = [];
-  if (systemPrompt) msgs.push({ role: 'system', content: systemPrompt });
+  if (effectiveSystemPrompt) msgs.push({ role: 'system', content: effectiveSystemPrompt });
   msgs.push(...messages);
 
   try {
-    const result = await _callModel(model, msgs);
-    return { content: result };
+    // ── MCP + CLI Tool Injection ──
+    let tools = null;
+    if (toolsEnabled) {
+      try {
+        const allTools = [];
+        // MCP tools
+        try {
+          const { McpClientManager } = require('./mcp-manager.cjs');
+          const mcpManager = McpClientManager.getInstance();
+          const provider = isAnthropic ? 'anthropic' : 'openai';
+          const mcpTools = mcpManager.getToolsForLLM(provider);
+          if (mcpTools.length > 0) {
+            allTools.push(...mcpTools);
+            log('chatWithAI: injecting ' + mcpTools.length + ' MCP tools');
+          }
+        } catch (e) { log('chatWithAI: MCP tool loading skipped', e); }
+        // CLI tools
+        try {
+          const cliTools = getCliToolsForLLM(db, isAnthropic ? 'anthropic' : 'openai');
+          if (cliTools.length > 0) {
+            allTools.push(...cliTools);
+            log('chatWithAI: injecting ' + cliTools.length + ' CLI tools');
+          }
+        } catch (e) { log('chatWithAI: CLI tool loading skipped', e); }
+        if (allTools.length > 0) tools = allTools;
+      } catch (e) {
+        log('chatWithAI: tool injection failed', e);
+      }
+    }
+
+    // ── Tool calling loop (max 5 rounds) ──
+    const MAX_TOOL_ROUNDS = 5;
+    let currentMessages = [...msgs];
+    /** @type {Array<{toolName: string, serverName: string, args: Object, result: string}>} */
+    const toolCallHistory = [];
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const result = await _callModel(model, currentMessages, tools);
+
+      // If no tool calls, return content directly
+      if (!result.tool_calls || result.tool_calls.length === 0) {
+        return {
+          content: result.content,
+          toolCallHistory: toolCallHistory.length > 0 ? toolCallHistory : undefined,
+        };
+      }
+
+      // Prevent infinite loops — if we've hit max rounds, force final response
+      if (round >= MAX_TOOL_ROUNDS) {
+        log('chatWithAI: max tool call rounds (' + MAX_TOOL_ROUNDS + ') reached');
+        currentMessages.push({
+          role: 'user',
+          content: '你已调用工具多次，请基于已获得的信息直接回答用户的问题，不要再调用工具。',
+        });
+        const finalResult = await _callModel(model, currentMessages, null); // no tools
+        return {
+          content: finalResult.content,
+          toolCallHistory,
+        };
+      }
+
+      // Execute tool calls
+      const toolResults = await handleToolCalls(result.tool_calls, isAnthropic, db);
+      toolCallHistory.push(...toolResults);
+
+      // Append assistant message (with tool_calls) and tool results to conversation
+      if (isAnthropic) {
+        // Anthropic format: assistant content + tool_result blocks
+        const assistantBlocks = [];
+        for (const tc of result.tool_calls) {
+          assistantBlocks.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+          });
+        }
+        currentMessages.push({ role: 'assistant', content: assistantBlocks });
+
+        const toolResultBlocks = [];
+        for (const tr of toolResults) {
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: tr.id,
+            content: tr.result,
+          });
+        }
+        currentMessages.push({ role: 'user', content: toolResultBlocks });
+      } else {
+        // OpenAI format
+        currentMessages.push({
+          role: 'assistant',
+          content: result.content || null,
+          tool_calls: result.tool_calls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args),
+            },
+          })),
+        });
+        for (const tr of toolResults) {
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: tr.id,
+            content: tr.result,
+          });
+        }
+      }
+
+      log('chatWithAI: round ' + (round + 1) + ' complete, ' + toolResults.length + ' tool calls executed');
+    }
+
+    // Should never reach here due to the round < MAX_TOOL_ROUNDS check above
+    return { content: '', toolCallHistory };
   } catch (e) {
     return { error: e.message };
   }
@@ -386,11 +546,12 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt }) {
  * (which use `/v1/chat/completions` and `Authorization: Bearer`).
  *
  * @param {{baseUrl: string, apiKey: string, modelId: string}} model - Model configuration
- * @param {Array<{role: string, content: string}>} messages - Message array
- * @returns {Promise<string>} The text content extracted from the API response
+ * @param {Array<{role: string, content: string|Array}>} messages - Message array
+ * @param {Array<Object>|null} [tools=null] - Optional tool definitions for function calling
+ * @returns {Promise<{content: string, tool_calls: Array|null, stop_reason: string}>}
  * @throws {Error} If the API returns an error or unexpected format
  */
-async function _callModel(model, messages) {
+async function _callModel(model, messages, tools) {
   const isAnthropic = model.endpoint?.includes('messages') || model.baseUrl.includes('anthropic');
   let url = model.baseUrl.replace(/\/+$/, '');
   if (model.endpoint) {
@@ -409,7 +570,7 @@ async function _callModel(model, messages) {
     url += '/chat/completions';
   }
 
-  log('_callModel URL: ' + url + ' | modelId=' + model.modelId + ' | endpoint=' + (model.endpoint || '(none)'));
+  log('_callModel URL: ' + url + ' | modelId=' + model.modelId + ' | endpoint=' + (model.endpoint || '(none)') + ' | tools=' + (tools ? tools.length : 0));
 
   const headers = { 'Content-Type': 'application/json' };
   if (isAnthropic) {
@@ -419,9 +580,31 @@ async function _callModel(model, messages) {
     headers['Authorization'] = 'Bearer ' + model.apiKey;
   }
 
-  const body = isAnthropic
-    ? { model: model.modelId, messages: messages.filter(m => m.role !== 'system'), system: messages.find(m => m.role === 'system')?.content, max_tokens: 4000, temperature: 0.7 }
-    : { model: model.modelId, messages, max_tokens: 4000, temperature: 0.7 };
+  // Build body with optional tools
+  let body;
+  if (isAnthropic) {
+    body = {
+      model: model.modelId,
+      messages: messages.filter(m => m.role !== 'system'),
+      system: messages.find(m => m.role === 'system')?.content,
+      max_tokens: 4000,
+      temperature: 0.7,
+    };
+    if (tools && tools.length > 0) {
+      body.tools = tools;
+    }
+  } else {
+    body = {
+      model: model.modelId,
+      messages,
+      max_tokens: 4000,
+      temperature: 0.7,
+    };
+    if (tools && tools.length > 0) {
+      body.tools = tools;
+      body.tool_choice = 'auto';
+    }
+  }
 
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
   let data;
@@ -430,17 +613,94 @@ async function _callModel(model, messages) {
     const text = await res.text().catch(() => '');
     throw new Error('模型返回非 JSON: HTTP ' + res.status + ' ' + res.statusText + (text ? ' — ' + text.substring(0, 200) : ''));
   }
-  log('chatWithAI response status=' + res.status + ' preview=' + JSON.stringify(data).substring(0, 300));
+  log('_callModel response status=' + res.status + ' preview=' + JSON.stringify(data).substring(0, 300));
 
-  if (data.choices?.[0]?.message?.content) return data.choices[0].message.content.trim();
-  if (data.content && Array.isArray(data.content)) {
-    const textBlock = data.content.find(c => c.type === 'text');
-    if (textBlock?.text) return textBlock.text.trim();
-    const thinkingBlock = data.content.find(c => c.thinking);
-    if (thinkingBlock?.thinking) return thinkingBlock.thinking.trim();
+  // ── Parse structured response (content + tool_calls) ──
+  let content = '';
+  let toolCalls = null;
+  let stopReason = 'stop';
+
+  if (isAnthropic) {
+    // Anthropic response: content[] with text and tool_use blocks
+    if (data.content && Array.isArray(data.content)) {
+      const textBlocks = [];
+      const toolBlocks = [];
+      for (const c of data.content) {
+        if (c.type === 'text' && c.text) {
+          textBlocks.push(c.text);
+        } else if (c.type === 'tool_use') {
+          toolBlocks.push({
+            id: c.id,
+            name: c.name,
+            args: c.input || {},
+          });
+        } else if (c.thinking) {
+          textBlocks.push(c.thinking);
+        }
+      }
+      content = textBlocks.join('\n');
+      if (toolBlocks.length > 0) toolCalls = toolBlocks;
+    }
+    stopReason = data.stop_reason || 'stop';
+  } else {
+    // OpenAI response
+    if (data.choices?.[0]?.message) {
+      const msg = data.choices[0].message;
+      content = msg.content || '';
+      stopReason = data.choices[0].finish_reason || 'stop';
+
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        toolCalls = msg.tool_calls.map(tc => ({
+          id: tc.id,
+          name: tc.function.name,
+          args: (() => { try { return JSON.parse(tc.function.arguments); } catch { return tc.function.arguments; } })(),
+        }));
+      }
+    }
   }
-  if (data.error) throw new Error(data.error.message || data.error.code || 'API 错误');
-  throw new Error('模型返回格式异常');
+
+  if (!content && !toolCalls) {
+    if (data.error) throw new Error(data.error.message || data.error.code || 'API 错误');
+    throw new Error('模型返回格式异常');
+  }
+
+  return { content: content.trim(), tool_calls: toolCalls, stop_reason: stopReason };
+}
+
+/**
+ * Execute MCP tool calls from LLM response and return results.
+ * @param {Array<{id: string, name: string, args: Object}>} toolCalls - Parsed tool calls from LLM
+ * @param {boolean} isAnthropic - Whether the provider is Anthropic
+ * @returns {Promise<Array<{id: string, toolName: string, serverName: string, args: Object, result: string}>>}
+ */
+async function handleToolCalls(toolCalls, isAnthropic, db) {
+  const { McpClientManager } = require('./mcp-manager.cjs');
+  const mcpManager = McpClientManager.getInstance();
+  const results = [];
+
+  for (const tc of toolCalls) {
+    log('handleToolCalls: executing ' + tc.name);
+    try {
+      let resultText;
+      // Check if it's a CLI tool (prefixed with cli__) or MCP tool (prefixed with serverName__)
+      if (tc.name.startsWith('cli__')) {
+        // CLI tool: extract real name, spawn process, return stdout
+        const cliName = tc.name.slice('cli__'.length);
+        resultText = await executeCliTool(cliName, tc.args, db);
+      } else {
+        // MCP tool
+        const result = await mcpManager.executeTool(tc.name, tc.args);
+        resultText = result.success
+          ? (typeof result.content === 'string' ? result.content : JSON.stringify(result.content))
+          : 'Error: ' + (result.error || 'Unknown error');
+      }
+      results.push({ id: tc.id, toolName: tc.name, args: tc.args, result: resultText });
+    } catch (e) {
+      results.push({ id: tc.id, toolName: tc.name, args: tc.args,
+        result: 'Tool execution error: ' + (e.message || String(e)) });
+    }
+  }
+  return results;
 }
 
 function formatReq(r) {
@@ -513,6 +773,170 @@ function formatPlugin(r) {
   };
 }
 
+function formatCliTool(r) {
+  return {
+    id: r[0], name: r[1], description: r[2], source: r[3],
+    enabled: r[4] === 1, config: (() => { try { return JSON.parse(r[5]||'{}'); } catch { return {}; } })(),
+    createdAt: r[6], updatedAt: r[7],
+  };
+}
+
+// ── CLI Tool helpers ─────────────────────────────────────────────
+
+/**
+ * Get enabled CLI tools as LLM function calling tools.
+ * CLI tools prefixed with "cli__" to avoid naming conflicts with MCP tools.
+ */
+function getCliToolsForLLM(db, provider) {
+  const rows = query(db, "SELECT name, description, config FROM cli_tools WHERE enabled = 1");
+  return rows.map(r => {
+    const cfg = safeJson(r[2]);
+    const name = r[0];
+    const desc = r[1] || `Execute CLI command: ${name}`;
+    if (provider === 'anthropic') {
+      return {
+        name: 'cli__' + name,
+        description: desc,
+        input_schema: {
+          type: 'object',
+          properties: {
+            args: { type: 'array', items: { type: 'string' }, description: 'Additional arguments to pass to the command' },
+            stdin: { type: 'string', description: 'Optional stdin input for the command' },
+          },
+        },
+      };
+    }
+    // OpenAI format
+    return {
+      type: 'function',
+      function: {
+        name: 'cli__' + name,
+        description: desc,
+        parameters: {
+          type: 'object',
+          properties: {
+            args: { type: 'array', items: { type: 'string' }, description: 'Additional arguments to pass' },
+            stdin: { type: 'string', description: 'Optional stdin input' },
+          },
+        },
+      },
+    };
+  });
+}
+
+/**
+ * Execute a CLI tool by spawning its command from config.
+ * @param {string} name - CLI tool name (without cli__ prefix)
+ * @param {Object} llmArgs - Arguments from LLM
+ * @param {*} db - SQLite database connection
+ */
+async function executeCliTool(name, llmArgs, db) {
+  const { spawn } = require('child_process');
+  // Look up tool config
+  const rows = query(db, 'SELECT config FROM cli_tools WHERE name = ? AND enabled = 1', [name]);
+  if (rows.length === 0) return 'Error: CLI tool not found: ' + name;
+  const cfg = safeJson(rows[0][1]);
+  const command = cfg.command || name;
+  const args = [...(cfg.args || []), ...(llmArgs && llmArgs.args ? llmArgs.args : [])];
+
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd: cfg.cwd || undefined,
+      env: { ...process.env, ...(cfg.env || {}) },
+      timeout: 30000,
+      shell: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('close', (code) => {
+      const out = stdout.trim();
+      const err = stderr.trim();
+      if (code === 0) {
+        resolve(out || '(no output)');
+      } else {
+        resolve('Error (exit ' + code + '): ' + (err || out || 'unknown error'));
+      }
+    });
+    child.on('error', (e) => { resolve('Spawn error: ' + e.message); });
+    // Send stdin if provided
+    if (llmArgs && llmArgs.stdin && child.stdin) {
+      child.stdin.write(llmArgs.stdin);
+      child.stdin.end();
+    }
+  });
+}
+
+/**
+ * Build system prompt context from enabled skills.
+ */
+function getSkillsSystemPrompt(db) {
+  const rows = query(db, "SELECT name, description, config FROM skills WHERE enabled = 1");
+  if (rows.length === 0) return '';
+  const lines = ['## 可用技能 (Skills)\n'];
+  for (const r of rows) {
+    const cfg = safeJson(r[2]);
+    const detail = cfg.instructions || cfg.prompt || '';
+    lines.push(`- **${r[0]}**: ${r[1] || 'No description'}${detail ? '\n  ' + detail : ''}`);
+  }
+  lines.push('\n根据用户需求选择使用合适的技能。');
+  return lines.join('\n');
+}
+
+/**
+ * Build system prompt context from enabled Claude Code plugins.
+ */
+function getPluginsSystemPrompt(db) {
+  const rows = query(db, "SELECT name, description, config FROM claude_code_plugins WHERE enabled = 1");
+  if (rows.length === 0) return '';
+  const lines = ['## 可用插件 (Plugins)\n'];
+  for (const r of rows) {
+    const cfg = safeJson(r[2]);
+    const detail = cfg.instructions || cfg.prompt || '';
+    lines.push(`- **${r[0]}**: ${r[1] || 'No description'}${detail ? '\n  ' + detail : ''}`);
+  }
+  lines.push('\n根据用户需求选择使用合适的插件功能。');
+  return lines.join('\n');
+}
+
+function safeJson(str) {
+  try { return JSON.parse(str || '{}'); } catch { return {}; }
+}
+
+// ── Agent Memory CRUD ──
+function getMemories(db) {
+  const rows = query(db, 'SELECT id, key, value, source, created_at, updated_at FROM agent_memories ORDER BY key');
+  return rows.map(r => ({ id: r[0], key: r[1], value: r[2], source: r[3], createdAt: r[4], updatedAt: r[5] }));
+}
+
+function upsertMemory(db, { key, value, source }) {
+  const rows = query(db, 'SELECT id FROM agent_memories WHERE key = ?', [key]);
+  if (rows.length > 0) {
+    run(db, 'UPDATE agent_memories SET value = ?, source = ?, updated_at = datetime("now","localtime") WHERE key = ?', [value, source || '', key]);
+    return { updated: true, key };
+  } else {
+    run(db, 'INSERT INTO agent_memories (key, value, source) VALUES (?, ?, ?)', [key, value, source || '']);
+    return { created: true, key };
+  }
+}
+
+function deleteMemory(db, key) {
+  run(db, 'DELETE FROM agent_memories WHERE key = ?', [key]);
+  return { deleted: true, key };
+}
+
+function clearMemories(db) {
+  run(db, 'DELETE FROM agent_memories');
+  return { cleared: true };
+}
+
+function getMemorySummary(db) {
+  const rows = query(db, 'SELECT key, value FROM agent_memories ORDER BY key');
+  if (rows.length === 0) return '';
+  return rows.map(r => `- ${r[0]}: ${r[1]}`).join('\n');
+}
+
 module.exports = {
   ALLOWED_TABLES,
   ALLOWED_METHODS,
@@ -526,10 +950,16 @@ module.exports = {
   getDefaultModel,
   callAI,
   chatWithAI,
+  getMemories,
+  upsertMemory,
+  deleteMemory,
+  clearMemories,
+  getMemorySummary,
   formatReq,
   formatReqList,
   formatDoc,
   formatUserProfile,
   formatSkill,
   formatPlugin,
+  formatCliTool,
 };
