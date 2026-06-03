@@ -263,10 +263,9 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         </div>
       )}
 
-      {/* Webview */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-      {!showHistory && (
-        url ? <webview key={wvKey.current} ref={wvRefCallback} src={url} className="flex-1 w-full border-0" style={{ height: '100%', display: 'flex' }} allowpopups /> : (
+      {/* Webview — always rendered to preserve interactivity */}
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ display: showHistory ? 'none' : 'flex' }}>
+        {url ? <webview ref={wvRefCallback} src={url} className="flex-1 w-full border-0" style={{ height: '100%', display: 'flex' }} allowpopups /> : (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-wiki-text3">
             <div className="text-4xl opacity-30">🌐</div>
             <div className="text-sm">暂无浏览内容</div>
@@ -281,8 +280,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
               </div>
             )}
           </div>
-        )
-      )}
+        )}
       </div>
     </div>
   );
