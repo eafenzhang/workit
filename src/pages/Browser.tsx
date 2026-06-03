@@ -123,6 +123,14 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     setBrowserLoading(false);
   }, []);
 
+  const handleNewWindow = useCallback((e: any) => {
+    e.preventDefault?.();
+    const newUrl = e.url;
+    if (newUrl && /^https?:\/\//.test(newUrl)) {
+      onOpenNewTabRef.current?.(newUrl);
+    }
+  }, []);
+
   // ── Event binding (stable ref callback, cleanup on unmount via null node) ──
   const wvRefCallback = useCallback((node: any) => {
     if (!node) {
@@ -135,6 +143,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         // P1-11: cleanup loading event listeners
         oldWv.removeEventListener('did-start-loading', handleStartLoading);
         oldWv.removeEventListener('did-stop-loading', handleStopLoading);
+        oldWv.removeEventListener('new-window', handleNewWindow);
       }
       webviewRef.current = null;
       return;
@@ -146,6 +155,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     // P1-11: loading progress events
     node.addEventListener('did-start-loading', handleStartLoading);
     node.addEventListener('did-stop-loading', handleStopLoading);
+    node.addEventListener('new-window', handleNewWindow);
     // setWindowOpenHandler MUST run after did-attach (guest WebContents ready)
     node.addEventListener('did-attach', () => {
       try {
