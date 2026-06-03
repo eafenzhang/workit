@@ -144,6 +144,18 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     };
   }, [state.isOSMode, state.windows, state.nextZIndex, state.isInitialized]);
 
+  // ── Helpers ────────────────────────────────────────────────────
+
+  function calcCascadePosition(windowCount: number) {
+    const cx = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
+    const cy = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
+    const offset = windowCount * 24;
+    return {
+      x: Math.min(cx + offset, window.innerWidth - 200),
+      y: Math.min(cy + offset, window.innerHeight - 200),
+    };
+  }
+
   // ── Action creators ────────────────────────────────────────────
 
   const openWindow = useCallback(
@@ -156,21 +168,13 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
         return;
       }
 
-      // Calculate centered position based on viewport
-      const centerX = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
-      const centerY = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
-
-      // Add slight cascading offset when multiple windows exist
-      const cascadeOffset = state.windows.length * 24;
-      const x = Math.min(centerX + cascadeOffset, window.innerWidth - 200);
-      const y = Math.min(centerY + cascadeOffset, window.innerHeight - 200);
-
+      const pos = calcCascadePosition(state.windows.length);
       const newWindow: OSWindow = {
         id: `${type}-${Date.now()}`,
         type,
         title,
-        x,
-        y,
+        x: pos.x,
+        y: pos.y,
         width: WINDOW_DEFAULT_WIDTH,
         height: WINDOW_DEFAULT_HEIGHT,
         zIndex: state.nextZIndex,
@@ -186,16 +190,14 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
 
   /** Always creates a new browser window (no deduplication) */
   const openNewBrowserWindow = useCallback(() => {
-    const centerX = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
-    const centerY = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
-    const cascadeOffset = state.windows.length * 24;
+    const pos = calcCascadePosition(state.windows.length);
     const tabIdx = state.windows.filter(w => w.type === 'browser').length + 1;
     const newWindow: OSWindow = {
       id: `browser-${Date.now()}`,
       type: 'browser',
       title: `浏览器${tabIdx > 1 ? ' ' + tabIdx : ''}`,
-      x: Math.min(centerX + cascadeOffset, window.innerWidth - 200),
-      y: Math.min(centerY + cascadeOffset, window.innerHeight - 200),
+      x: pos.x,
+      y: pos.y,
       width: WINDOW_DEFAULT_WIDTH,
       height: WINDOW_DEFAULT_HEIGHT,
       zIndex: state.nextZIndex,
@@ -261,6 +263,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     [
       state,
       openWindow,
+      openNewBrowserWindow,
       closeWindow,
       focusWindow,
       minimizeWindow,

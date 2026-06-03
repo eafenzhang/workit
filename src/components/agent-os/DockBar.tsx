@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';

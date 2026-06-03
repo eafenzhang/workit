@@ -174,32 +174,22 @@ function Home({ onOpenTab }: HomeProps) {
   const [providers, setProviders] = useState<GroupedProvider[]>([]);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   useEffect(() => {
-    apiFetch(API.models).then(r => r.json()).then((list: FlatModel[]) => {
-      const arr = Array.isArray(list) ? list.filter(m => m.enabled) : [];
-      const groups: Record<string, GroupedProvider> = {};
-      for (const m of arr) {
-        if (!groups[m.provider]) groups[m.provider] = { provider: m.provider, label: PROVIDER_NAMES[m.provider] || m.provider, models: [] };
-        groups[m.provider].models.push({ id: m.id, modelId: m.modelId, name: m.name });
-      }
-      const grouped = Object.values(groups);
-      setProviders(grouped);
-
-      // Restore last-used or fall back to default
-      let lastP = '', lastM = '';
-      try { const saved = JSON.parse(localStorage.getItem('home_last_model') || '{}'); lastP = saved.provider || ''; lastM = saved.modelId || ''; } catch {}
-      const found = lastP && lastM ? arr.find(m => m.provider === lastP && m.modelId === lastM) : null;
-      if (found) {
-        setSelectedProvider(found.provider);
-        setSelectedModel(String(found.modelId));
-      } else {
+    const load = () => {
+      apiFetch(API.models).then(r => r.json()).then((list: FlatModel[]) => {
+        const arr = Array.isArray(list) ? list.filter(m => m.enabled) : [];
+        const groups: Record<string, GroupedProvider> = {};
+        for (const m of arr) {
+          if (!groups[m.provider]) groups[m.provider] = { provider: m.provider, label: PROVIDER_NAMES[m.provider] || m.provider, models: [] };
+          groups[m.provider].models.push({ id: m.id, modelId: m.modelId, name: m.name });
+        }
+        setProviders(Object.values(groups));
         const def = arr.find(m => m.isDefault);
         if (def) { setSelectedProvider(def.provider); setSelectedModel(String(def.modelId)); }
-        else if (grouped.length > 0 && grouped[0].models.length > 0) {
-          setSelectedProvider(grouped[0].provider);
-          setSelectedModel(String(grouped[0].models[0].modelId));
-        }
-      }
-    }).catch(() => {});
+      }).catch(() => {});
+    };
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
   }, []);
 
   const currentModelLabel = (() => {

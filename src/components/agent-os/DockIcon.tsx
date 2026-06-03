@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import type { DockItem } from '../../types/agent-os';
 
 interface DockIconProps {

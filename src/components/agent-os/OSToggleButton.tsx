@@ -1,3 +1,4 @@
+import type React from 'react';
 import { MonitorIcon, LayoutGridIcon } from 'lucide-react';
 import { useCallback } from 'react';
 
