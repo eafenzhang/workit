@@ -141,7 +141,7 @@ export default function Window({
         zIndex: win.zIndex,
         borderRadius: '8px',
         boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.12)',
-        background: 'var(--wiki-bg)',
+        background: 'var(--wiki-surface)',
         border: '1px solid var(--wiki-border)',
       }}
       onMouseDown={handleFocus}
@@ -157,7 +157,7 @@ export default function Window({
       />
 
       {/* ── Content area ── */}
-      <div className="flex-1 overflow-hidden relative" style={{ background: 'var(--wiki-bg)' }}>
+      <div className="flex-1 overflow-hidden relative" style={{ background: 'var(--wiki-surface)' }}>
         {PageComponent ? (
           <Suspense fallback={<WindowLoading />}>
             <PageComponent />
