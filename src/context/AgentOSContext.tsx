@@ -147,12 +147,14 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   // ── Helpers ────────────────────────────────────────────────────
 
   function calcCascadePosition(windowCount: number) {
+    // Desktop area = full viewport minus MenuBar (28px)
+    const desktopH = window.innerHeight - 28;
     const cx = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
-    const cy = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
+    const cy = Math.max(0, Math.round((desktopH - WINDOW_DEFAULT_HEIGHT) / 2));
     const offset = Math.max(0, windowCount - 1) * 24;
     return {
       x: Math.min(cx + offset, window.innerWidth - 200),
-      y: Math.min(cy + offset, window.innerHeight - 200),
+      y: Math.min(cy + offset, desktopH - 200),
     };
   }
 

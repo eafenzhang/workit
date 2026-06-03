@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import WindowManager from './WindowManager';
 import { RefreshCwIcon, ImageIcon, PaletteIcon } from 'lucide-react';
+import { useAgentOS } from '../../context/AgentOSContext';
 
 // ── Wallpaper presets ────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ const CTX_MENU_ITEMS = [
  * right-click context menu, and window management.
  */
 export default function DesktopArea() {
+  const { state, closeWindow } = useAgentOS();
   const [wallpaper, setWallpaper] = useState(loadWallpaper);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({ x: 0, y: 0, visible: false });
@@ -84,7 +86,7 @@ export default function DesktopArea() {
     if (action === 'wallpaper') {
       setShowWallpaperPicker(true);
     } else if (action === 'refresh') {
-      window.location.reload();
+      state.windows.forEach(w => closeWindow(w.id));
     }
   }, []);
 
