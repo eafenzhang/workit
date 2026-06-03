@@ -26,12 +26,10 @@ function faviconUrl(url: string): string {
 }
 
 export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpenNewTab, visible }: Props) {
-  const wvKey = useRef(`wv-${Date.now()}`);
   const [url, setUrl] = useState('');
   const [inputUrl, setInputUrl] = useState('');
+  const wvContainerRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<any>(null);
-  const prevInitialUrl = useRef(initialUrl);
-
   const urlRef = useRef(url); urlRef.current = url;
   const onUrlChangeRef = useRef(onUrlChange); onUrlChangeRef.current = onUrlChange;
   const onOpenNewTabRef = useRef(onOpenNewTab); onOpenNewTabRef.current = onOpenNewTab;
@@ -41,44 +39,52 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => load(BM_KEY, []));
   const [history, setHistory] = useState<HistoryEntry[]>(() => load(HIST_KEY, []));
   const [showHistory, setShowHistory] = useState(false);
-
-  // P1-11: Browser loading progress bar state
   const [browserLoading, setBrowserLoading] = useState(false);
 
-  const closeAllPanels = () => { setShowHistory(false); };
-
-  function saveAndSync<T>(key: string, val: T) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* quota exceeded */ }
-    window.dispatchEvent(new CustomEvent('workit-browser-sync', { detail: { key } }));
-  }
-
-  // ── Sync bookmarks across browser tabs ──
+  // ── Create webview imperatively (avoids React rendering issues) ──
   useEffect(() => {
-    const h = (e: any) => { if (e.detail?.key === BM_KEY) setBookmarks(load(BM_KEY, [])); };
-    window.addEventListener('workit-browser-sync', h);
-    return () => window.removeEventListener('workit-browser-sync', h);
-  }, []);
-
-  // ── Navigation ──
-  const navigateTo = useCallback((target: string) => {
-    let u = target.trim();
-    if (!u) return;
-    if (!/^https?:\/\//.test(u)) u = 'https://' + u;
-    setUrl(u); setInputUrl(u);
-    onUrlChangeRef.current?.(u);
-    closeAllPanels();
-    try { webviewRef.current?.loadURL(u); } catch {}
-  }, []);
-
-  const goBack = () => { try { webviewRef.current?.goBack(); } catch {} };
-  const goForward = () => { try { webviewRef.current?.goForward(); } catch {} };
-  const reload = () => {
-    try { webviewRef.current?.reload(); } catch {
-      try { const c = webviewRef.current?.getURL?.() || urlRef.current; if (c) webviewRef.current?.loadURL(c); } catch {}
+    const container = wvContainerRef.current;
+    if (!container) return;
+    // Remove any previous webview
+    if (webviewRef.current) {
+      webviewRef.current.removeEventListener('did-finish-load', handleWebviewLoad);
+      webviewRef.current.removeEventListener('page-title-updated', handlePageTitle);
+      webviewRef.current.removeEventListener('will-navigate', handleWillNavigate);
+      webviewRef.current.removeEventListener('did-start-loading', handleStartLoading);
+      webviewRef.current.removeEventListener('did-stop-loading', handleStopLoading);
+      webviewRef.current.removeEventListener('new-window', handleNewWindow);
+      webviewRef.current.remove();
+      webviewRef.current = null;
     }
-  };
+    // Create fresh webview
+    const wv = document.createElement('webview') as any;
+    wv.className = 'flex-1 w-full border-0';
+    wv.style.cssText = 'height:100%;display:flex;';
+    wv.setAttribute('allowpopups', '');
+    wv.setAttribute('src', initialUrl || 'about:blank');
+    wv.addEventListener('did-finish-load', handleWebviewLoad);
+    wv.addEventListener('page-title-updated', handlePageTitle);
+    wv.addEventListener('will-navigate', handleWillNavigate);
+    wv.addEventListener('did-start-loading', handleStartLoading);
+    wv.addEventListener('did-stop-loading', handleStopLoading);
+    wv.addEventListener('new-window', handleNewWindow);
+    wv.addEventListener('did-attach', () => {
+      try {
+        const wc = wv.getWebContents?.();
+        if (wc?.setWindowOpenHandler) {
+          wc.setWindowOpenHandler(({ url: newUrl }: { url: string }) => {
+            if (newUrl && /^https?:\/\//.test(newUrl)) onOpenNewTabRef.current?.(newUrl);
+            return { action: 'deny' };
+          });
+        }
+      } catch {}
+    });
+    container.appendChild(wv);
+    webviewRef.current = wv;
+    return () => {/* container cleanup handles removal */};
+  }, []);
 
-  // ── webview event handlers ──
+  // ── event handlers ──
   const handleWebviewLoad = useCallback((e: any) => {
     try {
       const wvUrl = e.target?.getURL?.() || webviewRef.current?.getURL?.();
@@ -99,7 +105,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
       setHistory(prev => {
         const f = prev.filter(en => en.url !== cur);
         const n = [{ url: cur, title: title.substring(0, 40), visitedAt: Date.now() }, ...f].slice(0, 100);
-        try { localStorage.setItem(HIST_KEY, JSON.stringify(n)); } catch { /* quota exceeded */ }
+        try { localStorage.setItem(HIST_KEY, JSON.stringify(n)); } catch {}
         return n;
       });
     }
@@ -110,18 +116,11 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     if (navUrl && /^https?:\/\//.test(navUrl)) {
       setInputUrl(navUrl);
       onUrlChangeRef.current?.(navUrl);
-      // Do NOT call setUrl(navUrl) — it changes webview src and breaks redirect chains
     }
   }, []);
 
-  // P1-11: Loading state handlers
-  const handleStartLoading = useCallback(() => {
-    setBrowserLoading(true);
-  }, []);
-
-  const handleStopLoading = useCallback(() => {
-    setBrowserLoading(false);
-  }, []);
+  const handleStartLoading = useCallback(() => setBrowserLoading(true), []);
+  const handleStopLoading = useCallback(() => setBrowserLoading(false), []);
 
   const handleNewWindow = useCallback((e: any) => {
     e.preventDefault?.();
@@ -131,54 +130,30 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     }
   }, []);
 
-  // ── Event binding (stable ref callback, cleanup on unmount via null node) ──
-  const wvRefCallback = useCallback((node: any) => {
-    if (!node) {
-      // Cleanup when webview is removed from DOM
-      const oldWv = webviewRef.current;
-      if (oldWv) {
-        oldWv.removeEventListener('did-finish-load', handleWebviewLoad);
-        oldWv.removeEventListener('page-title-updated', handlePageTitle);
-        oldWv.removeEventListener('will-navigate', handleWillNavigate);
-        // P1-11: cleanup loading event listeners
-        oldWv.removeEventListener('did-start-loading', handleStartLoading);
-        oldWv.removeEventListener('did-stop-loading', handleStopLoading);
-        oldWv.removeEventListener('new-window', handleNewWindow);
-      }
-      webviewRef.current = null;
-      return;
+  // ── Navigation ──
+  const navigateTo = (u: string) => {
+    let go = u.trim();
+    if (!/^https?:\/\//.test(go)) go = /\./.test(go) && !/\s/.test(go) ? `https://${go}` : `https://www.google.com/search?q=${encodeURIComponent(go)}`;
+    setInputUrl(go);
+    if (webviewRef.current) {
+      try { webviewRef.current.loadURL(go); setUrl(go); } catch {}
     }
-    webviewRef.current = node;
-    node.addEventListener('did-finish-load', handleWebviewLoad);
-    node.addEventListener('page-title-updated', handlePageTitle);
-    node.addEventListener('will-navigate', handleWillNavigate);
-    // P1-11: loading progress events
-    node.addEventListener('did-start-loading', handleStartLoading);
-    node.addEventListener('did-stop-loading', handleStopLoading);
-    node.addEventListener('new-window', handleNewWindow);
-    // setWindowOpenHandler MUST run after did-attach (guest WebContents ready)
-    node.addEventListener('did-attach', () => {
-      try {
-        const wc = node.getWebContents?.();
-        if (wc?.setWindowOpenHandler) {
-          wc.setWindowOpenHandler(({ url: newUrl }: { url: string }) => {
-            if (newUrl && /^https?:\/\//.test(newUrl)) onOpenNewTabRef.current?.(newUrl);
-            return { action: 'deny' };
-          });
-        }
-      } catch {}
-    });
-  }, []); // Stable: handlers are useCallback([]) — never change
+  };
 
-  // Remove the separate cleanup useEffect since cleanup is now in wvRefCallback
+  const goBack = () => { try { webviewRef.current?.goBack(); } catch {} };
+  const goForward = () => { try { webviewRef.current?.goForward(); } catch {} };
+  const reload = () => {
+    try { webviewRef.current?.reload(); } catch {
+      try { const c = webviewRef.current?.getURL?.() || urlRef.current; if (c) webviewRef.current?.loadURL(c); } catch {}
+    }
+  };
 
-  // ── Sync external URL ──
+  // Track URL changes from initialUrl prop
   useEffect(() => {
-    if (initialUrl && initialUrl !== prevInitialUrl.current) {
-      navigateTo(/^https?:\/\//.test(initialUrl) ? initialUrl : 'https://' + initialUrl);
-      prevInitialUrl.current = initialUrl;
+    if (initialUrl && initialUrl !== url && webviewRef.current) {
+      try { webviewRef.current.loadURL(initialUrl); setUrl(initialUrl); } catch {}
     }
-  }, [initialUrl, navigateTo]);
+  }, [initialUrl]);
 
   useEffect(() => {
     if (visible === false) try { webviewRef.current?.stop(); } catch {}
@@ -187,6 +162,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
   // ── UI handlers ──
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') navigateTo(inputUrl); };
   const openExternal = () => { const u = urlRef.current; if (u) { try { window.open(u, '_blank', 'noopener,noreferrer'); } catch {} } };
+  const closeAllPanels = () => setShowHistory(false);
 
   const toggleBookmark = () => {
     const u = urlRef.current; if (!u) return;
@@ -197,6 +173,8 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
       saveAndSync(BM_KEY, next); return next;
     });
   };
+
+  function saveAndSync(key: string, val: any) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
   return (
     <div className="flex flex-col h-full">
@@ -230,23 +208,6 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         </div>
       )}
 
-      {/* P1-11: Loading progress bar */}
-      <style>{`
-        @keyframes browser-loading-bar {
-          0% { transform: translateX(-100%); }
-          50% { transform: translateX(100%); }
-          100% { transform: translateX(400%); }
-        }
-      `}</style>
-      {browserLoading && (
-        <div className="flex-shrink-0 h-0.5 w-full overflow-hidden" style={{ background: 'var(--wiki-surface2)' }}>
-          <div className="h-full w-1/3" style={{
-            background: 'linear-gradient(90deg, transparent, #6366f1, #8b5cf6, transparent)',
-            animation: 'browser-loading-bar 1.5s ease-in-out infinite',
-          }} />
-        </div>
-      )}
-
       {/* History */}
       {showHistory && (
         <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--wiki-surface)' }}>
@@ -263,25 +224,19 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
         </div>
       )}
 
-      {/* Webview — always rendered to preserve interactivity */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ display: showHistory ? 'none' : 'flex' }}>
-        {url ? <webview ref={wvRefCallback} src={url} className="flex-1 w-full border-0" style={{ height: '100%', display: 'flex' }} allowpopups /> : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-wiki-text3">
-            <div className="text-4xl opacity-30">🌐</div>
-            <div className="text-sm">暂无浏览内容</div>
-            {bookmarks.length > 0 && (
-              <div className="grid grid-cols-4 gap-3 max-w-lg mt-2">
-                {bookmarks.slice(0, 8).map(bm => (
-                  <button key={bm.url} onClick={() => navigateTo(bm.url)} className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-wiki-surface2 transition-colors">
-                    <img src={faviconUrl(bm.url)} className="w-7 h-7 rounded" alt="" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <span className="text-[11px] text-wiki-text2 truncate w-20 text-center">{bm.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Loading progress */}
+      <style>{`
+        .browser-progress { height: 2px; background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1); background-size: 200% 100%; animation: progress-pulse 1.5s ease-in-out infinite; }
+        @keyframes progress-pulse { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+      `}</style>
+      {browserLoading && <div className="browser-progress" />}
+
+      {/* Webview — always rendered, created imperatively */}
+      <div
+        ref={wvContainerRef}
+        className="flex-1 flex flex-col overflow-hidden"
+        style={{ display: showHistory ? 'none' : 'flex' }}
+      />
     </div>
   );
 }
