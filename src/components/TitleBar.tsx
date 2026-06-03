@@ -60,7 +60,8 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
       {/* Window controls */}
       <div className="flex h-full flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        {/* Browser button */}
+        {/* Browser button — hidden in OS mode */}
+        {!isOSMode && (
         <button
           onClick={() => onOpenBrowser?.()}
           className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none"
@@ -69,6 +70,7 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
         >
           <GlobeIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
         </button>
+        )}
         {/* OS mode toggle button */}
         {onToggleOSMode && (
           <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />

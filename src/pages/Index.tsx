@@ -285,7 +285,8 @@ export default function Index() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-wiki-bg">
-      {/* Title bar spans full width */}
+      {/* Title bar — hidden in OS mode (merged with MenuBar) */}
+      {!isOSMode && (
       <TitleBar
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
@@ -293,9 +294,9 @@ export default function Index() {
         isOSMode={isOSMode}
         onToggleOSMode={toggleOSMode}
       >
-        {/* Tab bar hidden in OS mode */}
-        {!isOSMode && tabBar}
+        {tabBar}
       </TitleBar>
+      )}
 
       {/* OS Mode: Render desktop environment */}
       {isOSMode ? (
