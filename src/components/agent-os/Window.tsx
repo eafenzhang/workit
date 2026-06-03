@@ -131,11 +131,36 @@ export default function Window({
     [win.id, win.x, win.y, win.width, win.height, onStartResize],
   );
 
-  // ── Minimized → hidden ──
+  // ── Close/minimize animation ──
+  const [exiting, setExiting] = useState(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  if (win.isMinimized) return null;
+  useEffect(() => {
+    if (win.isMinimized && !exiting) {
+      setExiting(true);
+      exitTimerRef.current = setTimeout(() => {
+        setExiting(false);
+      }, 250);
+    }
+    return () => {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    };
+  }, [win.isMinimized]);
+
+  // Keep DOM alive during exit animation
+  if (win.isMinimized && !exiting) return null;
 
   // ── Render ──
+
+  const animStyle = exiting
+    ? { opacity: 0, transform: 'scale(0.94)', transition: 'opacity 0.2s ease-out, transform 0.2s ease-out' as const }
+    : {
+        opacity: animated ? 1 : 0,
+        transform: animated ? ('scale(1)' as const) : ('scale(0.92)' as const),
+        transition: isDragging || isResizing
+          ? 'none' as const
+          : ('opacity 0.25s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out' as const),
+      };
 
   return (
     <div
@@ -150,9 +175,7 @@ export default function Window({
         boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.12)',
         background: 'var(--wiki-surface)',
         border: '1px solid var(--wiki-border)',
-        opacity: animated ? 1 : 0,
-        transform: animated ? 'scale(1)' : 'scale(0.92)',
-        transition: isDragging || isResizing ? 'none' : 'opacity 0.25s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out',
+        ...animStyle,
       }}
       onMouseDown={handleFocus}
     >
