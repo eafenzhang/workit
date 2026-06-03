@@ -1,36 +1,30 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState } from 'react';
 import type { DockItem } from '../../types/agent-os';
 
 interface DockIconProps {
   item: DockItem;
   isOpen: boolean;
+  color: string;
   onClick: (type: string) => void;
 }
 
 /**
- * A single icon in the Dock bar.
- *
- * Features a hover scale animation, running indicator dot for open
- * windows, and a tooltip label on hover.
+ * A single icon in the Dock bar with filled icon, brand color,
+ * glass hover effect, running indicator, and tooltip.
  */
-export default function DockIcon({ item, isOpen, onClick }: DockIconProps) {
+export default function DockIcon({ item, isOpen, color, onClick }: DockIconProps) {
   const [isHovered, setIsHovered] = useState(false);
-
-  const handleClick = useCallback(() => {
-    onClick(item.type);
-  }, [onClick, item.type]);
-
   const Icon = item.icon;
 
   return (
     <button
-      onClick={handleClick}
+      onClick={() => onClick(item.type)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className="flex flex-col items-center justify-end relative focus:outline-none"
       style={{
-        width: '44px',
-        height: '52px',
+        width: '48px',
+        height: '56px',
         border: 'none',
         background: 'transparent',
         padding: 0,
@@ -39,40 +33,57 @@ export default function DockIcon({ item, isOpen, onClick }: DockIconProps) {
       aria-label={item.label}
       title={item.label}
     >
-      {/* ── Icon ── */}
+      {/* ── Icon with glass badge ── */}
       <div
-        className="flex items-center justify-center rounded-lg transition-transform duration-200"
+        className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
         style={{
-          width: '40px',
-          height: '40px',
-          transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+          width: '44px',
+          height: '44px',
+          background: isHovered
+            ? `${color}22`
+            : isOpen ? `${color}14` : 'transparent',
+          transform: isHovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
+          boxShadow: isHovered
+            ? `0 8px 16px ${color}33`
+            : 'none',
         }}
       >
-        <Icon size={24} style={{ color: 'var(--wiki-text)' }} />
+        <Icon
+          size={26}
+          style={{
+            color: isOpen || isHovered ? color : 'var(--wiki-text3)',
+            filter: isHovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
+            transition: 'color 0.2s, filter 0.2s',
+          }}
+          fill={isOpen || isHovered ? color : 'none'}
+          strokeWidth={isOpen || isHovered ? 2.2 : 1.8}
+        />
       </div>
 
-      {/* ── Running indicator dot ── */}
+      {/* ── Running indicator ── */}
       <div
-        className="transition-opacity duration-200"
+        className="transition-all duration-200"
         style={{
-          width: '4px',
-          height: '4px',
+          width: isOpen ? '5px' : '4px',
+          height: isOpen ? '5px' : '4px',
           borderRadius: '50%',
-          background: 'var(--wiki-text3)',
-          marginTop: '2px',
+          background: isOpen ? color : 'var(--wiki-text3)',
+          marginTop: '3px',
           opacity: isOpen ? 1 : 0,
+          boxShadow: isOpen ? `0 0 6px ${color}80` : 'none',
         }}
       />
 
       {/* ── Tooltip ── */}
       <span
-        className="absolute left-1/2 -translate-x-1/2 px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-opacity duration-150"
+        className="absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-all duration-150"
         style={{
           bottom: '100%',
-          marginBottom: '8px',
-          background: 'var(--wiki-text)',
-          color: 'var(--wiki-bg)',
+          marginBottom: '10px',
+          background: isHovered ? 'var(--wiki-text)' : 'transparent',
+          color: isHovered ? 'var(--wiki-bg)' : 'transparent',
           opacity: isHovered ? 1 : 0,
+          transform: isHovered ? 'translateY(0)' : 'translateY(4px)',
         }}
       >
         {item.label}

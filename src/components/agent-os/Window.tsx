@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useState, useEffect, type MouseEvent, type ComponentType } from 'react';
+import React, { Suspense, useCallback, useState, useEffect, useRef, type MouseEvent, type ComponentType } from 'react';
 import WindowTitleBar from './WindowTitleBar';
 import type { OSWindow } from '../../types/agent-os';
 import type { ResizeEdge, TempDragRect, TempResizeRect } from '../../hooks/useWindowManager';
@@ -68,6 +68,13 @@ export default function Window({
   tempResizeRect,
   pageComponent: PageComponent,
 }: WindowProps) {
+  // ── Mount animation ──
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setAnimated(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   // ── Determine effective position/size (temp overrides during drag/resize) ──
 
   const isDragging = tempDragRect !== null && tempDragRect.windowId === win.id;
@@ -132,7 +139,7 @@ export default function Window({
 
   return (
     <div
-      className="absolute flex flex-col overflow-hidden select-none"
+      className="absolute flex flex-col overflow-hidden select-none will-change-transform"
       style={{
         left: displayX,
         top: displayY,
@@ -143,6 +150,9 @@ export default function Window({
         boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.12)',
         background: 'var(--wiki-surface)',
         border: '1px solid var(--wiki-border)',
+        opacity: animated ? 1 : 0,
+        transform: animated ? 'scale(1)' : 'scale(0.92)',
+        transition: isDragging || isResizing ? 'none' : 'opacity 0.25s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out',
       }}
       onMouseDown={handleFocus}
     >
