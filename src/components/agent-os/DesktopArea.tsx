@@ -5,14 +5,20 @@ import { PlusIcon, ImageIcon, PaletteIcon } from 'lucide-react';
 // ── Wallpaper presets ────────────────────────────────────────────
 
 const WALLPAPERS = [
+  // Dark palette
   { id: 'dark-grain', label: '暗色颗粒', bg: '#1a1a1f' },
   { id: 'navy', label: '深蓝', bg: '#0f172a' },
   { id: 'charcoal', label: '炭灰', bg: '#2d2d2d' },
   { id: 'forest', label: '森林', bg: '#0d2818' },
   { id: 'plum', label: '梅紫', bg: '#1a0f24' },
-  { id: 'slate', label: '石板', bg: '#1e293b' },
   { id: 'deep', label: '深黑', bg: '#0a0a0f' },
-  { id: 'warm', label: '暖灰', bg: '#2a2520' },
+  // Light palette
+  { id: 'snow', label: '雪白', bg: '#f0f2f5' },
+  { id: 'cream', label: '奶油', bg: '#faf8f2' },
+  { id: 'mint', label: '薄荷', bg: '#f0faf4' },
+  { id: 'lavender', label: '薰衣草', bg: '#f4f0fa' },
+  { id: 'sky', label: '天空', bg: '#f0f4fa' },
+  { id: 'rose', label: '玫瑰', bg: '#faf3f4' },
 ];
 
 const LS_WALLPAPER_KEY = 'agent-os-wallpaper';

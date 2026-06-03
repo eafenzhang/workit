@@ -131,13 +131,44 @@ export default function Window({
     [win.id, win.x, win.y, win.width, win.height, onStartResize],
   );
 
-  // ── Minimized → hidden ──
+  // ── Genie minimize animation ──
+  const [closing, setClosing] = useState(false);
+  const [shouldRemove, setShouldRemove] = useState(false);
+  const prevMinimized = useRef(win.isMinimized);
 
-  if (win.isMinimized) return null;
+  useEffect(() => {
+    if (win.isMinimized && !prevMinimized.current) {
+      setClosing(true);
+      const t = setTimeout(() => setShouldRemove(true), 350);
+      return () => clearTimeout(t);
+    }
+    prevMinimized.current = win.isMinimized;
+  }, [win.isMinimized]);
+
+  // ── Minimized → hidden (after animation) ──
+
+  if (win.isMinimized && shouldRemove) return null;
+
+  // ── Animation style ──
+  const genieStyle = closing ? {
+    animation: 'genieSuck 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+    transformOrigin: 'center bottom',
+    perspective: '800px',
+  } : {};
 
   // ── Render ──
 
   return (
+    <>
+      {closing && (
+        <style>{`
+          @keyframes genieSuck {
+            0% { opacity: 1; transform: scale(1) rotateX(0) translateY(0); }
+            40% { opacity: 0.8; transform: scale(0.95) rotateX(3deg) translateY(5%); }
+            100% { opacity: 0; transform: scale(0.5) rotateX(12deg) translateY(40%); }
+          }
+        `}</style>
+      )}
     <div
       className="absolute flex flex-col overflow-hidden select-none will-change-transform"
       style={{
@@ -150,9 +181,10 @@ export default function Window({
         boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.12)',
         background: 'var(--wiki-surface)',
         border: '1px solid var(--wiki-border)',
-        opacity: animated ? 1 : 0,
-        transform: animated ? 'scale(1)' : 'scale(0.92)',
-        transition: isDragging || isResizing ? 'none' : 'opacity 0.25s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out',
+        opacity: closing ? undefined : (animated ? 1 : 0),
+        transform: closing ? undefined : (animated ? 'scale(1)' : 'scale(0.92)'),
+        transition: closing ? 'none' : (isDragging || isResizing ? 'none' : 'opacity 0.25s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out'),
+        ...genieStyle,
       }}
       onMouseDown={handleFocus}
     >
@@ -221,5 +253,6 @@ export default function Window({
           );
         })}
     </div>
+  </>
   );
 }

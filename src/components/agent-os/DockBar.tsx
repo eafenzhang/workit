@@ -87,7 +87,7 @@ export default function DockBar() {
         borderRadius: '20px',
         background: isDark
           ? 'rgba(20,20,25,0.78)'
-          : 'rgba(240,240,245,0.78)',
+          : 'rgba(248,248,252,0.82)',
         backdropFilter: 'blur(24px) saturate(180%)',
         WebkitBackdropFilter: 'blur(24px) saturate(180%)',
         border: isDark
