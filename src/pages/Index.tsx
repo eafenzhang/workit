@@ -69,7 +69,7 @@ export default function Index() {
   const { userProfile, saveProfile, isLoading } = useAuth();
 
   // Agent OS mode
-  const { state: osState, toggleOSMode, openWindow } = useAgentOS();
+  const { state: osState, toggleOSMode, openWindow, openNewBrowserWindow } = useAgentOS();
   const isOSMode = osState.isOSMode;
   const hasAutoOpenedRef = React.useRef(false);
 
@@ -162,10 +162,14 @@ export default function Index() {
 
   // Open browser tab — always creates a NEW tab (fix #7)
   const onOpenBrowser = useCallback((url?: string) => {
+    if (isOSMode) {
+      openNewBrowserWindow();
+      return;
+    }
     const urlStr = url || '';
     const title = urlStr ? urlStr.replace(/^https?:\/\//, '').substring(0, 30) : '浏览器';
     openTab('browser', title || '浏览器', { params: { url: urlStr }, reqId: Date.now() });
-  }, [openTab]);
+  }, [openTab, isOSMode, openNewBrowserWindow]);
 
   // Listen for browser tab open requests from link clicks (App.tsx)
   useEffect(() => {

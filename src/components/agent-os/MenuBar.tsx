@@ -47,7 +47,7 @@ export default function MenuBar() {
 
   return (
     <div
-      className="flex items-center h-7 flex-shrink-0 select-none"
+      className="flex items-center h-7 flex-shrink-0 select-none relative"
       style={{
         background: 'var(--wiki-surface)',
         borderBottom: '1px solid var(--wiki-border)',
@@ -56,7 +56,7 @@ export default function MenuBar() {
       }}
     >
       {/* ── Left: Apple logo + menu items ── */}
-      <div className="flex items-center h-full gap-4 pl-3">
+      <div className="flex items-center h-full gap-4 pl-3 flex-1">
         <span className="inline-flex items-center" aria-label="Apple 菜单">
           <AppleLogo />
         </span>
@@ -71,11 +71,8 @@ export default function MenuBar() {
         ))}
       </div>
 
-      {/* ── Spacer ── */}
-      <div className="flex-1" />
-
-      {/* ── Right: Clock ── */}
-      <div className="flex items-center h-full pr-3">
+      {/* ── Center: Clock (absolute positioned) ── */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center h-full">
         <span
           className="cursor-default tabular-nums"
           style={{ color: 'var(--wiki-text2)' }}
@@ -83,6 +80,9 @@ export default function MenuBar() {
           {time}
         </span>
       </div>
+
+      {/* ── Right: spacer ── */}
+      <div className="flex-1" />
     </div>
   );
 }

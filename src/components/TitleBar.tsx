@@ -37,7 +37,8 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
       className="flex items-center h-10 flex-shrink-0 select-none w-full group"
       style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)', WebkitAppRegion: 'drag' } as any}
     >
-      {/* Sidebar toggle button */}
+      {/* Sidebar toggle button — hidden in OS mode */}
+      {!isOSMode && (
       <button
         onClick={onToggleSidebar}
         className="h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors flex-shrink-0 focus:outline-none"
@@ -50,6 +51,7 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
           : <PanelLeftCloseIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
         }
       </button>
+      )}
 
       {/* Tab bar slot — children render here */}
       <div className="flex items-center h-full flex-1 overflow-hidden">
@@ -58,10 +60,6 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
       {/* Window controls */}
       <div className="flex h-full flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        {/* OS mode toggle button */}
-        {onToggleOSMode && (
-          <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
-        )}
         {/* Browser button */}
         <button
           onClick={() => onOpenBrowser?.()}
@@ -71,6 +69,10 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
         >
           <GlobeIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
         </button>
+        {/* OS mode toggle button */}
+        {onToggleOSMode && (
+          <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
+        )}
         <button onClick={handleMinimize} className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none" aria-label="最小化" title="最小化">
           <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><rect y="5" width="12" height="1.5" fill="var(--wiki-text2)"/></svg>
         </button>

@@ -33,6 +33,7 @@ const ModelPage = React.lazy(() => import('../pages/Model'));
 const MessagesPage = React.lazy(() => import('../pages/Messages'));
 const SettingsPage = React.lazy(() => import('../pages/Settings'));
 const ProfilePage = React.lazy(() => import('../pages/Profile'));
+const BrowserPage = React.lazy(() => import('../pages/Browser'));
 
 /** Maps window.type → lazy page component */
 export const PAGE_COMPONENT_MAP: WindowPageMap = {
@@ -42,6 +43,7 @@ export const PAGE_COMPONENT_MAP: WindowPageMap = {
   insights: InsightsPage,
   mcp: AppEcosystemPage,
   model: ModelPage,
+  browser: BrowserPage,
   messages: MessagesPage,
   settings: SettingsPage,
   profile: ProfilePage,
@@ -52,6 +54,8 @@ export const PAGE_COMPONENT_MAP: WindowPageMap = {
 export interface AgentOSContextType {
   state: AgentOSState;
   openWindow: (type: string, title: string) => void;
+  /** Open a NEW browser window (does not deduplicate — each call = new window) */
+  openNewBrowserWindow: () => void;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
@@ -180,6 +184,28 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     [state.windows, state.nextZIndex],
   );
 
+  /** Always creates a new browser window (no deduplication) */
+  const openNewBrowserWindow = useCallback(() => {
+    const centerX = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
+    const centerY = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
+    const cascadeOffset = state.windows.length * 24;
+    const tabIdx = state.windows.filter(w => w.type === 'browser').length + 1;
+    const newWindow: OSWindow = {
+      id: `browser-${Date.now()}`,
+      type: 'browser',
+      title: `浏览器${tabIdx > 1 ? ' ' + tabIdx : ''}`,
+      x: Math.min(centerX + cascadeOffset, window.innerWidth - 200),
+      y: Math.min(centerY + cascadeOffset, window.innerHeight - 200),
+      width: WINDOW_DEFAULT_WIDTH,
+      height: WINDOW_DEFAULT_HEIGHT,
+      zIndex: state.nextZIndex,
+      isMinimized: false,
+      isMaximized: false,
+      preMaximizeRect: null,
+    };
+    dispatch({ type: 'OPEN_WINDOW', payload: { window: newWindow } });
+  }, [state.windows, state.nextZIndex]);
+
   const closeWindow = useCallback((id: string) => {
     dispatch({ type: 'CLOSE_WINDOW', payload: { id } });
   }, []);
@@ -222,6 +248,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     () => ({
       state,
       openWindow,
+      openNewBrowserWindow,
       closeWindow,
       focusWindow,
       minimizeWindow,

@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   SettingsIcon,
   UserIcon,
+  GlobeIcon,
 } from 'lucide-react';
 import DockIcon from './DockIcon';
 import type { DockItem, OSWindow } from '../../types/agent-os';
@@ -23,6 +24,7 @@ const DOCK_ITEMS: DockItem[] = [
   { id: 'insights', label: '洞察分析', icon: LightbulbIcon, type: 'insights' },
   { id: 'mcp', label: '应用生态', icon: PackageIcon, type: 'mcp' },
   { id: 'model', label: '模型配置', icon: CpuIcon, type: 'model' },
+  { id: 'browser', label: '浏览器', icon: GlobeIcon, type: 'browser' },
   { id: 'messages', label: '消息中心', icon: MessageSquareIcon, type: 'messages' },
   { id: 'settings', label: '系统设置', icon: SettingsIcon, type: 'settings' },
   { id: 'profile', label: '用户Agent', icon: UserIcon, type: 'profile' },
@@ -35,7 +37,7 @@ const DOCK_ITEMS: DockItem[] = [
  * Clicking an icon opens or focuses the corresponding window.
  */
 export default function DockBar() {
-  const { state, openWindow } = useAgentOS();
+  const { state, openWindow, openNewBrowserWindow } = useAgentOS();
   const { windows } = state;
 
   // ── Dark mode detection for glass background ────────────────────
@@ -64,11 +66,14 @@ export default function DockBar() {
   const handleDockClick = useCallback(
     (type: string) => {
       const item = DOCK_ITEMS.find((d) => d.type === type);
-      if (item) {
+      if (!item) return;
+      if (type === 'browser') {
+        openNewBrowserWindow();
+      } else {
         openWindow(type, item.label);
       }
     },
-    [openWindow],
+    [openWindow, openNewBrowserWindow],
   );
 
   return (
