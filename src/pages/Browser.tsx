@@ -52,7 +52,6 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
       webviewRef.current.removeEventListener('will-navigate', handleWillNavigate);
       webviewRef.current.removeEventListener('did-start-loading', handleStartLoading);
       webviewRef.current.removeEventListener('did-stop-loading', handleStopLoading);
-      webviewRef.current.removeEventListener('new-window', handleNewWindow);
       webviewRef.current.remove();
       webviewRef.current = null;
     }
@@ -67,7 +66,8 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     wv.addEventListener('will-navigate', handleWillNavigate);
     wv.addEventListener('did-start-loading', handleStartLoading);
     wv.addEventListener('did-stop-loading', handleStopLoading);
-    wv.addEventListener('new-window', handleNewWindow);
+    // Let normal link clicks navigate within the same webview.
+    // Only intercept window.open() style popups via did-attach handler.
     wv.addEventListener('did-attach', () => {
       try {
         const wc = wv.getWebContents?.();
