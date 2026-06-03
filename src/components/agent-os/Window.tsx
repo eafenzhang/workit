@@ -151,9 +151,7 @@ export default function Window({
 
   // ── Animation style ──
   const genieStyle = closing ? {
-    animation: 'genieSuck 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards',
-    transformOrigin: 'center bottom',
-    perspective: '800px',
+    animation: 'winFadeOut 0.2s ease-out forwards',
   } : {};
 
   // ── Render ──
@@ -162,10 +160,9 @@ export default function Window({
     <>
       {closing && (
         <style>{`
-          @keyframes genieSuck {
-            0% { opacity: 1; transform: scale(1) rotateX(0) translateY(0); }
-            40% { opacity: 0.8; transform: scale(0.95) rotateX(3deg) translateY(5%); }
-            100% { opacity: 0; transform: scale(0.5) rotateX(12deg) translateY(40%); }
+          @keyframes winFadeOut {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.96); }
           }
         `}</style>
       )}
