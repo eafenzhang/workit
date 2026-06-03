@@ -13,6 +13,8 @@ let _preloadPath = '';
 function setupWindowEvents(win) {
   win.on('maximize', () => win.webContents?.send('window-maximized-change', true));
   win.on('unmaximize', () => win.webContents?.send('window-maximized-change', false));
+  win.on('enter-full-screen', () => win.webContents?.send('window-fullscreen-change', true));
+  win.on('leave-full-screen', () => win.webContents?.send('window-fullscreen-change', false));
 }
 
 function getMainWindow() {

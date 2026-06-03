@@ -17,6 +17,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('window-maximized-change', handler);
   },
   isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  // Fullscreen
+  setFullScreen: (flag) => ipcRenderer.invoke('window-set-fullscreen', flag),
+  isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
+  onFullscreenChange: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on('window-fullscreen-change', handler);
+    return () => ipcRenderer.removeListener('window-fullscreen-change', handler);
+  },
   // Database operations
   dbQuery: (method, table, args) => ipcRenderer.invoke('db-query', method, table, args),
   dbUpload: (table, fileData) => ipcRenderer.invoke('db-upload', table, fileData),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MonitorIcon, LayoutGridIcon } from 'lucide-react';
+import { MonitorIcon, LayoutGridIcon, Maximize2Icon, Minimize2Icon } from 'lucide-react';
 
 // ── Apple logo SVG ───────────────────────────────────────────────
 
@@ -33,13 +33,15 @@ interface MenuBarProps {
 
 /**
  * Top menu bar (28px) — macOS-style with Apple logo, menu items,
- * centered clock, OS toggle, and window controls (merged TitleBar).
+ * centered clock, OS toggle, fullscreen toggle, and window controls.
+ * The area between menu items and clock is draggable for window reposition.
  */
 export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
   const [time, setTime] = useState<string>(() =>
     new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   );
   const [maximized, setMaximized] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -50,9 +52,11 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
 
   useEffect(() => {
     const api = getAPI();
-    const unsub = api?.onMaximizeChange?.((v: boolean) => setMaximized(v));
+    const unsubMax = api?.onMaximizeChange?.((v: boolean) => setMaximized(!!v));
+    const unsubFS = api?.onFullscreenChange?.((v: boolean) => setFullscreen(!!v));
     api?.isMaximized?.().then((v: any) => setMaximized(!!v)).catch(() => {});
-    return () => { if (unsub) unsub(); };
+    api?.isFullScreen?.().then((v: any) => setFullscreen(!!v)).catch(() => {});
+    return () => { if (unsubMax) unsubMax(); if (unsubFS) unsubFS(); };
   }, []);
 
   return (
@@ -67,7 +71,7 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
       }}
     >
       {/* ── Left: Apple logo + menu items (no-drag for click) ── */}
-      <div className="flex items-center h-full gap-4 pl-3 flex-1" style={{ WebkitAppRegion: 'no-drag' }}>
+      <div className="flex items-center h-full gap-4 pl-3 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
         <span className="inline-flex items-center" aria-label="Apple 菜单">
           <AppleLogo />
         </span>
@@ -78,22 +82,33 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
         ))}
       </div>
 
-      {/* ── Center: Clock (absolute positioned) ── */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center h-full" style={{ WebkitAppRegion: 'drag' }}>
+      {/* ── Drag region: fills the gap between menu and clock ── */}
+      <div className="flex-1 h-full" style={{ WebkitAppRegion: 'drag' }} />
+
+      {/* ── Center: Clock (absolute positioned, drag to reposition window) ── */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center h-full pointer-events-none">
         <span className="cursor-default tabular-nums" style={{ color: 'var(--wiki-text2)' }}>
           {time}
         </span>
       </div>
 
-      {/* ── Right: OS toggle + window controls (no-drag) ── */}
+      {/* ── Right: window controls (no-drag) ── */}
       <div className="flex items-center h-full pr-1 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
         <button
           onClick={(e) => { e.stopPropagation(); onToggleOSMode(); }}
           className="w-8 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors"
-          title={isOSMode ? '经典模式' : '桌面模式'}
+          title="切换桌面/经典模式"
           aria-label="切换模式"
         >
           {isOSMode ? <LayoutGridIcon size={14} style={{ color: 'var(--wiki-text2)' }} /> : <MonitorIcon size={14} style={{ color: 'var(--wiki-text2)' }} />}
+        </button>
+        <button
+          onClick={() => getAPI()?.setFullScreen?.(!fullscreen)}
+          className="w-8 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors"
+          title={fullscreen ? '退出全屏' : '全屏模式'}
+          aria-label="全屏"
+        >
+          {fullscreen ? <Minimize2Icon size={13} style={{ color: 'var(--wiki-text2)' }} /> : <Maximize2Icon size={13} style={{ color: 'var(--wiki-text2)' }} />}
         </button>
         <button onClick={() => getAPI()?.minimize?.()} className="w-8 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors" aria-label="最小化">
           <svg width="10" height="10" viewBox="0 0 12 12"><rect y="5" width="12" height="1.5" fill="var(--wiki-text2)"/></svg>

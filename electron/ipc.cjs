@@ -39,6 +39,8 @@ function setupIPC(mainWindow, db) {
   });
   ipcMain.handle('window-close', () => getMainWindow()?.close());
   ipcMain.handle('window-is-maximized', () => getMainWindow()?.isMaximized() || false);
+  ipcMain.handle('window-set-fullscreen', (_, flag) => getMainWindow()?.setFullScreen(!!flag));
+  ipcMain.handle('window-is-fullscreen', () => getMainWindow()?.isFullScreen() || false);
 
   ipcMain.handle('db-query', async (event, method, table, args) => {
     try {

@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, GlobeIcon } from 'lucide-react';
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, GlobeIcon, Maximize2Icon, Minimize2Icon } from 'lucide-react';
 import OSToggleButton from './agent-os/OSToggleButton';
 
 function getAPI(): ElectronAPI | undefined {
@@ -19,18 +19,21 @@ interface Props {
 
 export default function TitleBar({ children, sidebarCollapsed = false, onToggleSidebar, onOpenBrowser, onToggleOSMode, isOSMode = false }: Props) {
   const [maximized, setMaximized] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     const api = getAPI();
-    // P1-05: Store unsubscribe function and clean up on unmount
-    const unsub = api?.onMaximizeChange?.((v: boolean) => setMaximized(v));
-    api?.isMaximized?.().then(setMaximized);
-    return () => { if (unsub) unsub(); };
+    const unsub = api?.onMaximizeChange?.((v: boolean) => setMaximized(!!v));
+    const unsubFS = api?.onFullscreenChange?.((v: boolean) => setFullscreen(!!v));
+    api?.isMaximized?.().then((v: any) => setMaximized(!!v));
+    api?.isFullScreen?.().then((v: any) => setFullscreen(!!v));
+    return () => { if (unsub) unsub(); if (unsubFS) unsubFS(); };
   }, []);
 
   const handleMinimize = () => { getAPI()?.minimize?.(); };
   const handleMaximize = () => { getAPI()?.maximize?.(); };
   const handleClose = () => { getAPI()?.close?.(); };
+  const handleFullscreen = () => { getAPI()?.setFullScreen?.(!fullscreen); };
 
   return (
     <div
@@ -75,6 +78,9 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
         {onToggleOSMode && (
           <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
         )}
+        <button onClick={handleFullscreen} className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none" aria-label="全屏" title="全屏">
+          {fullscreen ? <Minimize2Icon size={15} style={{ color: 'var(--wiki-text2)' }} /> : <Maximize2Icon size={15} style={{ color: 'var(--wiki-text2)' }} />}
+        </button>
         <button onClick={handleMinimize} className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none" aria-label="最小化" title="最小化">
           <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><rect y="5" width="12" height="1.5" fill="var(--wiki-text2)"/></svg>
         </button>
