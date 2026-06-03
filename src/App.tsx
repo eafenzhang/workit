@@ -2,6 +2,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Index from './pages/Index';
 import { AuthProvider } from './context/AuthContext';
+import { AgentOSProvider } from './context/AgentOSContext';
 import { useState, useEffect, lazy, Suspense } from 'react';
 
 const QuickCapture = lazy(() => import('./components/QuickCapture'));
@@ -40,7 +41,9 @@ const App = () => {
   return (
     <AuthProvider>
       <MemoryRouter>
-        <Index />
+        <AgentOSProvider>
+          <Index />
+        </AgentOSProvider>
         {qcEnabled && <Suspense fallback={null}><QuickCapture /></Suspense>}
         <Toaster position="top-right" />
       </MemoryRouter>

@@ -1,91 +1,65 @@
 sequenceDiagram
-    participant App as Electron App
-    participant DB as database.cjs
-    participant IPC as ipc.cjs
-    participant MCM as McpClientManager
-    participant MCP as MCP Server Process
-    participant LLM as LLM API
-    participant UI as Renderer (Home)
+    participant User
+    participant TitleBar
+    participant OSToggleButton
+    participant AgentOSContext
+    participant Index
+    participant AgentOSDesktop
+    participant DockBar
+    participant WindowManager
+    participant Window
 
-    Note over App,UI: === 流程1: 应用启动 → MCP 自动连接 ===
+    Note over User,Window: === 模式切换：经典 → OS ===
 
-    App->>IPC: app.whenReady()
-    IPC->>DB: 初始化数据库
-    IPC->>MCM: initialize(mainWindow)
-    MCM->>DB: SELECT * FROM mcp_servers WHERE enabled=1
-    DB-->>MCM: enabledServers[]
+    User->>TitleBar: 点击 OS 模式按钮
+    TitleBar->>OSToggleButton: onClick()
+    OSToggleButton->>AgentOSContext: toggleOSMode()
+    AgentOSContext->>AgentOSContext: dispatch TOGGLE_OS_MODE
+    AgentOSContext-->>Index: re-render (isOSMode=true)
+    Index->>AgentOSDesktop: 渲染桌面
 
-    loop 每个启用的 server
-        MCM->>MCM: connectServer(config)
-        MCM->>MCM: pushStatus → "connecting"
-        MCM->>MCP: spawn(command, args) → StdioClientTransport
-        MCM->>MCP: client.connect(transport) [timeout:10s]
-        alt 连接成功
-            MCM->>MCP: client.request("tools/list")
-            MCP-->>MCM: tools[]
-            MCM->>MCM: cache tools, set status "connected"
-            MCM->>MCM: pushStatus + pushTools
-        else 连接失败/超时
-            MCM->>MCM: set status "error", pushStatus
-            MCM->>MCM: scheduleReconnect(serverId)
-        end
+    Note over User,Window: === 打开窗口 ===
+
+    User->>DockBar: 点击 Dock 图标
+    DockBar->>AgentOSContext: openWindow(type, title)
+    alt 窗口已存在
+        AgentOSContext->>AgentOSContext: focusWindow(id) + 恢复最小化
+    else 窗口不存在
+        AgentOSContext->>AgentOSContext: 创建新窗口 (居中 800×500)
     end
+    AgentOSContext-->>WindowManager: re-render windows[]
+    WindowManager->>Window: 渲染 Window 组件
+    Window->>Window: 懒加载页面 + 定位
 
-    Note over App,UI: === 流程2: 配置热更新 → 自动重连 ===
+    Note over User,Window: === 拖拽窗口 ===
 
-    UI->>IPC: mcp:update (enabled toggle)
-    IPC->>DB: UPDATE mcp_servers
-    DB-->>IPC: updated config
-    IPC->>MCM: onServerConfigChanged({type:"update"})
-
-    alt enabled: false→true 或 command/args变更
-        MCM->>MCM: disconnectServer → connectServer
-        MCM-->>UI: pushStatus + pushTools
-    else enabled: true→false
-        MCM->>MCM: disconnectServer + clearReconnect
-        MCM-->>UI: pushStatus → "disconnected"
+    User->>Window: mousedown 标题栏
+    Window->>Window: startDrag(id, e)
+    loop 拖拽中
+        User->>Window: mousemove
+        Window->>Window: 本地更新位置 (optimistic)
     end
+    User->>Window: mouseup
+    Window->>AgentOSContext: moveWindow(id, x, y)
 
-    Note over App,UI: === 流程3: LLM 工具注入与调用循环 ===
+    Note over User,Window: === 聚焦窗口 ===
 
-    UI->>IPC: chatWithAI(messages, options)
-    IPC->>MCM: getAllToolsForLLM("openai")
-    MCM-->>IPC: ToolDefinition[] (serverName__toolName)
+    User->>Window: click 窗口
+    Window->>AgentOSContext: focusWindow(id)
+    AgentOSContext->>AgentOSContext: zIndex = nextZIndex++
 
-    loop 工具调用循环 (round=0..4, max=5)
-        IPC->>LLM: _callModel(messages, {tools, tool_choice:"auto"})
-        LLM-->>IPC: response
+    Note over User,Window: === 关闭窗口 ===
 
-        alt response.tool_calls 存在 且 round < 5
-            IPC->>IPC: round++
-            loop 每个 tool_call
-                IPC->>IPC: parseToolName → {serverName, toolName}
-                IPC->>MCM: executeTool(serverId, toolName, args)
-                MCM->>MCP: client.callTool(toolName, args)
-                MCP-->>MCM: result
-                MCM-->>IPC: ToolCallResult
-                IPC->>IPC: messages.push(tool_result)
-                IPC-->>UI: chat:tool-progress
-            end
-        else 无 tool_calls 或 round >= 5
-            IPC-->>UI: 最终文本响应
-        end
-    end
+    User->>Window: 点击红色关闭按钮
+    Window->>AgentOSContext: closeWindow(id)
+    AgentOSContext->>AgentOSContext: 过滤窗口 + 聚焦最高层
 
-    Note over App,UI: === 流程4: 断线重连 (P1) ===
+    Note over User,Window: === 模式切换：OS → 经典 ===
 
-    MCP-->>MCM: 进程意外退出 (close event)
-    MCM->>MCM: set status "error", pushStatus
-    MCM->>MCM: scheduleReconnect(serverId)
-
-    loop 指数退避 (1s→2s→4s→8s→...→max30s)
-        MCM->>MCM: wait(delay)
-        MCM->>MCP: spawn + connect [timeout:10s]
-        alt 重连成功
-            MCM->>MCP: tools/list
-            MCM->>MCM: clearReconnect, pushStatus "connected"
-        else 重连失败
-            MCM->>MCM: delay = min(delay*2, 30000)
-            MCM->>MCM: pushStatus "error"
-        end
-    end
+    User->>TitleBar: 再次点击 OS 模式按钮
+    TitleBar->>OSToggleButton: onClick()
+    OSToggleButton->>AgentOSContext: toggleOSMode()
+    AgentOSContext->>AgentOSContext: dispatch TOGGLE_OS_MODE
+    AgentOSContext-->>Index: re-render (isOSMode=false)
+    Index->>Index: 渲染经典布局 (Sidebar + TabBar + Content)
+    Note right of Index: tabs 状态完全保留

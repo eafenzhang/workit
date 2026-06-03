@@ -1,573 +1,660 @@
-# Workit MCP 运行时集成 — 系统设计文档
+# System Design: Agent OS 桌面模式
 
-## Part A: 系统设计
+> **架构师**: Bob | **日期**: 2025-07-15 | **状态**: Final
 
 ---
 
-### 1. 实现方案
+## Part A: System Design
 
-#### 核心技术挑战
+### 1. Implementation Approach
 
-| 挑战 | 分析 | 方案 |
+#### 1.1 核心技术挑战
+
+| 挑战 | 描述 | 难度 |
 |------|------|------|
-| **ESM SDK 在 CJS 主进程中使用** | `@modelcontextprotocol/sdk` 是纯 ESM 包，现有 electron 代码均为 `.cjs` | 使用动态 `import()` 在 CJS 中加载 ESM SDK，封装在 `mcp-client-manager.cjs` 中 |
-| **sql.js 内存数据库变更监听** | sql.js 无原生 trigger/event 机制 | 在 `handleMcp()` 的 CRUD 操作后显式调用 `McpClientManager.onServerConfigChanged()` |
-| **工具名冲突** | 不同 MCP 服务可能提供同名工具 | 采用 `serverName__toolName` 前缀策略，在注入 LLM 时自动添加前缀 |
-| **多轮工具调用循环** | LLM 可能连续要求调用多个工具 | 实现状态机循环，最大 5 轮，每轮可包含多个 tool_call |
-| **IPC 实时推送** | Electron 主进程需主动推送状态到渲染进程 | 使用 `webContents.send()` 实现推模式，渲染进程通过 `ipcRenderer.on()` 监听 |
+| 窗口 z-index 管理 | 多窗口点击切换层级，焦点高亮/非焦点变暗 | 中 |
+| 窗口拖拽 & 缩放 | 标题栏拖拽移动、四角+边缘 resize，限制最小尺寸 400×300 | 中 |
+| 模式切换状态保留 | 经典模式 ←→ OS 模式，保持窗口/标签页状态不丢失 | 高 |
+| 现有 TabBar 适配 | OS 模式下全局 TabBar 变为窗口内局部 TabBar | 高 |
+| 暗色模式全覆盖 | 所有新组件使用 --wiki-* CSS 变量 | 低 |
 
-#### 框架选型
+#### 1.2 框架 & 库选型
 
-- **MCP SDK**：`@modelcontextprotocol/sdk@^1.x` — 官方 SDK，提供 `Client` + `StdioClientTransport`
-- **无需额外框架**：现有 sql.js 数据库、Electron IPC、Vite 构建体系已足够
+| 方面 | 选型 | 理由 |
+|------|------|------|
+| UI 框架 | React 19（现有） | 无需引入新框架 |
+| 样式方案 | Tailwind CSS v4 + CSS 变量 | 复用现有体系，降低学习成本 |
+| 图标库 | lucide-react（现有） | 侧边栏图标直接映射到 Dock |
+| 状态管理 | React Context + useReducer | 窗口状态复杂度适中，无需 Redux |
+| 拖拽实现 | 原生 DOM 事件（mousedown/mousemove/mouseup） | 零依赖，精确控制，避免引入 react-dnd 等重型库 |
+| 持久化 | localStorage | 模式偏好 + 窗口布局持久化 |
+| 类型定义 | TypeScript（现有） | 强类型约束 |
 
-#### 架构模式
+#### 1.3 架构模式
+
+采用 **Provider + Hook 模式**：
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Main Process                         │
-│  ┌──────────────┐  ┌──────────────────────────────┐     │
-│  │ database.cjs  │  │  mcp-client-manager.cjs       │     │
-│  │ (sql.js)     │◄─┤  (Singleton)                  │     │
-│  │ mcp_servers  │  │  ┌──────────┐ ┌───────────┐  │     │
-│  │ CRUD hooks   │  │  │Client 1  │ │Client 2   │  │     │
-│  └──────┬───────┘  │  │(stdio)   │ │(stdio)    │  │     │
-│         │          │  └──────────┘ └───────────┘  │     │
-│  ┌──────▼───────┐  │  toolCache, statusMap        │     │
-│  │  ipc.cjs     │  └──────────────┬───────────────┘     │
-│  │ chatWithAI() │◄────────────────┤                      │
-│  │ handleMcp()  │                 │                      │
-│  │ tool loop    │                 │ webContents.send()   │
-│  └──────┬───────┘                 │                      │
-│         │ IPC                      │                      │
-└─────────┼─────────────────────────┼──────────────────────┘
-          │                         │
-┌─────────▼─────────────────────────▼──────────────────────┐
-│                   Renderer Process                        │
-│  ┌──────────┐  ┌───────────────┐  ┌──────────────────┐   │
-│  │ Home.tsx  │  │  MCPTab.tsx   │  │ useMcpStatus.ts  │   │
-│  │ (chat)   │  │  (status UI)  │  │ (hook)           │   │
-│  └──────────┘  └───────────────┘  └──────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+App.tsx
+  └── AuthProvider
+       └── ThemeProvider
+            └── AgentOSProvider        ← 新增
+                 └── Index.tsx
+                      ├── [经典模式] TitleBar + Sidebar + Content
+                      └── [OS模式]   TitleBar(含Toggle) + AgentOSDesktop
+```
+
+**关键原则**：
+- AgentOSContext 在经典模式下保持休眠（不渲染桌面组件），但状态保留
+- 模式切换只影响 Index.tsx 的渲染分支，不卸载全局 Context
+- 窗口内容复用现有 lazy-loaded 页面组件，零改动
+
+---
+
+### 2. File List
+
+```
+src/
+├── types/
+│   └── agent-os.ts                    # [新增] OS模式类型定义
+├── context/
+│   └── AgentOSContext.tsx             # [新增] OS模式全局状态Context
+├── hooks/
+│   ├── useAgentOSMode.ts             # [新增] OS模式切换hook + localStorage持久化
+│   └── useWindowManager.ts           # [新增] 窗口CRUD + 拖拽/缩放逻辑
+├── components/
+│   ├── agent-os/
+│   │   ├── AgentOSDesktop.tsx        # [新增] 桌面主容器(MenuBar + DesktopArea + DockBar)
+│   │   ├── MenuBar.tsx               # [新增] 顶部菜单栏(28px)
+│   │   ├── DesktopArea.tsx           # [新增] 桌面区域(窗口画布)
+│   │   ├── DockBar.tsx               # [新增] Dock栏(64px, glassmorphism)
+│   │   ├── DockIcon.tsx              # [新增] 单个Dock图标
+│   │   ├── WindowManager.tsx         # [新增] 窗口管理器(协调渲染)
+│   │   ├── Window.tsx                # [新增] 单个窗口组件
+│   │   ├── WindowTitleBar.tsx        # [新增] 窗口标题栏(36px, macOS按钮)
+│   │   └── OSToggleButton.tsx        # [新增] 模式切换按钮
+│   └── TitleBar.tsx                  # [修改] 添加OSToggleButton插槽
+├── pages/
+│   └── Index.tsx                     # [修改] 添加OS模式渲染分支
 ```
 
 ---
 
-### 2. 文件列表
+### 3. Data Structures and Interfaces
 
-**新建文件：**
-
-| 文件路径 | 用途 | 模块类型 |
-|----------|------|----------|
-| `electron/mcp-client-manager.cjs` | MCP 客户端管理器单例 | CJS (主进程) |
-| `electron/mcp-types.cjs` | MCP 类型定义与常量 | CJS (主进程) |
-| `src/hooks/useMcpStatus.ts` | MCP 状态订阅 React Hook | TS (渲染进程) |
-
-**修改文件：**
-
-| 文件路径 | 修改内容 |
-|----------|----------|
-| `package.json` | 添加 `@modelcontextprotocol/sdk` 依赖 |
-| `electron/database.cjs` | 在 MCP CRUD 操作后添加变更通知钩子 |
-| `electron/ipc.cjs` | 添加 MCP 运行时 IPC handler，修改 `chatWithAI`/`_callModel` |
-| `electron/preload.cjs` | 暴露新的 MCP IPC API 到渲染进程 |
-| `src/api.ts` | 添加 MCP 运行时相关类型定义 |
-| `src/components/MCPTab.tsx` | 显示连接状态、工具数量、状态指示灯 |
-| `src/pages/AppEcosystem.tsx` | 集成 MCP 状态上下文 |
-| `src/pages/Home.tsx` | 工具调用状态提示（如"正在调用 MCP 工具..."） |
-
----
-
-### 3. 数据结构与接口
+> See also: `docs/class-diagram.mermaid`
 
 ```mermaid
 classDiagram
-    class McpClientManager {
-        -static instance: McpClientManager
-        -clients: Map~number, Client~
-        -transports: Map~number, StdioClientTransport~
-        -serverStates: Map~number, McpServerState
-        -reconnectTimers: Map~number, NodeJS.Timeout
-        -reconnectAttempts: Map~number, number
-        -mainWindow: BrowserWindow
-        +static getInstance(): McpClientManager
-        +initialize(mainWindow: BrowserWindow): Promise~void~
-        +loadAllEnabledServers(db: Database): Promise~void~
-        +connectServer(serverConfig: McpServerConfig): Promise~void~
-        +disconnectServer(serverId: number): Promise~void~
-        +onServerConfigChanged(event: ConfigChangeEvent): Promise~void~
-        +getAllToolsForLLM(format: "openai"|"anthropic"): ToolDefinition[]
-        +executeTool(serverId: number, toolName: string, args: object): Promise~ToolResult~
-        +getAllStatus(): McpServerState[]
-        +shutdown(): Promise~void~
-        -createClient(serverConfig: McpServerConfig): Promise~Client~
-        -fetchTools(client: Client): Promise~McpTool~
-        -pushStatus(serverId: number): void
-        -pushTools(serverId: number): void
-        -scheduleReconnect(serverId: number): void
-        -clearReconnect(serverId: number): void
+    direction TB
+
+    class AgentOSState {
+        +boolean isOSMode
+        +OSWindow[] windows
+        +string | null activeWindowId
+        +number nextZIndex
+        +boolean isInitialized
     }
 
-    class McpServerConfig {
-        +id: number
-        +name: string
-        +type: string
-        +command: string
-        +args: string
-        +env: string
-        +enabled: boolean
-        +config: string
+    class OSWindow {
+        +string id
+        +string type
+        +string title
+        +number x
+        +number y
+        +number width
+        +number height
+        +number zIndex
+        +boolean isMinimized
+        +boolean isMaximized
+        +WindowSize? preMaximizeRect
     }
 
-    class McpServerState {
-        +serverId: number
-        +serverName: string
-        +status: "disconnected"|"connecting"|"connected"|"error"
-        +error: string?
-        +toolCount: number
-        +tools: McpTool[]
+    class WindowSize {
+        +number x
+        +number y
+        +number width
+        +number height
     }
 
-    class McpTool {
-        +name: string
-        +description: string
-        +inputSchema: object
+    class DockItem {
+        +string id
+        +string label
+        +LucideIcon icon
+        +string type
     }
 
-    class ConfigChangeEvent {
-        +type: "insert"|"update"|"delete"|"toggle"
-        +serverId: number
-        +oldConfig: McpServerConfig?
-        +newConfig: McpServerConfig?
+    class AgentOSContextType {
+        +AgentOSState state
+        +openWindow(type, title) void
+        +closeWindow(id) void
+        +focusWindow(id) void
+        +minimizeWindow(id) void
+        +toggleMaximize(id) void
+        +moveWindow(id, x, y) void
+        +resizeWindow(id, width, height, x?, y?) void
+        +toggleOSMode() void
+        +getWindowPageComponent(type) React.LazyExoticComponent
     }
 
-    class ToolDefinition~OpenAI~ {
-        +type: "function"
-        +function: FunctionDef
+    class AgentOSProvider {
+        +AgentOSState state
+        +useReducer dispatch
+        +localStorage persistence
     }
 
-    class FunctionDef {
-        +name: string
-        +description: string
-        +parameters: object
+    class UseWindowManager {
+        +startDrag(windowId, e) void
+        +startResize(windowId, edge, e) void
+        +onMouseMove(e) void
+        +onMouseUp() void
+        +isDragging boolean
+        +isResizing boolean
     }
 
-    class ToolCallResult {
-        +tool_call_id: string
-        +role: "tool"
-        +content: string
+    class UseAgentOSMode {
+        +isOSMode boolean
+        +toggleOSMode() void
+        +persistToLocalStorage() void
     }
 
-    class ToolCallLoopState {
-        +messages: Message[]
-        +round: number
-        +maxRounds: number
-        +usedTools: Set~string~
-    }
+    AgentOSState "1" *-- "0..*" OSWindow : windows
+    OSWindow *-- WindowSize : preMaximizeRect
+    DockItem --> AgentOSContextType : consumed by
+    AgentOSContextType ..> AgentOSState : exposes
+    AgentOSProvider ..|> AgentOSContextType : implements
+    UseWindowManager ..> AgentOSContextType : calls moveWindow/resizeWindow
+    UseAgentOSMode ..> AgentOSContextType : calls toggleOSMode
+```
 
-    McpClientManager "1" --> "*" McpServerState : manages
-    McpServerState "1" --> "*" McpTool : contains
-    McpClientManager "1" --> "*" McpServerConfig : reads
-    McpClientManager ..> ConfigChangeEvent : receives
-    McpClientManager ..> ToolDefinition : produces
-    McpClientManager ..> ToolCallResult : produces
-    ToolCallLoopState ..> ToolCallResult : accumulates
+**TypeScript 类型定义** (`src/types/agent-os.ts`):
+
+```typescript
+import type { LucideIcon } from 'lucide-react';
+
+/** 窗口尺寸（用于全屏恢复） */
+export interface WindowRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** 单个 OS 窗口 */
+export interface OSWindow {
+  id: string;
+  type: string;          // 对应 MENU_MAP 的 type
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+  isMinimized: boolean;
+  isMaximized: boolean;
+  preMaximizeRect: WindowRect | null;  // 全屏前的位置/大小
+}
+
+/** Dock 栏图标项 */
+export interface DockItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  type: string;          // 映射到 MENU_MAP.type
+}
+
+/** OS 模式全局状态 */
+export interface AgentOSState {
+  isOSMode: boolean;
+  windows: OSWindow[];
+  activeWindowId: string | null;
+  nextZIndex: number;
+  isInitialized: boolean;  // 防止 hydration mismatch
+}
+
+/** Reducer Action 类型 */
+export type AgentOSAction =
+  | { type: 'TOGGLE_OS_MODE' }
+  | { type: 'INIT_FROM_STORAGE'; payload: { isOSMode: boolean; windows: OSWindow[]; nextZIndex: number } }
+  | { type: 'OPEN_WINDOW'; payload: { type: string; title: string } }
+  | { type: 'CLOSE_WINDOW'; payload: { id: string } }
+  | { type: 'FOCUS_WINDOW'; payload: { id: string } }
+  | { type: 'MINIMIZE_WINDOW'; payload: { id: string } }
+  | { type: 'TOGGLE_MAXIMIZE'; payload: { id: string; desktopRect: WindowRect } }
+  | { type: 'MOVE_WINDOW'; payload: { id: string; x: number; y: number } }
+  | { type: 'RESIZE_WINDOW'; payload: { id: string; width: number; height: number; x?: number; y?: number } };
+
+/** 窗口页面组件 Map */
+export type WindowPageMap = Record<string, React.LazyExoticComponent<React.ComponentType<any>>>;
 ```
 
 ---
 
-### 4. 程序调用流程
+### 4. Program Call Flow
 
-#### 4.1 应用启动 → MCP 自动连接
+> See also: `docs/sequence-diagram.mermaid`
+
+#### 4.1 模式切换流程
 
 ```mermaid
 sequenceDiagram
-    participant App as Electron App
-    participant DB as database.cjs
-    participant IPC as ipc.cjs
-    participant MCM as McpClientManager
-    participant MCP as MCP Server Process
+    participant User
+    participant TitleBar
+    participant OSToggleButton
+    participant AgentOSContext
+    participant Index
+    participant localStorage
 
-    App->>IPC: app.whenReady()
-    IPC->>DB: 初始化数据库
-    IPC->>MCM: initialize(mainWindow)
-    MCM->>DB: SELECT * FROM mcp_servers WHERE enabled=1
-    DB-->>MCM: enabledServers[]
+    User->>TitleBar: 点击 OS 模式按钮
+    TitleBar->>OSToggleButton: onClick()
+    OSToggleButton->>AgentOSContext: toggleOSMode()
+    AgentOSContext->>AgentOSContext: dispatch TOGGLE_OS_MODE
+    AgentOSContext->>AgentOSContext: state.isOSMode = !prev
+    AgentOSContext->>localStorage: persist isOSMode
+    AgentOSContext-->>Index: re-render with new isOSMode
 
-    loop 每个启用的 server
-        MCM->>MCM: connectServer(config)
-        MCM->>MCM: pushStatus(serverId) → "connecting"
-        MCM->>MCP: spawn(command, args) → StdioClientTransport
-        MCM->>MCP: client.connect(transport) [timeout:10s]
-        alt 连接成功
-            MCM->>MCP: client.request("tools/list")
-            MCP-->>MCM: tools[]
-            MCM->>MCM: cache tools, set status "connected"
-            MCM->>MCM: pushStatus(serverId)
-            MCM->>MCM: pushTools(serverId)
-        else 连接失败/超时
-            MCM->>MCM: set status "error"
-            MCM->>MCM: pushStatus(serverId)
-            MCM->>MCM: scheduleReconnect(serverId)
-        end
+    alt isOSMode === true
+        Index->>Index: 渲染 AgentOSDesktop
+        Index->>AgentOSContext: 首次进入 → 自动打开首页窗口
+    else isOSMode === false
+        Index->>Index: 渲染经典布局 (Sidebar + TabBar + Content)
     end
 ```
 
-#### 4.2 配置变更 → 自动重连
+#### 4.2 窗口打开/关闭/聚焦流程
 
 ```mermaid
 sequenceDiagram
-    participant UI as MCPTab.tsx
-    participant IPC as ipc.cjs (handleMcp)
-    participant DB as database.cjs
-    participant MCM as McpClientManager
+    participant User
+    participant DockBar
+    participant DockIcon
+    participant AgentOSContext
+    participant WindowManager
+    participant Window
+    participant DesktopArea
 
-    UI->>IPC: mcp:update (enabled=true)
-    IPC->>DB: UPDATE mcp_servers
-    DB-->>IPC: updated config
-    IPC->>MCM: onServerConfigChanged({type:"update", ...})
+    User->>DockBar: 点击 Dock 图标(如"采集库")
+    DockBar->>DockIcon: onClick(type="requirements")
+    DockIcon->>AgentOSContext: openWindow("requirements", "采集库")
 
-    alt enabled 从 false→true 或 command/args 变更
-        MCM->>MCM: disconnectServer(old serverId)
-        MCM->>MCM: connectServer(new config)
-        MCM->>MCM: pushStatus → "connecting" → "connected"
-        MCM->>MCM: pushTools
-    else enabled 从 true→false
-        MCM->>MCM: disconnectServer(serverId)
-        MCM->>MCM: clearReconnect(serverId)
-        MCM->>MCM: pushStatus → "disconnected"
-    else 仅 name/config 变更
-        MCM->>MCM: 更新缓存的 serverStates.serverName
-        MCM->>MCM: pushStatus(serverId)
+    AgentOSContext->>AgentOSContext: 检查窗口是否已存在
+    alt 窗口已存在
+        AgentOSContext->>AgentOSContext: focusWindow(existingId)
+        AgentOSContext->>AgentOSContext: 若最小化 → 恢复
+    else 窗口不存在
+        AgentOSContext->>AgentOSContext: 创建新窗口(默认居中, 800×500)
+        AgentOSContext->>AgentOSContext: nextZIndex++
     end
+
+    AgentOSContext-->>WindowManager: re-render windows[]
+    WindowManager->>Window: 渲染 Window(id, type, zIndex, ...)
+    Window->>Window: 懒加载页面组件 (如 Requirements)
+    Window->>DesktopArea: 定位在 (x, y)，尺寸 (w, h)
+
+    Note over User,DesktopArea: --- 关闭窗口 ---
+
+    User->>Window: 点击红色关闭按钮
+    Window->>AgentOSContext: closeWindow(id)
+    AgentOSContext->>AgentOSContext: 过滤掉该窗口
+    AgentOSContext->>AgentOSContext: 若有剩余窗口 → focus 最高 zIndex
+    AgentOSContext-->>WindowManager: re-render (窗口已移除)
+
+    Note over User,DesktopArea: --- 聚焦窗口 ---
+
+    User->>Window: 点击窗口任意位置
+    Window->>AgentOSContext: focusWindow(id)
+    AgentOSContext->>AgentOSContext: 设置 activeWindowId = id
+    AgentOSContext->>AgentOSContext: 该窗口 zIndex = nextZIndex++
 ```
 
-#### 4.3 LLM 工具注入与调用循环
+#### 4.3 窗口拖拽与缩放流程
 
 ```mermaid
 sequenceDiagram
-    participant Home as Home.tsx (Renderer)
-    participant IPC as ipc.cjs (chatWithAI)
-    participant MCM as McpClientManager
-    participant LLM as LLM API
-    participant MCP as MCP Server
+    participant User
+    participant WindowTitleBar
+    participant useWindowManager
+    participant AgentOSContext
 
-    Home->>IPC: chatWithAI(messages, options)
-    IPC->>MCM: getAllToolsForLLM("openai")
-    MCM-->>IPC: ToolDefinition[] (带 serverName__toolName 前缀)
+    Note over User,AgentOSContext: --- 拖拽移动 ---
 
-    Note over IPC: round=0, maxRounds=5
+    User->>WindowTitleBar: mousedown 标题栏
+    WindowTitleBar->>useWindowManager: startDrag(windowId, e)
+    useWindowManager->>useWindowManager: 记录初始鼠标位置 + 窗口位置
+    useWindowManager->>useWindowManager: isDragging = true
 
-    loop 工具调用循环 (最多5轮)
-        IPC->>LLM: _callModel(messages, {tools, tool_choice:"auto"})
-        LLM-->>IPC: response
-
-        alt response 包含 tool_calls
-            IPC->>IPC: round++
-            alt round > maxRounds
-                IPC-->>Home: 最终文本响应 (不再调用工具)
-            else round <= maxRounds
-                loop 每个 tool_call
-                    IPC->>IPC: 解析 "serverName__toolName"
-                    IPC->>MCM: executeTool(serverId, toolName, args)
-                    MCM->>MCP: client.callTool(toolName, args)
-                    MCP-->>MCM: tool result
-                    MCM-->>IPC: ToolCallResult
-                    IPC->>IPC: messages.push(tool_result)
-                    IPC-->>Home: IPC push: tool_call 进度
-                end
-                Note over IPC: 继续下一轮
-            end
-        else response 不含 tool_calls
-            IPC-->>Home: 最终文本响应
-            Note over IPC: 退出循环
-        end
+    loop 拖拽中
+        User->>useWindowManager: mousemove
+        useWindowManager->>useWindowManager: 计算 deltaX, deltaY
+        useWindowManager->>useWindowManager: 本地更新窗口位置 (optimistic)
     end
-```
 
-#### 4.4 断线重连（P1）
+    User->>useWindowManager: mouseup
+    useWindowManager->>AgentOSContext: moveWindow(id, finalX, finalY)
+    AgentOSContext->>AgentOSContext: dispatch MOVE_WINDOW
 
-```mermaid
-sequenceDiagram
-    participant MCM as McpClientManager
-    participant MCP as MCP Server Process
+    Note over User,AgentOSContext: --- 边缘缩放 ---
 
-    MCP-->>MCM: 进程意外退出 (close/error event)
-    MCM->>MCM: set status "error"
-    MCM->>MCM: pushStatus(serverId)
-    MCM->>MCM: scheduleReconnect(serverId)
+    User->>Window: mousedown 右下角 resize handle
+    Window->>useWindowManager: startResize(windowId, "se", e)
+    useWindowManager->>useWindowManager: isResizing = true
 
-    loop 指数退避重连 (1s→2s→4s→8s→...→max30s)
-        MCM->>MCM: wait(delay)
-        MCM->>MCM: pushStatus → "connecting"
-        MCM->>MCP: spawn + connect [timeout:10s]
-        alt 重连成功
-            MCM->>MCP: tools/list
-            MCM->>MCM: clearReconnect, set "connected"
-            MCM->>MCM: pushStatus + pushTools
-        else 重连失败
-            MCM->>MCM: delay = min(delay*2, 30000)
-            MCM->>MCM: pushStatus → "error"
-            Note over MCM: 继续下一轮重连
-        end
+    loop 缩放中
+        User->>useWindowManager: mousemove
+        useWindowManager->>useWindowManager: 计算新 width/height (clamp ≥400×300)
+        useWindowManager->>useWindowManager: 本地更新窗口尺寸 (optimistic)
     end
+
+    User->>useWindowManager: mouseup
+    useWindowManager->>AgentOSContext: resizeWindow(id, w, h)
+    AgentOSContext->>AgentOSContext: dispatch RESIZE_WINDOW
 ```
 
 ---
 
-### 5. 待明确事项
+### 5. Anything UNCLEAR
 
-| # | 问题 | 当前假设 |
-|---|------|----------|
-| 1 | `@modelcontextprotocol/sdk` 的精确版本号 | 假设使用 `^1.0.0`，需验证最新稳定版 |
-| 2 | 现有 `handleMcp()` 的完整签名与返回值格式 | 假设为标准 REST 风格 `{success, data}` 格式，需对接 |
-| 3 | `_callModel` 目前支持的 LLM provider 有哪些 | 从 PRD 知支持 OpenAI 和 Anthropic 格式，Anthropic 的 tool_use 格式与 OpenAI tool_calls 不同，需分别适配 |
-| 4 | Anthropic 格式的工具定义结构 | 假设使用 `{name, description, input_schema}` 格式（Anthropic 标准），与 OpenAI 的 `{type:"function", function:{...}}` 分开处理 |
-| 5 | 渲染进程中 `window.electronAPI` 的现有结构 | 假设通过 contextBridge 暴露，新增 `mcp` 命名空间 |
-| 6 | `mcp_servers` 表 `config` 字段的结构 | 假设为 JSON 字符串，存储额外配置（如 timeout、重连策略等） |
-| 7 | 主进程文件是否可转换为 `.mjs` | 当前假设全部保持 `.cjs`，通过动态 `import()` 加载 ESM SDK |
+| # | 问题 | 假设/处理方式 |
+|---|------|---------------|
+| 1 | 全屏窗口是否需要覆盖 Dock 栏？ | **假设**：不覆盖。全屏窗口铺满 DesktopArea（即 MenuBar 下方、Dock 上方），保留 Dock 栏可见 |
+| 2 | 窗口关闭后，该窗口内的浏览器 webview 是否需要销毁？ | **假设**：销毁。窗口关闭 = 组件卸载 = webview 销毁。与现有浏览器 Tab 行为一致 |
+| 3 | OS 模式下是否需要支持 TabBar 内的子 Tab（如需求详情）？ | **假设**：支持。每个窗口内部独立维护自己的 TabBar，复用现有 openTab/closeTab 逻辑 |
+| 4 | 窗口布局（位置/大小）是否需要在刷新后恢复？ | **假设**：是。通过 localStorage 持久化，但窗口内容（具体打开哪个页面）不持久化 |
+| 5 | Dock 栏图标的"运行中"指示器（macOS 小黑点）是否需要？ | **假设**：需要。已有窗口打开的 Dock 图标下方显示圆点指示器，关闭后消失 |
 
 ---
 
-## Part B: 任务分解
+## Part B: Task Decomposition
 
----
+### 6. Required Packages
 
-### 6. 依赖包
+**无新增第三方依赖！** 全部基于现有依赖实现：
 
 ```
-- @modelcontextprotocol/sdk@^1.0.0: MCP 官方 SDK (Client + StdioClientTransport)
+- react@^19.2.0:          UI框架（现有）
+- lucide-react@^0.555.0:  图标库（现有，Dock图标复用Sidebar图标）
+- tailwindcss@^4.1.17:    样式框架（现有）
+- TypeScript@~5.9.3:      类型检查（现有）
 ```
 
-> 无其他新依赖。现有 `sql.js`、Electron IPC、React 19 体系已满足需求。
+> 窗口拖拽/缩放使用原生 DOM 事件，不需要额外库。
+> Dock 栏 glassmorphism 效果使用 Tailwind backdrop-blur 工具类。
 
 ---
 
-### 7. 任务列表（按依赖排序）
+### 7. Task List (ordered by dependency)
 
-#### T01：MCP 运行时基础设施
+| Task ID | Task Name | Source Files | Dependencies | Priority |
+|---------|-----------|-------------|-------------|----------|
+| **T01** | 项目基础设施：类型定义 + Context + 模式切换 | `src/types/agent-os.ts`, `src/context/AgentOSContext.tsx`, `src/hooks/useAgentOSMode.ts`, `src/components/agent-os/OSToggleButton.tsx`, `src/components/TitleBar.tsx` (modify), `src/pages/Index.tsx` (modify) | 无 | P0 |
+| **T02** | 窗口核心组件：Window + WindowTitleBar + WindowManager | `src/components/agent-os/Window.tsx`, `src/components/agent-os/WindowTitleBar.tsx`, `src/components/agent-os/WindowManager.tsx`, `src/hooks/useWindowManager.ts` | T01 | P0 |
+| **T03** | 桌面框架：AgentOSDesktop + MenuBar + DesktopArea + DockBar + DockIcon | `src/components/agent-os/AgentOSDesktop.tsx`, `src/components/agent-os/MenuBar.tsx`, `src/components/agent-os/DesktopArea.tsx`, `src/components/agent-os/DockBar.tsx`, `src/components/agent-os/DockIcon.tsx` | T02 | P0 |
 
-| 属性 | 值 |
-|------|-----|
-| **Task ID** | T01 |
-| **任务名称** | MCP 运行时基础设施 |
-| **源文件** | `package.json`、`electron/mcp-types.cjs`、`electron/mcp-client-manager.cjs`、`electron/preload.cjs` |
-| **依赖** | 无 |
-| **优先级** | P0 |
-
-**工作内容：**
-
-1. **`package.json`**：添加 `"@modelcontextprotocol/sdk": "^1.0.0"` 到 dependencies，执行 `npm install`
-2. **`electron/mcp-types.cjs`**（新建）：
-   - 定义 `McpServerConfig`、`McpServerState`、`McpTool`、`ConfigChangeEvent`、`ToolCallResult` 等核心类型
-   - 定义常量：`MAX_TOOL_CALL_ROUNDS=5`、`CONNECT_TIMEOUT_MS=10000`、`RECONNECT_BASE_DELAY_MS=1000`、`RECONNECT_MAX_DELAY_MS=30000`
-   - 导出 `formatToolName(serverName, toolName)` 和 `parseToolName(prefixedName)` 工具函数
-3. **`electron/mcp-client-manager.cjs`**（新建）：
-   - 实现 `McpClientManager` 单例类骨架
-   - `getInstance()`、`initialize(mainWindow)`、`shutdown()`
-   - `connectServer(config)`：通过动态 `import('@modelcontextprotocol/sdk/client/index.js')` 和 `import('@modelcontextprotocol/sdk/client/stdio.js')` 创建 Client + StdioClientTransport
-   - `disconnectServer(serverId)`：关闭 transport 和 client
-   - `pushStatus(serverId)` / `pushTools(serverId)`：通过 `mainWindow.webContents.send()` 推送
-   - 连接超时逻辑（10s Promise.race）
-4. **`electron/preload.cjs`**（修改）：
-   - 通过 contextBridge 暴露 `window.electronAPI.mcp`，包含：
-     - `onStatusUpdate(callback)` — 监听 `mcp:status-update`
-     - `onToolsUpdated(callback)` — 监听 `mcp:tools-updated`
-     - `getAllStatus()` — 调用 `mcp:get-all-status`
-     - `getTools(serverId)` — 调用 `mcp:get-tools`
+**共计 3 个任务**（符合 ≤5 硬性限制）。
 
 ---
 
-#### T02：数据库集成与自动连接/断开
+### T01 详细说明：项目基础设施
 
-| 属性 | 值 |
-|------|-----|
-| **Task ID** | T02 |
-| **任务名称** | 数据库集成与自动连接/断开 |
-| **源文件** | `electron/database.cjs`、`electron/ipc.cjs`、`electron/mcp-client-manager.cjs` |
-| **依赖** | T01 |
-| **优先级** | P0 |
+**目标**：建立 AgentOS 的类型系统、全局状态管理和模式切换机制，打通经典模式 ←→ OS 模式的切换通道。
 
-**工作内容：**
+**具体工作**：
 
-1. **`electron/database.cjs`**（修改）：
-   - 在 `handleMcp()` 的 insert/update/delete/toggle 操作成功后，调用 `McpClientManager.onServerConfigChanged(event)`
-   - 需导出 `getAllEnabledMcpServers(db)` 辅助函数供 McpClientManager 使用
-2. **`electron/ipc.cjs`**（修改）：
-   - 在 `app.whenReady()` 后调用 `mcpClientManager.initialize(mainWindow)`
-   - 在 `app.on('will-quit')` 中调用 `mcpClientManager.shutdown()`
-   - 添加 IPC handler：
-     - `mcp:get-all-status` → 返回 `mcpClientManager.getAllStatus()`
-     - `mcp:get-tools` → 返回 `mcpClientManager.getToolsForServer(serverId)`
-     - `mcp:test-tool` → 调用 `mcpClientManager.executeTool(serverId, toolName, args)`（P2 预留）
-3. **`electron/mcp-client-manager.cjs`**（扩展）：
-   - 实现 `onServerConfigChanged(event)`：
-     - `insert` 且 enabled → connectServer
-     - `update` enabled 变化 → connect/disconnect
-     - `update` command/args 变化 → disconnect + reconnect
-     - `delete` → disconnect + cleanup
-   - 实现 `loadAllEnabledServers(db)`：从 DB 读取并连接所有启用的 server
+1. **`src/types/agent-os.ts`** — 定义所有核心类型：
+   - `OSWindow`, `WindowRect`, `AgentOSState`, `AgentOSAction`, `DockItem`, `WindowPageMap`
+   - 导出 reducer 函数 `agentOSReducer(state, action): AgentOSState`
+   - 导出初始状态工厂 `createInitialState(): AgentOSState`
 
----
+2. **`src/context/AgentOSContext.tsx`** — 全局 Context Provider：
+   - 使用 `useReducer` 管理 `AgentOSState`
+   - 提供 `openWindow`, `closeWindow`, `focusWindow`, `minimizeWindow`, `toggleMaximize`, `moveWindow`, `resizeWindow`, `toggleOSMode` 方法
+   - `openWindow` 实现：已存在同 type 窗口 → focus + 恢复最小化；不存在 → 创建新窗口（默认居中 800×500）
+   - `toggleOSMode` 实现：首次进入 OS 模式时自动调用 `openWindow('home', '首页')`
+   - localStorage 读写：
+     - Key: `agent-os-mode` → `isOSMode: boolean`
+     - Key: `agent-os-windows` → `{ windows: OSWindow[], nextZIndex: number }`
+   - 窗口页面组件映射：复用 Index.tsx 中的 lazy() 组件定义（通过 import 或 prop 注入）
 
-#### T03：工具发现、LLM 工具注入与调用路由
+3. **`src/hooks/useAgentOSMode.ts`** — 便捷 hook：
+   - 从 AgentOSContext 提取 `isOSMode` + `toggleOSMode`
+   - `useEffect` 首次挂载时从 localStorage 读取模式偏好
 
-| 属性 | 值 |
-|------|-----|
-| **Task ID** | T03 |
-| **任务名称** | 工具发现、LLM 工具注入与调用路由 |
-| **源文件** | `electron/mcp-client-manager.cjs`、`electron/ipc.cjs`、`src/api.ts` |
-| **依赖** | T02 |
-| **优先级** | P0 |
+4. **`src/components/agent-os/OSToggleButton.tsx`** — 切换按钮：
+   - 使用 lucide-react 的 `MonitorIcon`（OS模式）和 `LayoutIcon`（经典模式）
+   - `aria-label="切换到桌面模式"` / `"切换到经典模式"`
+   - 样式：`w-11 h-full flex items-center justify-center hover:bg-wiki-surface2`
 
-**工作内容：**
+5. **`src/components/TitleBar.tsx`** (修改) — 添加模式切换按钮插槽：
+   - 新增 prop: `onToggleOSMode?: () => void; isOSMode?: boolean`
+   - 在现有窗口控制按钮区域（browser 按钮前或后）渲染 `<OSToggleButton>`
+   - 保持 WebkitAppRegion: 'no-drag'
 
-1. **`electron/mcp-client-manager.cjs`**（扩展）：
-   - 实现 `fetchTools(client)`：调用 `client.request({method:'tools/list'})`，缓存结果
-   - 实现 `getAllToolsForLLM(format)`：
-     - `"openai"` 格式：`[{type:"function", function:{name:"serverName__toolName", description, parameters}}]`
-     - `"anthropic"` 格式：`[{name:"serverName__toolName", description, input_schema}]`
-   - 实现 `executeTool(serverId, toolName, args)`：
-     - 去除 `serverName__` 前缀，用原始 toolName 调用 `client.callTool()`
-     - 返回 `{tool_call_id, role:"tool", content: JSON.stringify(result)}`
-   - 监听 `list_changed` 通知：`client.setNotificationHandler({method:'notifications/tools/list_changed'}, () => fetchTools(client))`
-2. **`electron/ipc.cjs`**（修改）：
-   - 修改 `chatWithAI` handler：
-     - 获取 `mcpClientManager.getAllToolsForLLM(format)`，根据 LLM provider 选择格式
-     - 注入 tools 到 `_callModel` 请求参数
-     - 实现工具调用循环（详见下方伪代码）
-   - 在工具调用每轮迭代中，通过 IPC 推送 `chat:tool-progress` 事件给渲染进程（含当前轮次、工具名、状态）
-3. **`src/api.ts`**（修改）：
-   - 添加 MCP 相关 TypeScript 类型：
-     - `McpConnectionStatus`、`McpToolInfo`、`McpServerStatus`
-     - `ToolCallProgressEvent`
-   - 添加 `window.electronAPI.mcp` 的类型声明
+6. **`src/pages/Index.tsx`** (修改) — 添加 OS 模式渲染分支：
+   - 从 AgentOSContext 读取 `isOSMode`
+   - `{isOSMode ? <AgentOSDesktop /> : <经典布局>}`
+   - TitleBar 传入 `isOSMode` + `onToggleOSMode`
+   - OS 模式下隐藏 Sidebar，TitleBar 仅保留切换按钮 + 窗口控制按钮（不显示 TabBar）
+   - 非 OS 模式行为完全不变
 
-**工具调用循环伪代码（`chatWithAI` 核心逻辑）：**
-
-```
-function chatWithAI(messages, options):
-  tools = mcpManager.getAllToolsForLLM(providerFormat)
-  round = 0
-  while round < MAX_TOOL_CALL_ROUNDS:
-    response = await _callModel(messages, {tools, tool_choice: "auto"})
-    if no tool_calls in response:
-      return response  // 纯文本响应，直接返回
-    round++
-    for each tool_call in response.tool_calls:
-      {serverName, toolName} = parseToolName(tool_call.function.name)
-      result = await mcpManager.executeTool(serverId, toolName, args)
-      messages.push({role: "tool", tool_call_id, content: result.content})
-      sendToRenderer("chat:tool-progress", {round, toolName, status: "done"})
-    // 继续下一轮，LLM 会看到工具结果
-  return finalResponse  // 达到最大轮数
-```
+**关键约束**：
+- 模式切换不丢失经典模式的 tabs 状态（tabs/activeTabId 在 Index.tsx 中保留）
+- 首次初始化从 localStorage 读取，默认 `isOSMode = false`
+- OS 模式关闭所有窗口时，不自动退出 OS 模式（桌面保持空白）
 
 ---
 
-#### T04：连接状态 IPC 推送与 P1 断线重连
+### T02 详细说明：窗口核心组件
 
-| 属性 | 值 |
-|------|-----|
-| **Task ID** | T04 |
-| **任务名称** | 连接状态 IPC 推送与 P1 功能 |
-| **源文件** | `electron/mcp-client-manager.cjs`、`src/hooks/useMcpStatus.ts`、`src/components/MCPTab.tsx`、`src/pages/AppEcosystem.tsx` |
-| **依赖** | T02 |
-| **优先级** | P0+P1 |
+**目标**：实现可拖拽、可缩放、可最小化、可全屏的独立窗口组件，以及窗口管理器。
 
-**工作内容：**
+**具体工作**：
 
-1. **`electron/mcp-client-manager.cjs`**（扩展）：
-   - 完善 `pushStatus(serverId)`：发送 `{serverId, serverName, status, error, toolCount}` 到渲染进程
-   - 实现 `scheduleReconnect(serverId)`：指数退避算法
+1. **`src/hooks/useWindowManager.ts`** — 拖拽 & 缩放核心逻辑：
+   - `startDrag(windowId, mouseEvent)`：
+     - 记录初始鼠标位置 (`startX`, `startY`)
+     - 记录初始窗口位置 (`initialWindowX`, `initialWindowY`)
+     - `isDragging = true`
+   - `startResize(windowId, edge, mouseEvent)`：
+     - edge: `'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'`
+     - 记录初始鼠标位置 + 窗口位置/尺寸
+     - `isResizing = true`
+   - `onMouseMove(e)`:
+     - 拖拽：计算 delta，本地更新 window 位置（optimistic ref 更新，不触发 re-render）
+     - 缩放：根据 edge 计算新 width/height/x/y，clamp 最小值 400×300
+   - `onMouseUp()`:
+     - 拖拽/缩放结束，调用 `moveWindow` / `resizeWindow`，同步到 Context
+     - `isDragging = false`, `isResizing = false`
+   - `onDoubleClickTitleBar(windowId)`:
+     - 调用 `toggleMaximize`
+   - 返回 `{ startDrag, startResize, onMouseMove, onMouseUp, isDragging, isResizing }`
+   - 事件监听：`mousemove`/`mouseup` 绑定到 `document`（避免鼠标移出窗口后失效）
+
+2. **`src/components/agent-os/WindowTitleBar.tsx`** — macOS 风格标题栏：
+   - Props: `{ title: string; isFocused: boolean; onClose: () => void; onMinimize: () => void; onMaximize: () => void; onMouseDown: (e) => void }`
+   - 高度 36px，背景 `var(--wiki-surface)`，底部 `1px solid var(--wiki-border)`
+   - 左侧：三个圆点按钮（12px 直径）
+     - 红色 `#FF5F57`：关闭（hover 显示 × 图标）
+     - 黄色 `#FFBD2E`：最小化（hover 显示 − 图标）
+     - 绿色 `#28CA41`：全屏（hover 显示 ↖ 图标）
+   - 中央：标题文字 `var(--wiki-text2)`，13px，`pointer-events: none`
+   - 非焦点窗口：标题栏整体 opacity 降低至 0.6
+   - `cursor: grab` on titlebar, `cursor: grabbing` when dragging
+
+3. **`src/components/agent-os/Window.tsx`** — 单个窗口：
+   - Props: `{ window: OSWindow; isFocused: boolean; onClose: () => void; onFocus: () => void; onMinimize: () => void; onMaximize: () => void }`
+   - 外层 div：`position: absolute`, `left/top/width/height`, `zIndex`
+   - 圆角 8px，阴影 `0 8px 32px rgba(0,0,0,0.12)`（暗色 `rgba(0,0,0,0.4)`）
+   - 背景 `var(--wiki-bg)`
+   - 非焦点窗口：整体 opacity 轻微降低（标题栏效果）
+   - 渲染 `<WindowTitleBar>` + 内容区
+   - 内容区：`flex-1 overflow-hidden`，嵌入懒加载页面组件
+   - resize handles：四角（8px）+ 四边（4px），`cursor: nw-resize` 等
+   - 最小化时渲染 null（`display: none`）
+   - 全屏时：`left: 0, top: 0, width: 100%, height: 100%`（相对于 DesktopArea）
+   - `onMouseDown` → `onFocus()`
+
+4. **`src/components/agent-os/WindowManager.tsx`** — 窗口管理器：
+   - 从 AgentOSContext 读取 `windows` + `activeWindowId`
+   - 渲染所有未最小化的 `<Window>` 组件
+   - 按 zIndex 排序渲染
+   - 使用 `useWindowManager` hook 管理全局拖拽/缩放事件
+   - 将 drag/resize handlers 传递给每个 Window
+   - 页面组件映射：根据 `window.type` 懒加载对应页面（同 Index.tsx 的 switch-case 逻辑）
+   - 每个窗口内嵌独立 TabBar（对于需要 TabBar 的页面类型如 requirements）
+
+---
+
+### T03 详细说明：桌面框架
+
+**目标**：组装完整的桌面环境 —— 菜单栏 + 桌面画布 + Dock 栏，提供完整的 macOS 风格交互体验。
+
+**具体工作**：
+
+1. **`src/components/agent-os/MenuBar.tsx`** — 顶部菜单栏：
+   - 高度 28px，背景 `var(--wiki-surface)`，底部 `1px solid var(--wiki-border)`
+   - 左侧：Apple logo 占位（`` 或 SVG），不可点击
+   - 菜单项（仅展示，不可点击）：`Workit` `文件` `编辑` `视图` `窗口` `帮助`
+   - 字体 13px，`var(--wiki-text2)`，间距 16px
+   - 右侧：时间显示（`new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})`），每秒更新
+   - 注意：使用 `useEffect` + `setInterval` 更新时间，组件卸载时清理
+
+2. **`src/components/agent-os/DesktopArea.tsx`** — 桌面区域：
+   - `flex-1`，背景 `var(--wiki-bg)`
+   - `position: relative; overflow: hidden`
+   - 作为 `<WindowManager>` 的容器
+   - Style: 可设置桌面壁纸色（`var(--wiki-bg)` 足够）
+
+3. **`src/components/agent-os/DockBar.tsx`** — 底部 Dock 栏：
+   - 高度 64px，水平居中，`position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%)`
+   - 背景：`rgba(255,255,255,0.72)` + `backdrop-filter: blur(20px)`（暗色 `rgba(0,0,0,0.72)`）
+   - 圆角 16px，边框 `1px solid var(--wiki-border)`
+   - 内边距：`px-2 py-1.5`
+   - 包含所有 `<DockIcon>` 组件
+   - Dock 图标列表复用 Sidebar 的 `navItems` 结构 + 额外添加 `settings`, `profile`
+
+4. **`src/components/agent-os/DockIcon.tsx`** — 单个 Dock 图标：
+   - Props: `{ item: DockItem; isOpen: boolean; onClick: () => void }`
+   - 图标 40×40px，圆角 10px，间距 4px（margin）
+   - hover: `transform: scale(1.2)` + `transition-transform duration-200`
+   - 使用 lucide-react 图标组件，颜色 `var(--wiki-text)`
+   - 下方运行指示器（`isOpen` 为 true）：4px 圆点，`var(--wiki-text3)`
+   - tooltip：hover 显示名称（复用 Sidebar 的 tooltip 样式）
+
+5. **`src/components/agent-os/AgentOSDesktop.tsx`** — 桌面主容器：
+   - 组合：`<MenuBar>` + `<DesktopArea>`（内含 `<WindowManager>`）+ `<DockBar>`
+   - 高度 `100%`（填充 Index.tsx 中的 flex-1 空间）
+   - `flex flex-col`
+   - 从 AgentOSContext 读取状态，传给子组件
+   - 构建 `dockItems` 数组：
+     ```typescript
+     const dockItems: DockItem[] = [
+       { id: 'home', label: '首页', icon: HomeIcon, type: 'home' },
+       { id: 'requirements', label: '采集库', icon: SparklesIcon, type: 'requirements' },
+       { id: 'knowledge', label: '知识库', icon: DatabaseIcon, type: 'knowledge' },
+       { id: 'insights', label: '洞察分析', icon: LightbulbIcon, type: 'insights' },
+       { id: 'mcp', label: '应用生态', icon: PackageIcon, type: 'mcp' },
+       { id: 'model', label: '模型配置', icon: CpuIcon, type: 'model' },
+       { id: 'messages', label: '消息中心', icon: MessageSquareIcon, type: 'messages' },
+       { id: 'settings', label: '系统设置', icon: SettingsIcon, type: 'settings' },
+       { id: 'profile', label: '用户Agent', icon: UserIcon, type: 'profile' },  // UserIcon from lucide-react
+     ];
      ```
-     attempts = (reconnectAttempts.get(serverId) || 0) + 1
-     delay = min(RECONNECT_BASE_DELAY * 2^(attempts-1), RECONNECT_MAX_DELAY)
-     setTimeout(() => { connectServer(config); if success: clear; else: scheduleReconnect() }, delay)
-     ```
-   - 实现 `clearReconnect(serverId)`：清理 timer 和 attempts 计数
-   - 在 `connectServer` 中监听 transport 的 `close`/`error` 事件触发重连
-2. **`src/hooks/useMcpStatus.ts`**（新建）：
-   - 实现 `useMcpStatus()` hook：
-     - 初始化时调用 `window.electronAPI.mcp.getAllStatus()` 获取初始状态
-     - 使用 `useEffect` 注册 `onStatusUpdate` 和 `onToolsUpdated` 监听器
-     - 返回 `{ servers: McpServerStatus[], isAnyConnected: boolean, totalToolCount: number }`
-3. **`src/components/MCPTab.tsx`**（修改）：
-   - 在服务列表中集成 `useMcpStatus` hook
-   - 每行显示连接状态指示灯（🟢 connected / 🟡 connecting / 🔴 error / ⚫ disconnected）
-   - 显示工具数量徽章（如 "5 tools"）
-   - 错误状态显示 tooltip 含错误信息
-4. **`src/pages/AppEcosystem.tsx`**（修改）：
-   - 在 MCP Tab label 上显示全局连接状态摘要（如 "MCP (2/3)"）
+   - `isOpen` 判断：`windows.some(w => w.type === dockItem.type && !w.isMinimized)`
 
 ---
 
-#### T05：渲染进程 UI 集成与 P2 工具测试面板
+### 8. Shared Knowledge
 
-| 属性 | 值 |
-|------|-----|
-| **Task ID** | T05 |
-| **任务名称** | 渲染进程 UI 集成与工具测试面板 |
-| **源文件** | `src/pages/Home.tsx`、`src/components/MCPTab.tsx`、`electron/ipc.cjs`、`src/api.ts` |
-| **依赖** | T03、T04 |
-| **优先级** | P0+P1+P2 |
-
-**工作内容：**
-
-1. **`src/pages/Home.tsx`**（修改）：
-   - 监听 `chat:tool-progress` 事件，在聊天界面显示工具调用进度：
-     - "正在调用 MCP 工具：文件搜索 (第 2/5 轮)..."
-     - 工具调用结果以可折叠卡片形式展示
-   - 处理工具调用错误：显示错误提示但继续对话
-2. **`src/components/MCPTab.tsx`**（扩展 — P2）：
-   - 在已连接服务的行上添加 "测试工具" 按钮
-   - 点击弹出工具测试面板：下拉选择工具 → 自动生成参数输入表单（基于 inputSchema） → 执行 → 显示结果
-3. **`electron/ipc.cjs`**（扩展 — P2）：
-   - `mcp:test-tool` handler：调用 `executeTool` 并返回结果
-4. **`src/api.ts`**（扩展）：
-   - 添加 `testMcpTool(serverId, toolName, args)` API 函数
-
----
-
-### 8. 共享约定
+跨文件约定，Engineer 实现时必须遵守：
 
 ```
-- 所有 IPC 消息使用命名空间前缀："mcp:" 用于 MCP 相关，"chat:" 用于聊天相关
-- 工具名称始终使用 serverName__toolName 格式跨 IPC 传递，仅在调用 MCP Server 时还原
-- McpClientManager 为单例，通过 getInstance() 获取，确保全应用唯一
-- 所有异步操作使用 try/catch，错误通过 IPC status "error" 状态传递
-- 数据库操作保持现有回调风格（sql.js），MCP 代码使用 async/await
-- 渲染进程所有 MCP 通信通过 preload contextBridge 暴露的 API，不直接使用 ipcRenderer
-- LLM 请求的 tools 格式：OpenAI 用 {type:"function", function:{...}}，Anthropic 用 {name, description, input_schema}
-- 工具调用结果统一格式：{tool_call_id: string, role: "tool", content: string}
-- 连接超时统一 10s，重连基础延迟 1s，最大 30s，使用指数退避
-- 最大工具调用轮数 5，硬编码为常量 MAX_TOOL_CALL_ROUNDS
+## 命名规范
+- 所有 AgentOS 组件文件使用 PascalCase
+- CSS 类名优先使用 Tailwind utility class，自定义样式使用 inline style 绑定 --wiki-* 变量
+- 事件处理函数以 `handle` 前缀命名（如 handleClose, handleFocus）
+
+## CSS 变量使用约定
+- 所有背景色使用 var(--wiki-bg) 或 var(--wiki-surface)
+- 所有边框使用 var(--wiki-border)
+- 所有主文字使用 var(--wiki-text)，次要文字 var(--wiki-text2)，三级文字 var(--wiki-text3)
+- 暗色模式适配通过现有 .dark 类自动生效，无需额外处理
+- ❌ 禁止硬编码颜色值（如 #ffffff, #000000），除非是 macOS 按钮颜色 #FF5F57/#FFBD2E/#28CA41
+
+## 状态管理
+- 窗口状态通过 AgentOSContext 统一管理
+- useWindowManager 仅管理本地 drag/resize 临时状态，最终通过 Context dispatch 同步
+- localStorage key 前缀统一为 "agent-os-"
+
+## 组件懒加载
+- 窗口内容页面复用 Index.tsx 中已有的 lazy() 导入
+- 窗口打开时 Suspense fallback 为 Loading spinner（复用现有 Loading 组件）
+
+## 事件处理
+- 拖拽/缩放事件绑定到 document，mouseup 时解绑
+- 所有 mousemove/mouseup 监听在组件卸载时必须清理（useEffect cleanup）
+- 窗口 drag 区域仅限 WindowTitleBar，resize 区域为窗口边缘/角落
+
+## TypeScript 严格模式
+- 所有组件 Props 必须显式定义 interface
+- 禁止使用 any，未知类型使用 unknown
+- 回调函数类型使用具体签名而非 Function
+
+## Electron 集成
+- 仅使用现有 window.electronAPI（不新增 IPC 通道）
+- OS 模式运行在同一个 BrowserWindow 内
+- WebkitAppRegion: 'no-drag' 仅用于可交互按钮区域
 ```
 
 ---
 
-### 9. 任务依赖图
+### 9. Task Dependency Graph
 
 ```mermaid
 graph TD
-    T01["T01: MCP 运行时基础设施<br/>package.json + types + manager骨架 + preload"]
-    T02["T02: 数据库集成与自动连接<br/>database.cjs + ipc.cjs + manager扩展"]
-    T03["T03: 工具发现 + LLM注入 + 调用路由<br/>manager扩展 + ipc.cjs chatWithAI + api.ts"]
-    T04["T04: 状态IPC推送 + P1断线重连<br/>manager pushStatus + useMcpStatus + MCPTab"]
-    T05["T05: UI集成 + P2工具测试面板<br/>Home.tsx + MCPTab扩展 + 测试面板"]
+    T01["T01: 项目基础设施<br/>类型定义 + Context + 模式切换<br/>6 files"]
+    T02["T02: 窗口核心组件<br/>Window + TitleBar + Manager + Hook<br/>4 files"]
+    T03["T03: 桌面框架<br/>Desktop + MenuBar + Dock<br/>5 files"]
 
     T01 --> T02
     T02 --> T03
-    T02 --> T04
-    T03 --> T05
-    T04 --> T05
+
+    style T01 fill:#e3f2fd,stroke:#1565c0
+    style T02 fill:#fff3e0,stroke:#ef6c00
+    style T03 fill:#e8f5e9,stroke:#2e7d32
 ```
 
-> **关键路径**：T01 → T02 → T03 → T05（核心 P0 功能链）  
-> **并行路径**：T04 可与 T03 并行开发（仅依赖 T02）
+**依赖链**：T01 → T02 → T03（线性依赖，每个任务完成后下一个才能开始）
 
 ---
 
-> **文档版本**：v1.0  
-> **创建日期**：2025-06-02  
-> **作者**：Bob (Architect)
+## Appendix: Integration Impact Analysis
+
+### 现有文件修改清单
+
+| 文件 | 修改类型 | 影响范围 |
+|------|----------|----------|
+| `src/pages/Index.tsx` | 修改 | 添加 OS 模式渲染分支，约 +15 行 |
+| `src/components/TitleBar.tsx` | 修改 | 新增 2 个 prop + 渲染 OSToggleButton，约 +8 行 |
+
+### 零影响区域
+
+- ✅ 所有页面组件（Home, Requirements, Knowledge 等）**零改动**
+- ✅ Sidebar 组件**零改动**（OS 模式下通过 `isOSMode` 条件隐藏）
+- ✅ AuthContext, ThemeContext **零改动**
+- ✅ Electron 主进程**零改动**
+- ✅ 现有 CSS 变量体系**零改动**
+
+### CSS 变量映射表（OS模式组件 → 设计规格）
+
+| 设计规格 | CSS 变量 |
+|----------|----------|
+| 桌面背景 | `var(--wiki-bg)` |
+| 窗口/MenuBar/Dock 表面 | `var(--wiki-surface)` |
+| 窗口标题栏背景 | `var(--wiki-surface)` |
+| 边框 | `var(--wiki-border)` |
+| 标题文字 | `var(--wiki-text2)` |
+| 内容文字 | `var(--wiki-text)` |
+| 暗色 Dock 背景 | `rgba(0,0,0,0.72)` (hardcoded, per spec) |
+| 亮色 Dock 背景 | `rgba(255,255,255,0.72)` (hardcoded, per spec) |
+| 窗口阴影(亮) | `0 8px 32px rgba(0,0,0,0.12)` |
+| 窗口阴影(暗) | `0 8px 32px rgba(0,0,0,0.4)` |

@@ -255,64 +255,70 @@ export default function Profile() {
           <div className="p-5">
             {activeTab === 'personality' && (
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-wiki-text3">人格特征</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-wiki-text">人格特征</h3>
+                    <p className="text-xs text-wiki-text3 mt-0.5">描述 Agent 的说话风格、思维方式和行为模式</p>
+                  </div>
                   <button onClick={regeneratePersonality}
-                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
-                    style={{ color: 'var(--wiki-text3)' }}>
-                    <SparklesIcon size={12} />基于角色生成
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                    style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+                    <SparklesIcon size={13} />基于角色生成
                   </button>
                 </div>
-                <textarea value={personality} onChange={e => { setPersonality(e.target.value); markDirty(); }} rows={3}
-                  placeholder="Agent 的人格特征，描述说话风格、思维方式和行为模式"
-                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical" style={C.input} />
+                <textarea value={personality} onChange={e => { setPersonality(e.target.value); markDirty(); }} rows={4}
+                  placeholder="例如：你是一位资深软件架构师，善于用简洁的方式解释复杂问题..."
+                  className="w-full px-3 py-2.5 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical leading-relaxed" style={C.input} />
               </div>
             )}
             {activeTab === 'memory' && (
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-wiki-text3">上下文记忆</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-wiki-text">上下文记忆</h3>
+                    <p className="text-xs text-wiki-text3 mt-0.5">记录用户偏好、工作习惯和项目背景</p>
+                  </div>
                   <button onClick={generateMemory}
-                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
-                    style={{ color: 'var(--wiki-text3)' }}>
-                    <Wand2Icon size={12} />从对话生成
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                    style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+                    <Wand2Icon size={13} />从对话生成
                   </button>
                 </div>
-                <textarea value={memory} onChange={e => { setMemory(e.target.value); markDirty(); }} rows={5}
-                  placeholder="Agent 的上下文记忆，如用户偏好、工作习惯、项目背景"
-                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical" style={C.input} />
+                <textarea value={memory} onChange={e => { setMemory(e.target.value); markDirty(); }} rows={6}
+                  placeholder="例如：用户偏好简洁回复、使用中文、项目使用 React + TypeScript 技术栈..."
+                  className="w-full px-3 py-2.5 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical leading-relaxed" style={C.input} />
 
                 {/* ── Persistent Long-Term Memories ── */}
-                <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <BrainIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
-                      <span className="text-xs font-medium" style={{ color: 'var(--wiki-text2)' }}>长期记忆</span>
-                      <span className="text-[10px]" style={{ color: 'var(--wiki-text3)' }}>(自动提取 · 数据库持久化)</span>
+                <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <BrainIcon size={15} style={{ color: 'var(--wiki-accent)' }} />
+                      <span className="text-sm font-semibold text-wiki-text">长期记忆</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>自动提取</span>
                     </div>
                     {persistentMemories.length > 0 && (
                       <button onClick={handleClearMemories}
-                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors"
                         style={{ color: 'var(--wiki-danger)' }}>
                         <Trash2Icon size={12} />清空全部
                       </button>
                     )}
                   </div>
                   {persistentMemories.length === 0 ? (
-                    <div className="text-xs py-3 text-center rounded-lg" style={{ color: 'var(--wiki-text3)', background: 'var(--wiki-surface2)' }}>
+                    <div className="text-sm py-6 text-center rounded-lg" style={{ color: 'var(--wiki-text3)', background: 'var(--wiki-surface2)' }}>
                       {memoriesLoaded ? '暂无长期记忆，开始对话后将自动提取' : '加载中...'}
                     </div>
                   ) : (
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin">
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto scrollbar-thin">
                       {persistentMemories.map(m => (
-                        <div key={m.id} className="group flex items-start gap-2 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-wiki-surface2"
+                        <div key={m.id} className="group flex items-start gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-wiki-surface2"
                           style={{ border: '1px solid var(--wiki-border)' }}>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
-                            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>{m.key}</span>
-                          <span className="text-xs flex-1 min-w-0" style={{ color: 'var(--wiki-text2)' }}>{m.value}</span>
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded flex-shrink-0 mt-0.5"
+                            style={{ background: 'var(--wiki-accent)', color: '#fff' }}>{m.key}</span>
+                          <span className="text-sm flex-1 min-w-0" style={{ color: 'var(--wiki-text2)' }}>{m.value}</span>
                           <button onClick={() => handleDeleteMemory(m.key)}
                             className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all flex-shrink-0">
-                            <XIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+                            <XIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
                           </button>
                         </div>
                       ))}
@@ -323,17 +329,20 @@ export default function Profile() {
             )}
             {activeTab === 'skills' && (
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-wiki-text3">技能列表</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-wiki-text">技能列表</h3>
+                    <p className="text-xs text-wiki-text3 mt-0.5">从应用生态导入或手动填写 Agent 具备的技能</p>
+                  </div>
                   <button onClick={openSkillsModal}
-                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-wiki-surface2 transition-colors"
-                    style={{ color: 'var(--wiki-text3)' }}>
-                    <ImportIcon size={12} />从生态导入
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                    style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+                    <ImportIcon size={13} />从生态导入
                   </button>
                 </div>
-                <textarea value={skills} onChange={e => { setSkills(e.target.value); markDirty(); }} rows={5}
-                  placeholder="每行一个技能，或点击「从生态导入」选择已安装的技能"
-                  className="w-full px-3 py-2 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical mb-3" style={C.input} />
+                <textarea value={skills} onChange={e => { setSkills(e.target.value); markDirty(); }} rows={6}
+                  placeholder="例如：PDF 处理、Excel 数据分析、Web 爬虫、Git 操作..."
+                  className="w-full px-3 py-2.5 rounded-lg text-sm placeholder:text-wiki-text3 focus:outline-none resize-vertical leading-relaxed mb-3" style={C.input} />
                 {skills.trim() && (
                   <div className="flex flex-wrap gap-1.5">
                     {skills.split('\n').filter(Boolean).map((s, i) => (

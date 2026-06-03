@@ -1,8 +1,11 @@
 graph TD
-    T01["T01: 后端数据层<br/>database.cjs + ipc.cjs + api.ts"]
-    T02["T02: 容器 + MCPTab + 路由<br/>AppEcosystem.tsx + MCPTab.tsx<br/>+ Index.tsx + Sidebar.tsx"]
-    T03["T03: 业务 Tab 组件<br/>SkillsTab.tsx + PluginsTab.tsx<br/>+ ImportModal.tsx"]
+    T01["T01: 项目基础设施<br/>━━━━━━━━━━━━━<br/>src/types/agent-os.ts<br/>src/context/AgentOSContext.tsx<br/>src/hooks/useAgentOSMode.ts<br/>src/components/agent-os/OSToggleButton.tsx<br/>src/components/TitleBar.tsx (modify)<br/>src/pages/Index.tsx (modify)<br/>━━━━━━━━━━━━━<br/>类型系统 + Context + 模式切换通道"]
+    T02["T02: 窗口核心组件<br/>━━━━━━━━━━━━━<br/>src/components/agent-os/Window.tsx<br/>src/components/agent-os/WindowTitleBar.tsx<br/>src/components/agent-os/WindowManager.tsx<br/>src/hooks/useWindowManager.ts<br/>━━━━━━━━━━━━━<br/>拖拽/缩放 + macOS 按钮 + 窗口管理"]
+    T03["T03: 桌面框架<br/>━━━━━━━━━━━━━<br/>src/components/agent-os/AgentOSDesktop.tsx<br/>src/components/agent-os/MenuBar.tsx<br/>src/components/agent-os/DesktopArea.tsx<br/>src/components/agent-os/DockBar.tsx<br/>src/components/agent-os/DockIcon.tsx<br/>━━━━━━━━━━━━━<br/>menu + dock + 桌面画布组装"]
 
     T01 --> T02
-    T01 --> T03
     T02 --> T03
+
+    style T01 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style T02 fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style T03 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px

@@ -1,0 +1,262 @@
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
+import {
+  type AgentOSState,
+  type AgentOSAction,
+  type OSWindow,
+  type WindowRect,
+  type WindowPageMap,
+  createInitialState,
+  agentOSReducer,
+  WINDOW_DEFAULT_WIDTH,
+  WINDOW_DEFAULT_HEIGHT,
+  LS_MODE_KEY,
+  LS_WINDOWS_KEY,
+} from '../types/agent-os';
+
+// ── Lazy-loaded page components (mirrors Index.tsx) ──────────────
+
+const HomePage = React.lazy(() => import('../pages/Home'));
+const RequirementsPage = React.lazy(() => import('../pages/Requirements'));
+const KnowledgePage = React.lazy(() => import('../pages/Knowledge'));
+const InsightsPage = React.lazy(() => import('../pages/Insights'));
+const AppEcosystemPage = React.lazy(() => import('../pages/AppEcosystem'));
+const ModelPage = React.lazy(() => import('../pages/Model'));
+const MessagesPage = React.lazy(() => import('../pages/Messages'));
+const SettingsPage = React.lazy(() => import('../pages/Settings'));
+const ProfilePage = React.lazy(() => import('../pages/Profile'));
+
+/** Maps window.type → lazy page component */
+export const PAGE_COMPONENT_MAP: WindowPageMap = {
+  home: HomePage,
+  requirements: RequirementsPage,
+  knowledge: KnowledgePage,
+  insights: InsightsPage,
+  mcp: AppEcosystemPage,
+  model: ModelPage,
+  messages: MessagesPage,
+  settings: SettingsPage,
+  profile: ProfilePage,
+};
+
+// ── Context type ─────────────────────────────────────────────────
+
+export interface AgentOSContextType {
+  state: AgentOSState;
+  openWindow: (type: string, title: string) => void;
+  closeWindow: (id: string) => void;
+  focusWindow: (id: string) => void;
+  minimizeWindow: (id: string) => void;
+  toggleMaximize: (id: string, desktopRect: WindowRect) => void;
+  moveWindow: (id: string, x: number, y: number) => void;
+  resizeWindow: (id: string, width: number, height: number, x?: number, y?: number) => void;
+  toggleOSMode: () => void;
+  getWindowPageComponent: (type: string) => React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>> | undefined;
+}
+
+const AgentOSContext = createContext<AgentOSContextType | null>(null);
+
+// ── Provider ─────────────────────────────────────────────────────
+
+interface AgentOSProviderProps {
+  children: ReactNode;
+}
+
+export function AgentOSProvider({ children }: AgentOSProviderProps) {
+  const [state, dispatch] = useReducer(agentOSReducer, undefined, createInitialState);
+  const initializedRef = useRef(false);
+
+  // ── localStorage hydration (once on mount) ──
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    try {
+      const modeRaw = localStorage.getItem(LS_MODE_KEY);
+      const windowsRaw = localStorage.getItem(LS_WINDOWS_KEY);
+
+      const isOSMode = modeRaw === 'true';
+      let windows: OSWindow[] = [];
+      let nextZIndex = 1;
+
+      if (windowsRaw) {
+        const parsed = JSON.parse(windowsRaw);
+        if (Array.isArray(parsed.windows)) {
+          windows = parsed.windows;
+        }
+        if (typeof parsed.nextZIndex === 'number') {
+          nextZIndex = parsed.nextZIndex;
+        }
+      }
+
+      dispatch({
+        type: 'INIT_FROM_STORAGE',
+        payload: { isOSMode, windows, nextZIndex },
+      });
+    } catch {
+      // If localStorage is corrupted, start fresh
+      dispatch({
+        type: 'INIT_FROM_STORAGE',
+        payload: { isOSMode: false, windows: [], nextZIndex: 1 },
+      });
+    }
+  }, []);
+
+  // ── Persistence (after every state change, debounced) ──
+
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!state.isInitialized) return;
+
+    // Debounce writes to avoid thrashing localStorage during drags
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(LS_MODE_KEY, String(state.isOSMode));
+        localStorage.setItem(
+          LS_WINDOWS_KEY,
+          JSON.stringify({
+            windows: state.windows,
+            nextZIndex: state.nextZIndex,
+          }),
+        );
+      } catch {
+        // Silently ignore storage errors (quota exceeded, etc.)
+      }
+    }, 300);
+
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
+  }, [state.isOSMode, state.windows, state.nextZIndex, state.isInitialized]);
+
+  // ── Action creators ────────────────────────────────────────────
+
+  const openWindow = useCallback(
+    (type: string, title: string) => {
+      // Check if a window of this type already exists
+      const existing = state.windows.find(w => w.type === type);
+      if (existing) {
+        // Focus + un-minimize
+        dispatch({ type: 'FOCUS_WINDOW', payload: { id: existing.id } });
+        return;
+      }
+
+      // Calculate centered position based on viewport
+      const centerX = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
+      const centerY = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
+
+      // Add slight cascading offset when multiple windows exist
+      const cascadeOffset = state.windows.length * 24;
+      const x = Math.min(centerX + cascadeOffset, window.innerWidth - 200);
+      const y = Math.min(centerY + cascadeOffset, window.innerHeight - 200);
+
+      const newWindow: OSWindow = {
+        id: `${type}-${Date.now()}`,
+        type,
+        title,
+        x,
+        y,
+        width: WINDOW_DEFAULT_WIDTH,
+        height: WINDOW_DEFAULT_HEIGHT,
+        zIndex: state.nextZIndex,
+        isMinimized: false,
+        isMaximized: false,
+        preMaximizeRect: null,
+      };
+
+      dispatch({ type: 'OPEN_WINDOW', payload: { window: newWindow } });
+    },
+    [state.windows, state.nextZIndex],
+  );
+
+  const closeWindow = useCallback((id: string) => {
+    dispatch({ type: 'CLOSE_WINDOW', payload: { id } });
+  }, []);
+
+  const focusWindow = useCallback((id: string) => {
+    dispatch({ type: 'FOCUS_WINDOW', payload: { id } });
+  }, []);
+
+  const minimizeWindow = useCallback((id: string) => {
+    dispatch({ type: 'MINIMIZE_WINDOW', payload: { id } });
+  }, []);
+
+  const toggleMaximize = useCallback((id: string, desktopRect: WindowRect) => {
+    dispatch({ type: 'TOGGLE_MAXIMIZE', payload: { id, desktopRect } });
+  }, []);
+
+  const moveWindow = useCallback((id: string, x: number, y: number) => {
+    dispatch({ type: 'MOVE_WINDOW', payload: { id, x, y } });
+  }, []);
+
+  const resizeWindow = useCallback(
+    (id: string, width: number, height: number, x?: number, y?: number) => {
+      dispatch({ type: 'RESIZE_WINDOW', payload: { id, width, height, x, y } });
+    },
+    [],
+  );
+
+  const toggleOSMode = useCallback(() => {
+    dispatch({ type: 'TOGGLE_OS_MODE' });
+  }, []);
+
+  const getWindowPageComponent = useCallback(
+    (type: string) => PAGE_COMPONENT_MAP[type],
+    [],
+  );
+
+  // ── Context value (memoized) ───────────────────────────────────
+
+  const ctx = useMemo<AgentOSContextType>(
+    () => ({
+      state,
+      openWindow,
+      closeWindow,
+      focusWindow,
+      minimizeWindow,
+      toggleMaximize,
+      moveWindow,
+      resizeWindow,
+      toggleOSMode,
+      getWindowPageComponent,
+    }),
+    [
+      state,
+      openWindow,
+      closeWindow,
+      focusWindow,
+      minimizeWindow,
+      toggleMaximize,
+      moveWindow,
+      resizeWindow,
+      toggleOSMode,
+      getWindowPageComponent,
+    ],
+  );
+
+  return <AgentOSContext.Provider value={ctx}>{children}</AgentOSContext.Provider>;
+}
+
+// ── Hook ─────────────────────────────────────────────────────────
+
+/** Access the AgentOS context. Must be used inside AgentOSProvider. */
+export function useAgentOS(): AgentOSContextType {
+  const ctx = useContext(AgentOSContext);
+  if (!ctx) {
+    throw new Error('useAgentOS must be used within an AgentOSProvider');
+  }
+  return ctx;
+}
+
+export default AgentOSContext;

@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, GlobeIcon } from 'lucide-react';
+import OSToggleButton from './agent-os/OSToggleButton';
 
 function getAPI(): ElectronAPI | undefined {
   return window.electronAPI;
@@ -10,9 +11,13 @@ interface Props {
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   onOpenBrowser?: () => void;
+  /** OS mode toggle callback — renders the toggle button when provided */
+  onToggleOSMode?: () => void;
+  /** Current OS mode state — controls toggle button icon */
+  isOSMode?: boolean;
 }
 
-export default function TitleBar({ children, sidebarCollapsed = false, onToggleSidebar, onOpenBrowser }: Props) {
+export default function TitleBar({ children, sidebarCollapsed = false, onToggleSidebar, onOpenBrowser, onToggleOSMode, isOSMode = false }: Props) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -53,6 +58,10 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
       {/* Window controls */}
       <div className="flex h-full flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        {/* OS mode toggle button */}
+        {onToggleOSMode && (
+          <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
+        )}
         {/* Browser button */}
         <button
           onClick={() => onOpenBrowser?.()}

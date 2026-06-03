@@ -66,6 +66,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   memoryDelete: (key) => ipcRenderer.invoke('memory:delete', key),
   memoryClear: () => ipcRenderer.invoke('memory:clear'),
   memorySummary: () => ipcRenderer.invoke('memory:summary'),
+  // ── CLI Tools ──
+  cliCheckCommand: (command) => ipcRenderer.invoke('cli:check', command),
+  cliInstall: (command) => ipcRenderer.invoke('cli:install', { command }),
   // P0-06: Forward requirements-changed event from main process (replaces executeJavaScript)
   onRequirementsChanged: (cb) => {
     const handler = () => cb();

@@ -60,6 +60,9 @@ declare global {
     memoryDelete: (key: string) => Promise<{ deleted: boolean; key: string }>;
     memoryClear: () => Promise<{ cleared: boolean }>;
     memorySummary: () => Promise<string>;
+    // ── CLI Tools ──
+    cliCheckCommand: (command: string) => Promise<{ exists: boolean; path: string | null }>;
+    cliInstall: (command: string) => Promise<{ success: boolean; output?: string; error?: string }>;
     /** Test connection to a specific model configuration by ID */
     testModelConnection: (modelId: number) => Promise<boolean>;
     /** Get application settings */

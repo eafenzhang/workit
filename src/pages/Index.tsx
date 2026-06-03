@@ -5,6 +5,8 @@ import ProfileWizard from '../components/ProfileWizard';
 import { useAuth } from '../context/AuthContext';
 import { hasProfile } from '../utils/profileStorage';
 import { XIcon, Trash2Icon } from 'lucide-react';
+import { useAgentOS } from '../context/AgentOSContext';
+import AgentOSDesktop from '../components/agent-os/AgentOSDesktop';
 
 /** Extracted base style for tab bar buttons */
 const TAB_STYLE: React.CSSProperties = {
@@ -65,6 +67,29 @@ export default function Index() {
   const [showWizard, setShowWizard] = useState(false);
 
   const { userProfile, saveProfile, isLoading } = useAuth();
+
+  // Agent OS mode
+  const { state: osState, toggleOSMode, openWindow } = useAgentOS();
+  const isOSMode = osState.isOSMode;
+  const hasAutoOpenedRef = React.useRef(false);
+
+  // Auto-open home window when entering OS mode for the first time
+  useEffect(() => {
+    if (isOSMode && osState.isInitialized && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
+      // Only open if no windows are open yet
+      if (osState.windows.length === 0) {
+        openWindow('home', '首页');
+      }
+    }
+  }, [isOSMode, osState.isInitialized, osState.windows.length, openWindow]);
+
+  // Reset auto-open flag when leaving OS mode
+  useEffect(() => {
+    if (!isOSMode) {
+      hasAutoOpenedRef.current = false;
+    }
+  }, [isOSMode]);
 
   // First-time startup: show wizard if no profile exists
   useEffect(() => {
@@ -261,54 +286,64 @@ export default function Index() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
         onOpenBrowser={() => onOpenBrowser()}
+        isOSMode={isOSMode}
+        onToggleOSMode={toggleOSMode}
       >
-        {tabBar}
+        {/* Tab bar hidden in OS mode */}
+        {!isOSMode && tabBar}
       </TitleBar>
 
-      {/* Below: Sidebar + Content */}
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          activeTab={                     activeTab?.type === 'home' ? 'home' :
-                     activeTab?.type === 'requirements' ? 'requirements' :
-                     activeTab?.type === 'knowledge' ? 'knowledge' :
-                     activeTab?.type === 'insights' ? 'insights' :
-                     activeTab?.type === 'mcp' ? 'mcp' :
-                     activeTab?.type === 'model' ? 'model' :
-                     activeTab?.type === 'messages' ? 'messages' :
-                     activeTab?.type === 'settings' ? 'settings' :
-                     activeTab?.type === 'profile' ? 'profile' : 'home'}
-          onTabChange={(menuType) => {
-            const item = MENU_MAP[menuType];
-            if (item) handleMenuClick(item.type, item.title);
-          }}
-          collapsed={sidebarCollapsed}
-          onCollapsedChange={setSidebarCollapsed}
-        />
+      {/* OS Mode: Render desktop environment */}
+      {isOSMode ? (
+        <AgentOSDesktop />
+      ) : (
+        <>
+          {/* Below: Sidebar + Content (classic mode) */}
+          <div className="flex flex-1 overflow-hidden">
+            <Sidebar
+              activeTab={                     activeTab?.type === 'home' ? 'home' :
+                             activeTab?.type === 'requirements' ? 'requirements' :
+                             activeTab?.type === 'knowledge' ? 'knowledge' :
+                             activeTab?.type === 'insights' ? 'insights' :
+                             activeTab?.type === 'mcp' ? 'mcp' :
+                             activeTab?.type === 'model' ? 'model' :
+                             activeTab?.type === 'messages' ? 'messages' :
+                             activeTab?.type === 'settings' ? 'settings' :
+                             activeTab?.type === 'profile' ? 'profile' : 'home'}
+              onTabChange={(menuType) => {
+                const item = MENU_MAP[menuType];
+                if (item) handleMenuClick(item.type, item.title);
+              }}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
+            />
 
-        {/* Main content area */}
-        <main className="flex-1 min-h-0">
-          <div className="h-full relative">
-            <div key={activeTabId} className="h-full page-fade-enter">
-              <Suspense fallback={<Loading />}>{page}</Suspense>
-            </div>
-            {/* Browser tabs — always rendered, hidden when inactive (fix #1: keep webview alive) */}
-            {tabs.filter(t => t.type === 'browser').map(tab => (
-              <div key={tab.id} className="h-full absolute inset-0"
-                style={{ display: tab.id === activeTabId ? undefined : 'none' }}>
-                <Suspense fallback={<Loading />}>
-                  <Browser
-                    initialUrl={tab.params?.url}
-                    onUrlChange={(url) => updateBrowserUrl(tab.id, url)}
-                    onTitleChange={(title) => updateBrowserTitle(tab.id, title)}
-                    onOpenNewTab={onOpenBrowser}
-                    visible={tab.id === activeTabId}
-                  />
-                </Suspense>
+            {/* Main content area */}
+            <main className="flex-1 min-h-0">
+              <div className="h-full relative">
+                <div key={activeTabId} className="h-full page-fade-enter">
+                  <Suspense fallback={<Loading />}>{page}</Suspense>
+                </div>
+                {/* Browser tabs — always rendered, hidden when inactive */}
+                {tabs.filter(t => t.type === 'browser').map(tab => (
+                  <div key={tab.id} className="h-full absolute inset-0"
+                    style={{ display: tab.id === activeTabId ? undefined : 'none' }}>
+                    <Suspense fallback={<Loading />}>
+                      <Browser
+                        initialUrl={tab.params?.url}
+                        onUrlChange={(url) => updateBrowserUrl(tab.id, url)}
+                        onTitleChange={(title) => updateBrowserTitle(tab.id, title)}
+                        onOpenNewTab={onOpenBrowser}
+                        visible={tab.id === activeTabId}
+                      />
+                    </Suspense>
+                  </div>
+                ))}
               </div>
-            ))}
+            </main>
           </div>
-        </main>
-      </div>
+        </>
+      )}
 
       {/* Profile Wizard — full-screen overlay for first-time setup */}
       {showWizard && (

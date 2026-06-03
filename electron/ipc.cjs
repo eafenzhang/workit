@@ -83,6 +83,27 @@ function setupIPC(mainWindow, db) {
     } catch (e) { return { error: e.message }; }
   });
 
+  // ── CLI Tools: Check if command exists on PATH ──
+  ipcMain.handle('cli:check', async (_, command) => {
+    try {
+      const { execSync } = require('child_process');
+      const result = execSync(`where "${command}" 2>nul || which "${command}" 2>/dev/null || echo NOT_FOUND`, { encoding: 'utf8', timeout: 5000 });
+      const found = !result.includes('NOT_FOUND') && result.trim().length > 0;
+      return { exists: found, path: found ? result.trim().split('\n')[0] : null };
+    } catch { return { exists: false, path: null }; }
+  });
+
+  // ── CLI Tools: Install by running install command ──
+  ipcMain.handle('cli:install', async (_, { command }) => {
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync(command, { encoding: 'utf8', timeout: 120000, shell: 'powershell.exe', maxBuffer: 10 * 1024 * 1024 });
+      return { success: true, output: output.trim() };
+    } catch (e) {
+      return { success: false, error: e.stderr || e.message || '安装失败' };
+    }
+  });
+
   // ── Agent Memory IPC handlers ──
   ipcMain.handle('memory:getAll', async () => {
     try { return getMemories(db); } catch (e) { return { error: e.message }; }

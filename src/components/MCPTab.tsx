@@ -172,23 +172,41 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
 
   return (
     <>
-      {/* Toolbar — import button top-right */}
-      {!hideToolbar && (
-      <div className="flex items-center justify-end gap-2 px-8 py-3">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-2 px-8 py-3">
+        <h2 className="text-xl font-semibold text-wiki-text">MCP 工具</h2>
+        <div className="flex items-center gap-2">
         <button onClick={() => setShowImport(true)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
-          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-          <UploadIcon size={14} />一键导入
+          style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
+          <UploadIcon size={14} />导入 JSON
         </button>
+        <button onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          <ServerIcon size={14} />添加 MCP 服务器
+        </button>
+        </div>
       </div>
-      )}
 
       {/* Empty state */}
       {servers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 mx-8 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <ServerIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
-          <p className="mt-4 text-wiki-text2 text-sm">暂无 MCP 服务</p>
-          <p className="mt-1 text-wiki-text3 text-xs">点击「一键导入」快速添加 MCP 服务</p>
+          <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 MCP 服务</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加 MCP 服务器后，AI 可以直接调用外部工具和服务</p>
+          <div className="flex items-center gap-2 mt-4">
+            <button onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium"
+              style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              <ServerIcon size={14} />添加 MCP 服务器
+            </button>
+            <button onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium"
+              style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
+              <UploadIcon size={14} />导入 JSON
+            </button>
+          </div>
         </div>
       )}
 
@@ -206,7 +224,7 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
           return (
             <div key={server.id} className="rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
               {/* Main card */}
-              <div className="p-6">
+              <div className="p-4">
                 <div className="flex items-center gap-4">
                   {/* Status indicator */}
                   <div className="relative">
@@ -224,7 +242,7 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-semibold text-wiki-text">{server.name}</span>
+                      <span className="text-sm font-semibold text-wiki-text">{server.name}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{server.type}</span>
                       {/* Status badge */}
                       {server.enabled && (
@@ -485,10 +503,10 @@ function AddServerModal({ onClose, onAdd, editingId, editData }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)', backdropFilter: 'blur(4px)' }}>
       <div className="w-[480px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-wiki-text">{isEdit ? '编辑服务' : '添加 MCP 服务器'}</h2>
+          <h2 className="text-sm font-semibold text-wiki-text">{isEdit ? '编辑服务' : '添加 MCP 服务器'}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-wiki-surface2">
             <XIcon size={18} style={{ color: 'var(--wiki-text3)' }} />
           </button>

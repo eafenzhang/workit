@@ -1,91 +1,97 @@
 classDiagram
-    class McpClientManager {
-        -static instance: McpClientManager
-        -clients: Map~number, Client~
-        -transports: Map~number, StdioClientTransport~
-        -serverStates: Map~number, McpServerState
-        -reconnectTimers: Map~number, NodeJS.Timeout
-        -reconnectAttempts: Map~number, number
-        -mainWindow: BrowserWindow
-        +static getInstance(): McpClientManager
-        +initialize(mainWindow: BrowserWindow): Promise~void~
-        +loadAllEnabledServers(db: Database): Promise~void~
-        +connectServer(serverConfig: McpServerConfig): Promise~void~
-        +disconnectServer(serverId: number): Promise~void~
-        +onServerConfigChanged(event: ConfigChangeEvent): Promise~void~
-        +getAllToolsForLLM(format: "openai"|"anthropic"): ToolDefinition[]
-        +executeTool(serverId: number, toolName: string, args: object): Promise~ToolResult~
-        +getAllStatus(): McpServerState[]
-        +shutdown(): Promise~void~
-        -createClient(serverConfig: McpServerConfig): Promise~Client~
-        -fetchTools(client: Client): Promise~McpTool~
-        -pushStatus(serverId: number): void
-        -pushTools(serverId: number): void
-        -scheduleReconnect(serverId: number): void
-        -clearReconnect(serverId: number): void
+    direction TB
+
+    class AgentOSState {
+        +boolean isOSMode
+        +OSWindow[] windows
+        +string | null activeWindowId
+        +number nextZIndex
+        +boolean isInitialized
     }
 
-    class McpServerConfig {
-        +id: number
-        +name: string
-        +type: string
-        +command: string
-        +args: string
-        +env: string
-        +enabled: boolean
-        +config: string
+    class OSWindow {
+        +string id
+        +string type
+        +string title
+        +number x
+        +number y
+        +number width
+        +number height
+        +number zIndex
+        +boolean isMinimized
+        +boolean isMaximized
+        +WindowRect? preMaximizeRect
     }
 
-    class McpServerState {
-        +serverId: number
-        +serverName: string
-        +status: "disconnected"|"connecting"|"connected"|"error"
-        +error: string?
-        +toolCount: number
-        +tools: McpTool[]
+    class WindowRect {
+        +number x
+        +number y
+        +number width
+        +number height
     }
 
-    class McpTool {
-        +name: string
-        +description: string
-        +inputSchema: object
+    class DockItem {
+        +string id
+        +string label
+        +LucideIcon icon
+        +string type
     }
 
-    class ConfigChangeEvent {
-        +type: "insert"|"update"|"delete"|"toggle"
-        +serverId: number
-        +oldConfig: McpServerConfig?
-        +newConfig: McpServerConfig?
+    class AgentOSContextType {
+        +AgentOSState state
+        +openWindow(type, title) void
+        +closeWindow(id) void
+        +focusWindow(id) void
+        +minimizeWindow(id) void
+        +toggleMaximize(id, desktopRect) void
+        +moveWindow(id, x, y) void
+        +resizeWindow(id, width, height, x?, y?) void
+        +toggleOSMode() void
     }
 
-    class ToolDefinition~OpenAI~ {
-        +type: "function"
-        +function: FunctionDef
+    class AgentOSProvider {
+        +useReducer[AgentOSState, AgentOSAction]
+        +localStorage persistence
     }
 
-    class FunctionDef {
-        +name: string
-        +description: string
-        +parameters: object
+    class UseWindowManager {
+        +startDrag(windowId, e) void
+        +startResize(windowId, edge, e) void
+        +onMouseMove(e) void
+        +onMouseUp() void
     }
 
-    class ToolCallResult {
-        +tool_call_id: string
-        +role: "tool"
-        +content: string
+    class UseAgentOSMode {
+        +boolean isOSMode
+        +toggleOSMode() void
     }
 
-    class ToolCallLoopState {
-        +messages: Message[]
-        +round: number
-        +maxRounds: number
-        +usedTools: Set~string~
+    class Window {
+        +OSWindow window
+        +boolean isFocused
+        +onClose() void
+        +onFocus() void
     }
 
-    McpClientManager "1" --> "*" McpServerState : manages
-    McpServerState "1" --> "*" McpTool : contains
-    McpClientManager "1" --> "*" McpServerConfig : reads
-    McpClientManager ..> ConfigChangeEvent : receives
-    McpClientManager ..> ToolDefinition : produces
-    McpClientManager ..> ToolCallResult : produces
-    ToolCallLoopState ..> ToolCallResult : accumulates
+    class WindowTitleBar {
+        +string title
+        +boolean isFocused
+        +macOS buttons(close, minimize, maximize)
+    }
+
+    class AgentOSDesktop {
+        +MenuBar top
+        +DesktopArea middle
+        +DockBar bottom
+    }
+
+    AgentOSState "1" *-- "0..*" OSWindow : windows
+    OSWindow *-- WindowRect : preMaximizeRect
+    AgentOSContextType ..> AgentOSState : exposes
+    AgentOSProvider ..|> AgentOSContextType : implements
+    UseWindowManager ..> AgentOSContextType : uses
+    UseAgentOSMode ..> AgentOSContextType : uses
+    Window --> WindowTitleBar : renders
+    Window --> AgentOSContextType : uses
+    AgentOSDesktop --> Window : contains
+    AgentOSDesktop --> DockItem : renders
