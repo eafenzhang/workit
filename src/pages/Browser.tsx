@@ -254,6 +254,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
       )}
 
       {/* Webview */}
+      <div className="flex-1 flex flex-col overflow-hidden">
       {!showHistory && (
         url ? <webview key={wvKey.current} ref={wvRefCallback} src={url} className="flex-1 w-full border-0" style={{ height: '100%' }} /> : (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-wiki-text3">
@@ -272,6 +273,7 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
           </div>
         )
       )}
+      </div>
     </div>
   );
 }
