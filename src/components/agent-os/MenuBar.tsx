@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
 import { MonitorIcon, LayoutGridIcon, Maximize2Icon, Minimize2Icon } from 'lucide-react';
+import { APP_ICON } from '../../constants/icon';
 
-// ── App Icon SVG ──────────────────────────────────────────────────
+// ── App Icon ──────────────────────────────────────────────────────
 
-const AppIcon: React.FC = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="2" y="2" width="20" height="20" rx="5" fill="var(--wiki-text)" />
-    <path d="M7 12l3 3 7-7" stroke="var(--wiki-bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+// Uses the same icon as Settings page
 
 // ── Menu items (display only) ────────────────────────────────────
 
@@ -66,9 +62,7 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
     >
       {/* ── Left: Apple logo + menu items (no-drag for click) ── */}
       <div className="flex items-center h-full gap-4 pl-3 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
-        <span className="inline-flex items-center" aria-label="Workit 菜单">
-          <AppIcon />
-        </span>
+        <img src={APP_ICON} alt="Workit" className="w-4 h-4 object-contain" />
         {MENU_ITEMS.map((item) => (
           <span key={item} className="cursor-default" style={{ color: 'var(--wiki-text2)' }}>
             {item}

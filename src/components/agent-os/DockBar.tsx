@@ -37,7 +37,7 @@ const DOCK_ITEMS: (DockItem & { color: string })[] = [
  * macOS-style bottom Dock bar with glassmorphism, filled icons and brand colors.
  */
 export default function DockBar() {
-  const { state, openWindow, openNewBrowserWindow } = useAgentOS();
+  const { state, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow } = useAgentOS();
   const { windows } = state;
 
   const [isDark, setIsDark] = useState<boolean>(() =>
@@ -62,11 +62,21 @@ export default function DockBar() {
       if (!item) return;
       if (type === 'browser') {
         openNewBrowserWindow();
+        return;
+      }
+      // Find existing window of this type
+      const existing = windows.find((w: OSWindow) => w.type === type);
+      if (existing) {
+        if (existing.isMinimized) {
+          focusWindow(existing.id);
+        } else {
+          minimizeWindow(existing.id);
+        }
       } else {
         openWindow(type, item.label);
       }
     },
-    [openWindow, openNewBrowserWindow],
+    [windows, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow],
   );
 
   return (

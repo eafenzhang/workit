@@ -55,8 +55,7 @@ export default function DockIcon({ item, isOpen, color, onClick }: DockIconProps
             filter: isHovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
             transition: 'color 0.2s, filter 0.2s',
           }}
-          fill={isOpen || isHovered ? color : 'none'}
-          strokeWidth={isOpen || isHovered ? 2.2 : 1.8}
+          strokeWidth={isOpen || isHovered ? 2.4 : 1.6}
         />
       </div>
 
