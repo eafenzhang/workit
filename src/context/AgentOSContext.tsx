@@ -149,7 +149,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   function calcCascadePosition(windowCount: number) {
     const cx = Math.max(0, Math.round((window.innerWidth - WINDOW_DEFAULT_WIDTH) / 2));
     const cy = Math.max(0, Math.round((window.innerHeight - WINDOW_DEFAULT_HEIGHT) / 2));
-    const offset = windowCount * 24;
+    const offset = Math.max(0, windowCount - 1) * 24;
     return {
       x: Math.min(cx + offset, window.innerWidth - 200),
       y: Math.min(cy + offset, window.innerHeight - 200),

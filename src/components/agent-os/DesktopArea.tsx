@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import WindowManager from './WindowManager';
-import { PlusIcon, ImageIcon, PaletteIcon } from 'lucide-react';
+import { RefreshCwIcon, ImageIcon, PaletteIcon } from 'lucide-react';
 
 // ── Wallpaper presets ────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ interface ContextMenuState {
 }
 
 const CTX_MENU_ITEMS = [
-  { id: 'new-window', label: '新建窗口', icon: PlusIcon, action: 'newWindow' },
+  { id: 'refresh', label: '刷新页面', icon: RefreshCwIcon, action: 'refresh' },
   { id: 'wallpaper', label: '更换背景', icon: ImageIcon, action: 'wallpaper' },
 ];
 
@@ -83,8 +83,9 @@ export default function DesktopArea() {
     setCtxMenu(prev => ({ ...prev, visible: false }));
     if (action === 'wallpaper') {
       setShowWallpaperPicker(true);
+    } else if (action === 'refresh') {
+      window.location.reload();
     }
-    // 'newWindow' could trigger a quick launcher in the future
   }, []);
 
   const selectWallpaper = useCallback((bg: string) => {
