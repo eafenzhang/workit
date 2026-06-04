@@ -300,7 +300,7 @@ export default function DockBar({
           onClick={() => setContextMenu(null)}
         >
           <div
-            className="absolute rounded-xl overflow-hidden min-w-[180px]"
+            className="absolute rounded-xl overflow-hidden"
             style={{
               left: contextMenu.x,
               top: contextMenu.y,
@@ -318,15 +318,6 @@ export default function DockBar({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="px-4 py-2.5 text-xs font-medium"
-              style={{
-                color: 'var(--wiki-text)',
-                borderBottom: '1px solid var(--wiki-border)',
-              }}
-            >
-              {contextMenu.label} ({windows.filter((w: OSWindow) => w.type === contextMenu.type).length} 个窗口)
-            </div>
             <button
               onClick={() => {
                 windows
@@ -334,14 +325,14 @@ export default function DockBar({
                   .forEach((w) => closeWindow(w.id));
                 setContextMenu(null);
               }}
-              className="w-full text-left px-4 py-2.5 text-sm hover:bg-wiki-surface2 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-wiki-surface2 transition-colors flex items-center gap-2 whitespace-nowrap"
               style={{ color: 'var(--wiki-text)' }}
             >
               <svg width="13" height="13" viewBox="0 0 13 13">
                 <line x1="2" y1="2" x2="11" y2="11" stroke="var(--wiki-text3)" strokeWidth="1.2" strokeLinecap="round"/>
                 <line x1="11" y1="2" x2="2" y2="11" stroke="var(--wiki-text3)" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
-              关闭所有窗口
+              关闭窗口
             </button>
           </div>
         </div>
