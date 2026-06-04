@@ -16,11 +16,19 @@ async function call(method: string, table: string, data?: any, id?: number | str
   if (id !== undefined) url += `/${id}`;
   if (method === 'GET') {
     const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${res.statusText} - ${body.substring(0, 500)}`);
+    }
     return res.text().then(t => { try { return JSON.parse(t); } catch { return t; } });
   }
   opts.method = method;
   if (data) opts.body = JSON.stringify(data);
   const res = await fetch(url, opts);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}: ${res.statusText} - ${body.substring(0, 500)}`);
+  }
   return res.text().then(t => { try { return JSON.parse(t); } catch { return t; } });
 }
 
