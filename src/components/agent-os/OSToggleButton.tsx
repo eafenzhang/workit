@@ -27,8 +27,8 @@ export default function OSToggleButton({ isOSMode, onToggle }: OSToggleButtonPro
       onClick={handleClick}
       className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      aria-label={isOSMode ? '切换到经典模式' : '切换到桌面模式'}
-      title={isOSMode ? '切换到经典模式' : '切换到桌面模式'}
+      aria-label={isOSMode ? '切换到应用模式' : '切换到桌面模式'}
+      title={isOSMode ? '切换到应用模式' : '切换到桌面模式'}
     >
       {isOSMode ? (
         <LayoutGridIcon size={15} style={{ color: 'var(--wiki-text2)' }} />

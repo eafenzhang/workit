@@ -1,180 +1,74 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import WindowManager from './WindowManager';
-import { RefreshCwIcon, ImageIcon, PaletteIcon } from 'lucide-react';
-import { useAgentOS } from '../../context/AgentOSContext';
 
-// ── Wallpaper presets ────────────────────────────────────────────
-
-const WALLPAPERS = [
-  // Dark palette
-  { id: 'dark-grain', label: '暗色颗粒', bg: '#1a1a1f' },
-  { id: 'navy', label: '深蓝', bg: '#0f172a' },
-  { id: 'charcoal', label: '炭灰', bg: '#2d2d2d' },
-  { id: 'forest', label: '森林', bg: '#0d2818' },
-  { id: 'plum', label: '梅紫', bg: '#1a0f24' },
-  { id: 'deep', label: '深黑', bg: '#0a0a0f' },
-  // Light palette
-  { id: 'snow', label: '雪白', bg: '#f0f2f5' },
-  { id: 'cream', label: '奶油', bg: '#faf8f2' },
-  { id: 'mint', label: '薄荷', bg: '#f0faf4' },
-  { id: 'lavender', label: '薰衣草', bg: '#f4f0fa' },
-  { id: 'sky', label: '天空', bg: '#f0f4fa' },
-  { id: 'rose', label: '玫瑰', bg: '#faf3f4' },
-];
+// ── Constants ────────────────────────────────────────────────────
 
 const LS_WALLPAPER_KEY = 'agent-os-wallpaper';
+const DEFAULT_WALLPAPER = '#1a1a1f';
 
-function loadWallpaper(): string {
-  try { return localStorage.getItem(LS_WALLPAPER_KEY) || WALLPAPERS[0].bg; } catch { return WALLPAPERS[0].bg; }
+// ── Wallpaper state & helpers ────────────────────────────────────
+
+interface WallpaperState {
+  type: 'color' | 'image';
+  value: string;
 }
 
-function saveWallpaper(bg: string) {
-  try { localStorage.setItem(LS_WALLPAPER_KEY, bg); } catch {}
+function loadWallpaper(): WallpaperState {
+  try {
+    const raw = localStorage.getItem(LS_WALLPAPER_KEY);
+    if (raw) {
+      if (raw.startsWith('data:')) {
+        return { type: 'image', value: raw };
+      }
+      return { type: 'color', value: raw };
+    }
+  } catch {
+    // Corrupted
+  }
+  return { type: 'color', value: DEFAULT_WALLPAPER };
 }
 
-// ── Context menu ──────────────────────────────────────────────────
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  visible: boolean;
-}
-
-const CTX_MENU_ITEMS = [
-  { id: 'refresh', label: '刷新页面', icon: RefreshCwIcon, action: 'refresh' },
-  { id: 'wallpaper', label: '更换背景', icon: ImageIcon, action: 'wallpaper' },
-];
+type DockState = 'show' | 'hide' | 'float';
 
 /**
- * Desktop canvas with distinct background, wallpaper support,
- * right-click context menu, and window management.
+ * Desktop canvas with wallpaper support and window management.
+ *
+ * Always fills the full container — wallpaper covers the entire area
+ * including behind the dock bar (which overlays with glassmorphism).
+ * Window maximize dimensions are handled by WindowManager based on
+ * dockState so maximized windows leave room for the dock in "show" mode.
  */
-export default function DesktopArea() {
-  const { state, closeWindow } = useAgentOS();
-  const [wallpaper, setWallpaper] = useState(loadWallpaper);
-  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
-  const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({ x: 0, y: 0, visible: false });
-  const ctxRef = useRef<HTMLDivElement>(null);
+export default function DesktopArea({
+  settingsVersion,
+  dockState,
+}: {
+  settingsVersion?: number;
+  dockState?: DockState;
+}) {
+  const [wallpaper, setWallpaper] = useState<WallpaperState>(loadWallpaper);
 
-  // Close context menu on outside click
+  // Re-read wallpaper when settings modal closes (settingsVersion increments)
   useEffect(() => {
-    if (!ctxMenu.visible) return;
-    const handler = (e: MouseEvent) => {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
-        setCtxMenu(prev => ({ ...prev, visible: false }));
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [ctxMenu.visible]);
-
-  // Close context menu on scroll/escape
-  useEffect(() => {
-    if (!ctxMenu.visible) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(prev => ({ ...prev, visible: false })); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [ctxMenu.visible]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setCtxMenu({ x: e.clientX, y: e.clientY, visible: true });
-  }, []);
-
-  const handleMenuAction = useCallback((action: string) => {
-    setCtxMenu(prev => ({ ...prev, visible: false }));
-    if (action === 'wallpaper') {
-      setShowWallpaperPicker(true);
-    } else if (action === 'refresh') {
-      state.windows.forEach(w => closeWindow(w.id));
+    if (settingsVersion !== undefined && settingsVersion > 0) {
+      setWallpaper(loadWallpaper());
     }
-  }, []);
+  }, [settingsVersion]);
 
-  const selectWallpaper = useCallback((bg: string) => {
-    setWallpaper(bg);
-    saveWallpaper(bg);
-    setShowWallpaperPicker(false);
-  }, []);
+  const bgStyle =
+    wallpaper.type === 'image'
+      ? {
+          backgroundImage: `url(${wallpaper.value})`,
+          backgroundSize: 'cover' as const,
+          backgroundPosition: 'center' as const,
+        }
+      : { background: wallpaper.value };
 
   return (
     <div
-      className="flex-1 relative overflow-hidden"
-      style={{ background: wallpaper }}
-      onContextMenu={handleContextMenu}
+      className="absolute inset-0 overflow-hidden"
+      style={bgStyle}
     >
-      <WindowManager />
-
-      {/* ── Context menu ── */}
-      {ctxMenu.visible && (
-        <div
-          ref={ctxRef}
-          className="fixed z-[1000] rounded-xl py-1 shadow-lg min-w-[160px]"
-          style={{
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            background: 'var(--wiki-surface)',
-            border: '1px solid var(--wiki-border)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.32)',
-          }}
-        >
-          {CTX_MENU_ITEMS.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleMenuAction(item.action)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-wiki-text2 hover:bg-wiki-surface2 transition-colors text-left"
-              >
-                <Icon size={14} />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Wallpaper picker modal ── */}
-      {showWallpaperPicker && (
-        <div
-          className="fixed inset-0 z-[1001] flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setShowWallpaperPicker(false)}
-        >
-          <div
-            className="rounded-xl p-5 max-w-sm w-full mx-4"
-            style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-wiki-text">更换背景</h3>
-              <PaletteIcon size={16} style={{ color: 'var(--wiki-text3)' }} />
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {WALLPAPERS.map(wp => (
-                <button
-                  key={wp.id}
-                  onClick={() => selectWallpaper(wp.bg)}
-                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all hover:scale-105"
-                  style={{
-                    border: wallpaper === wp.bg ? '2px solid var(--wiki-text)' : '2px solid var(--wiki-border)',
-                  }}
-                >
-                  <div
-                    className="w-full aspect-square rounded-lg"
-                    style={{ background: wp.bg, border: '1px solid rgba(255,255,255,0.08)' }}
-                  />
-                  <span
-                    className="text-[10px] text-center truncate w-full"
-                    style={{ color: wallpaper === wp.bg ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}
-                  >
-                    {wp.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <WindowManager dockState={dockState} />
     </div>
   );
 }

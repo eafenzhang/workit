@@ -176,7 +176,7 @@ export default function Window({
       <div className="flex-1 overflow-hidden relative" style={{ background: 'var(--wiki-surface)' }}>
         {PageComponent ? (
           <Suspense fallback={<WindowLoading />}>
-            <PageComponent />
+            <PageComponent initialUrl={win.initialUrl} />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full" style={{ color: 'var(--wiki-text3)' }}>

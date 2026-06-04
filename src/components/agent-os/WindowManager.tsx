@@ -9,7 +9,9 @@ import Window from './Window';
  * Integrates `useWindowManager` for drag/resize orchestration and
  * delegates individual window rendering to the `Window` component.
  */
-export default function WindowManager() {
+type DockState = 'show' | 'hide' | 'float';
+
+export default function WindowManager({ dockState = 'show' }: { dockState?: DockState }) {
   const { state, closeWindow, focusWindow, minimizeWindow, toggleMaximize, moveWindow, resizeWindow, getWindowPageComponent } =
     useAgentOS();
 
@@ -43,14 +45,16 @@ export default function WindowManager() {
     wm.startResize(windowId, edge, x, y, w, h, e);
   };
 
-  // ── Handle maximize with desktop rect ──────────────────────────
-  // The desktop area dimensions are known at this level; we get them
-  // from the parent container or window. For now we use window.innerWidth/Height
-  // minus menu bar (28px) and dock bar (64px + 8px margin) offsets.
+  // ── Handle maximize with dynamic dock offset ──────────────────
+  // The container is absolute inset-0 with CSS bottom offset managed
+  // by DesktopArea. We mirror that logic here for maximize rect:
+  //   menuBar 32px (top) + dock 76px (bottom, only when dock='show')
+  const MENUBAR_HEIGHT = 32;
+  const DOCK_HEIGHT = 76; // mirrors DOCK_RESERVED_HEIGHT in DesktopArea
   const handleMaximize = (id: string) => {
-    // Approximate desktop area — exact dimensions come from DesktopArea
+    const bottomMargin = dockState === 'show' ? DOCK_HEIGHT : 0;
     const desktopWidth = window.innerWidth;
-    const desktopHeight = window.innerHeight - 28 - 72; // menuBar 28px + dock 64px + margin 8px
+    const desktopHeight = window.innerHeight - MENUBAR_HEIGHT - bottomMargin;
     toggleMaximize(id, { x: 0, y: 0, width: desktopWidth, height: desktopHeight });
   };
 

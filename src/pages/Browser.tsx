@@ -45,16 +45,24 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
   useEffect(() => {
     const container = wvContainerRef.current;
     if (!container) return;
-    // Remove any previous webview
-    if (webviewRef.current) {
-      webviewRef.current.removeEventListener('did-finish-load', handleWebviewLoad);
-      webviewRef.current.removeEventListener('page-title-updated', handlePageTitle);
-      webviewRef.current.removeEventListener('will-navigate', handleWillNavigate);
-      webviewRef.current.removeEventListener('did-start-loading', handleStartLoading);
-      webviewRef.current.removeEventListener('did-stop-loading', handleStopLoading);
-      webviewRef.current.remove();
-      webviewRef.current = null;
-    }
+
+    // Cleanup previous webview
+    const removeWebview = () => {
+      if (webviewRef.current) {
+        try {
+          webviewRef.current.removeEventListener('did-finish-load', handleWebviewLoad);
+          webviewRef.current.removeEventListener('page-title-updated', handlePageTitle);
+          webviewRef.current.removeEventListener('will-navigate', handleWillNavigate);
+          webviewRef.current.removeEventListener('did-start-loading', handleStartLoading);
+          webviewRef.current.removeEventListener('did-stop-loading', handleStopLoading);
+          webviewRef.current.stop();
+          webviewRef.current.remove();
+        } catch {}
+        webviewRef.current = null;
+      }
+    };
+    removeWebview();
+
     // Create fresh webview
     const wv = document.createElement('webview') as any;
     wv.className = 'flex-1 w-full border-0';
@@ -81,7 +89,9 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     });
     container.appendChild(wv);
     webviewRef.current = wv;
-    return () => {/* container cleanup handles removal */};
+
+    // Proper cleanup on unmount
+    return () => { removeWebview(); };
   }, []);
 
   // ── event handlers ──
@@ -155,8 +165,20 @@ export default function Browser({ initialUrl, onUrlChange, onTitleChange, onOpen
     }
   }, [initialUrl]);
 
+  // Pause webview rendering when window is minimized or hidden
   useEffect(() => {
-    if (visible === false) try { webviewRef.current?.stop(); } catch {}
+    if (visible === false) {
+      try { webviewRef.current?.stop(); }
+      catch {}
+      // Hide webview to prevent GPU rendering when not visible
+      if (webviewRef.current) {
+        webviewRef.current.style.display = 'none';
+      }
+    } else {
+      if (webviewRef.current) {
+        webviewRef.current.style.display = 'flex';
+      }
+    }
   }, [visible]);
 
   // ── UI handlers ──

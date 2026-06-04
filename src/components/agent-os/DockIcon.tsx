@@ -6,19 +6,21 @@ interface DockIconProps {
   isOpen: boolean;
   color: string;
   onClick: (type: string) => void;
+  onContextMenu?: (type: string, e: React.MouseEvent) => void;
 }
 
 /**
  * A single icon in the Dock bar with filled icon, brand color,
  * glass hover effect, running indicator, and tooltip.
  */
-export default function DockIcon({ item, isOpen, color, onClick }: DockIconProps) {
+export default function DockIcon({ item, isOpen, color, onClick, onContextMenu }: DockIconProps) {
   const [isHovered, setIsHovered] = useState(false);
   const Icon = item.icon;
 
   return (
     <button
       onClick={() => onClick(item.type)}
+      onContextMenu={(e) => onContextMenu?.(item.type, e)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className="flex flex-col items-center justify-end relative focus:outline-none"

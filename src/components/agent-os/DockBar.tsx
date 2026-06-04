@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';
@@ -33,16 +33,50 @@ const DOCK_ITEMS: (DockItem & { color: string })[] = [
   { id: 'profile', label: '用户Agent', icon: User, type: 'profile', color: '#ec4899' },
 ];
 
+type DockState = 'show' | 'hide' | 'float';
+
 /**
- * macOS-style bottom Dock bar with glassmorphism, filled icons and brand colors.
+ * macOS-style bottom Dock bar positioned absolute in the shared container.
+ *
+ * DesktopArea fills the full container (wallpaper covers entire area),
+ * DockBar sits on top with glassmorphism overlay.
+ *
+ * Behavior (all wrt. maximized windows only — see AgentOSDesktop):
+ *  - show:  Normal glassmorphism bar, always interactive.
+ *  - hide:  Hidden entirely.
+ *  - float: Semi-transparent overlay that appears on hover.
  */
-export default function DockBar() {
+export default function DockBar({
+  settingsVersion,
+  dockState = 'show',
+}: {
+  settingsVersion?: number;
+  dockState?: DockState;
+}) {
   const { state, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow } = useAgentOS();
   const { windows } = state;
 
   const [isDark, setIsDark] = useState<boolean>(() =>
     typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
   );
+
+  const [dockHovered, setDockHovered] = useState(false);
+
+  // ── Browser context menu (right-click browser icon → list all browser windows) ──
+  const [browserMenu, setBrowserMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const browserWindows = useMemo(
+    () => windows.filter((w: OSWindow) => w.type === 'browser' && !w.isMinimized),
+    [windows],
+  );
+
+  // Close context menu on any click outside
+  useEffect(() => {
+    if (!browserMenu) return;
+    const close = () => setBrowserMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [browserMenu]);
 
   useEffect(() => {
     const check = () => setIsDark(document.documentElement.classList.contains('dark'));
@@ -64,7 +98,6 @@ export default function DockBar() {
         openNewBrowserWindow();
         return;
       }
-      // Find existing window of this type
       const existing = windows.find((w: OSWindow) => w.type === type);
       if (existing) {
         if (existing.isMinimized) {
@@ -79,34 +112,106 @@ export default function DockBar() {
     [windows, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow],
   );
 
+  // Right-click browser icon → list all browser windows
+  const handleBrowserContextMenu = useCallback(
+    (type: string, e: React.MouseEvent) => {
+      if (type !== 'browser') return;
+      e.preventDefault();
+      setBrowserMenu({ x: e.clientX, y: e.clientY });
+    },
+    [],
+  );
+
+  // ── Hide mode ──
+  if (dockState === 'hide') {
+    return null;
+  }
+
+  const isFloat = dockState === 'float';
+
   return (
     <div
-      className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-2 z-50"
-      style={{
-        height: '68px',
-        borderRadius: '20px',
-        background: isDark
-          ? 'rgba(20,20,25,0.78)'
-          : 'rgba(248,248,252,0.82)',
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-        border: isDark
-          ? '1px solid rgba(255,255,255,0.08)'
-          : '1px solid rgba(255,255,255,0.6)',
-        boxShadow: isDark
-          ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
-          : '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
-      }}
+      className="absolute bottom-0 left-0 right-0 flex justify-center pb-2"
+      style={{ zIndex: isFloat ? 9999 : 50 }}
+      onMouseEnter={() => { if (isFloat) setDockHovered(true); }}
+      onMouseLeave={() => { if (isFloat) setDockHovered(false); }}
     >
-      {DOCK_ITEMS.map((item) => (
-        <DockIcon
-          key={item.id}
-          item={item}
-          color={item.color}
-          isOpen={isOpen(item.type)}
-          onClick={handleDockClick}
-        />
-      ))}
+      <div
+        className="flex items-center gap-1 px-3 py-2"
+        style={{
+          height: '68px',
+          borderRadius: '20px',
+          background: isDark
+            ? 'rgba(20,20,25,0.78)'
+            : 'rgba(248,248,252,0.82)',
+          backdropFilter: 'blur(24px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          border: isDark
+            ? '1px solid rgba(255,255,255,0.08)'
+            : '1px solid rgba(255,255,255,0.6)',
+          boxShadow: isDark
+            ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
+            : '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
+          opacity: isFloat ? (dockHovered ? 1 : 0.85) : 1,
+          // Float mode: only the glass panel blocks clicks; the outer zone stays hit-testable
+          pointerEvents: isFloat && !dockHovered ? 'none' : 'auto',
+        }}
+      >
+        {DOCK_ITEMS.map((item) => (
+          <DockIcon
+            key={item.id}
+            item={item}
+            color={item.color}
+            isOpen={isOpen(item.type)}
+            onClick={handleDockClick}
+            onContextMenu={handleBrowserContextMenu}
+          />
+        ))}
+      </div>
+
+      {/* ── Browser context menu (right-click) ── */}
+      {browserMenu && (
+        <div
+          className="fixed rounded-lg py-1 shadow-lg z-[10000]"
+          style={{
+            left: browserMenu.x,
+            top: browserMenu.y,
+            background: 'var(--wiki-surface)',
+            border: '1px solid var(--wiki-border)',
+            minWidth: '280px',
+            maxHeight: '320px',
+            overflowY: 'auto',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {browserWindows.length === 0 ? (
+            <div
+              className="px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors"
+              style={{ color: 'var(--wiki-text3)', fontSize: '12px' }}
+              onClick={() => {
+                openNewBrowserWindow();
+                setBrowserMenu(null);
+              }}
+            >
+              新建浏览器窗口
+            </div>
+          ) : (
+            browserWindows.map((bw) => (
+              <div
+                key={bw.id}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors truncate"
+                style={{ color: 'var(--wiki-text)', fontSize: '13px' }}
+                onClick={() => {
+                  focusWindow(bw.id);
+                  setBrowserMenu(null);
+                }}
+              >
+                {bw.url || bw.title || bw.id}
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

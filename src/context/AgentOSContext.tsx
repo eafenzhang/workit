@@ -55,7 +55,9 @@ export interface AgentOSContextType {
   state: AgentOSState;
   openWindow: (type: string, title: string) => void;
   /** Open a NEW browser window (does not deduplicate — each call = new window) */
-  openNewBrowserWindow: () => void;
+  openNewBrowserWindow: (initialUrl?: string) => void;
+  /** Open a browser window with a specific URL */
+  openBrowserWithUrl: (url: string, title?: string) => void;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
@@ -191,13 +193,14 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   );
 
   /** Always creates a new browser window (no deduplication) */
-  const openNewBrowserWindow = useCallback(() => {
+  const openNewBrowserWindow = useCallback((initialUrl?: string) => {
     const pos = calcCascadePosition(state.windows.length);
     const tabIdx = state.windows.filter(w => w.type === 'browser').length + 1;
+    const urlLabel = initialUrl ? ` — ${new URL(initialUrl).hostname}` : '';
     const newWindow: OSWindow = {
       id: `browser-${Date.now()}`,
       type: 'browser',
-      title: `浏览器${tabIdx > 1 ? ' ' + tabIdx : ''}`,
+      title: `浏览器${tabIdx > 1 ? ' ' + tabIdx : ''}${urlLabel}`,
       x: pos.x,
       y: pos.y,
       width: WINDOW_DEFAULT_WIDTH,
@@ -206,9 +209,15 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       isMinimized: false,
       isMaximized: false,
       preMaximizeRect: null,
+      initialUrl,
     };
     dispatch({ type: 'OPEN_WINDOW', payload: { window: newWindow } });
   }, [state.windows, state.nextZIndex]);
+
+  /** Open a browser window pre-loaded with a specific URL */
+  const openBrowserWithUrl = useCallback((url: string, title?: string) => {
+    openNewBrowserWindow(url);
+  }, [openNewBrowserWindow]);
 
   const closeWindow = useCallback((id: string) => {
     dispatch({ type: 'CLOSE_WINDOW', payload: { id } });
@@ -253,6 +262,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       state,
       openWindow,
       openNewBrowserWindow,
+      openBrowserWithUrl,
       closeWindow,
       focusWindow,
       minimizeWindow,
@@ -266,6 +276,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       state,
       openWindow,
       openNewBrowserWindow,
+      openBrowserWithUrl,
       closeWindow,
       focusWindow,
       minimizeWindow,

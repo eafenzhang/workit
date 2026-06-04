@@ -26,6 +26,8 @@ export interface OSWindow {
   isMaximized: boolean;
   /** Saved position/size before maximizing — used to restore */
   preMaximizeRect: WindowRect | null;
+  /** Initial URL for browser-type windows */
+  initialUrl?: string;
 }
 
 /** A single Dock bar icon entry */

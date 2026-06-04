@@ -6,12 +6,14 @@ import { APP_ICON } from '../../constants/icon';
 
 // Uses the same icon as Settings page
 
-// ── Menu items (display only) ────────────────────────────────────
+// ── Menu items (left side) ────────────────────────────────────────
 
-const MENU_ITEMS = ['Workit', '文件', '编辑', '视图', '窗口', '帮助'];
+const MENU_ITEMS = ['Workit', '访达', '设置'] as const;
+type MenuItem = (typeof MENU_ITEMS)[number];
 
 // ── Helpers ───────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getAPI = () => (window as any).electronAPI;
 
 // ── Component ────────────────────────────────────────────────────
@@ -19,14 +21,16 @@ const getAPI = () => (window as any).electronAPI;
 interface MenuBarProps {
   isOSMode: boolean;
   onToggleOSMode: () => void;
+  onOpenFinder: () => void;
+  onOpenSettings: () => void;
 }
 
 /**
- * Top menu bar (28px) — macOS-style with Apple logo, menu items,
+ * Top menu bar (32px) — macOS-style with Workit logo, menu items,
  * centered clock, OS toggle, fullscreen toggle, and window controls.
  * The area between menu items and clock is draggable for window reposition.
  */
-export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
+export default function MenuBar({ isOSMode, onToggleOSMode, onOpenFinder, onOpenSettings }: MenuBarProps) {
   const [time, setTime] = useState<string>(() =>
     new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   );
@@ -51,7 +55,7 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
 
   return (
     <div
-      className="flex items-center h-7 flex-shrink-0 select-none relative"
+      className="flex items-center h-8 flex-shrink-0 select-none relative"
       style={{
         background: 'var(--wiki-surface)',
         borderBottom: '1px solid var(--wiki-border)',
@@ -63,11 +67,40 @@ export default function MenuBar({ isOSMode, onToggleOSMode }: MenuBarProps) {
       {/* ── Left: Apple logo + menu items (no-drag for click) ── */}
       <div className="flex items-center h-full gap-4 pl-3 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
         <img src={APP_ICON} alt="Workit" className="w-4 h-4 object-contain" />
-        {MENU_ITEMS.map((item) => (
-          <span key={item} className="cursor-default" style={{ color: 'var(--wiki-text2)' }}>
-            {item}
-          </span>
-        ))}
+        {MENU_ITEMS.map((item) => {
+          if (item === 'Workit') {
+            return (
+              <span key={item} className="font-semibold cursor-default" style={{ color: 'var(--wiki-text)' }}>
+                {item}
+              </span>
+            );
+          }
+          if (item === '访达') {
+            return (
+              <button
+                key={item}
+                onClick={onOpenFinder}
+                className="px-1.5 py-0.5 rounded hover:bg-wiki-surface2 transition-colors cursor-default"
+                style={{ color: 'var(--wiki-text2)', fontSize: '13px' }}
+              >
+                {item}
+              </button>
+            );
+          }
+          if (item === '设置') {
+            return (
+              <button
+                key={item}
+                onClick={onOpenSettings}
+                className="px-1.5 py-0.5 rounded hover:bg-wiki-surface2 transition-colors cursor-default"
+                style={{ color: 'var(--wiki-text2)', fontSize: '13px' }}
+              >
+                {item}
+              </button>
+            );
+          }
+          return null;
+        })}
       </div>
 
       {/* ── Drag region: fills the gap between menu and clock ── */}
