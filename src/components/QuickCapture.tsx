@@ -82,6 +82,7 @@ export default function QuickCapture() {
   const mountedRef = useRef(true);
   const autoAnalyzeRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Cleanup auto-analyze timeout on unmount to prevent state updates on unmounted component
   useEffect(() => () => { if (autoAnalyzeRef.current) clearTimeout(autoAnalyzeRef.current); }, []);
 
   const allImages = useMemo(() => captured?.items.filter(i => i.type === 'image').map(i => i.content || '') || [], [captured]);
@@ -416,6 +417,7 @@ export default function QuickCapture() {
     // Auto-analyze after successful submission
     if (newId) {
       autoAnalyzeRef.current = setTimeout(async () => {
+        if (!mountedRef.current) return;
         try {
           const autoEnabled = (() => { try { return localStorage.getItem('ai_auto_analyze') === 'true'; } catch { return false; } })();
           if (!autoEnabled) return;
@@ -440,7 +442,7 @@ export default function QuickCapture() {
     <>
       {!isStandalone && enabled && (
       <div
-        className="fixed z-40"
+        className="fixed z-[99999]"
         style={{ right: '24px', bottom: '24px' }}
       >
         {/* Quick capture button */}

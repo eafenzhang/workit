@@ -54,7 +54,7 @@ function HomeInput({ onSend, disabled, selectedProvider, selectedModel, toolsEna
   }, [handleSend]);
 
   return (
-    <div data-cmp="HomeInput" className="w-full max-w-2xl mx-auto">
+    <div data-cmp="HomeInput" className="w-full max-w-[692px] mx-auto">
       <div className="rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <textarea
           ref={textareaRef}

@@ -58,6 +58,8 @@ export default function MenuBar({ isOSMode, onToggleOSMode, onOpenFinder, onOpen
       className="flex items-center h-8 flex-shrink-0 select-none relative"
       style={{
         background: 'var(--wiki-surface)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         borderBottom: '1px solid var(--wiki-border)',
         fontSize: '13px',
         color: 'var(--wiki-text2)',
@@ -118,8 +120,8 @@ export default function MenuBar({ isOSMode, onToggleOSMode, onOpenFinder, onOpen
         <button
           onClick={(e) => { e.stopPropagation(); onToggleOSMode(); }}
           className="w-8 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors"
-          title="切换桌面/经典模式"
-          aria-label="切换模式"
+          title="切换应用模式"
+          aria-label="切换应用模式"
         >
           {isOSMode ? <LayoutGridIcon size={14} style={{ color: 'var(--wiki-text2)' }} /> : <MonitorIcon size={14} style={{ color: 'var(--wiki-text2)' }} />}
         </button>

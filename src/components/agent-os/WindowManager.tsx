@@ -1,6 +1,7 @@
-import { useMemo, type MouseEvent } from 'react';
+import { useMemo, type MouseEvent, useCallback } from 'react';
 import { useAgentOS } from '../../context/AgentOSContext';
 import { useWindowManager, type ResizeEdge } from '../../hooks/useWindowManager';
+import { useWebviewTier } from '../../hooks/useWebviewTier';
 import Window from './Window';
 
 /**
@@ -12,10 +13,13 @@ import Window from './Window';
 type DockState = 'show' | 'hide' | 'float';
 
 export default function WindowManager({ dockState = 'show' }: { dockState?: DockState }) {
-  const { state, closeWindow, focusWindow, minimizeWindow, toggleMaximize, moveWindow, resizeWindow, getWindowPageComponent } =
+  const { state, closeWindow, focusWindow, minimizeWindow, toggleMaximize, moveWindow, resizeWindow, getWindowPageComponent, setWindowTier, previousActiveId } =
     useAgentOS();
 
   const { windows, activeWindowId } = state;
+
+  // ── Webview tier management ────────────────────────────────────
+  useWebviewTier({ windows, activeWindowId, previousActiveId, setWindowTier });
 
   // ── Drag/resize hook ───────────────────────────────────────────
 
@@ -62,22 +66,45 @@ export default function WindowManager({ dockState = 'show' }: { dockState?: Dock
 
   return (
     <>
-      {sortedWindows.map((win) => (
+      {sortedWindows.map((win) => {
+        // Cold-tier browser windows: don't render React component (save VRAM + CPU)
+        const isColdBrowser = win.type === 'browser' && win.webviewTier === 'cold';
+        const isBrowser = win.type === 'browser';
+        const tier = win.webviewTier ?? 'hot';
+
+        return (
         <Window
           key={win.id}
           window={win}
           isFocused={win.id === activeWindowId}
           onClose={closeWindow}
-          onFocus={focusWindow}
-          onMinimize={minimizeWindow}
+          onFocus={(id) => {
+            focusWindow(id);
+            // Update lastActiveTime when focused
+            const winTarget = windows.find(w => w.id === id);
+            if (winTarget) {
+              setWindowTier(id, tier, winTarget.snapshot);
+            }
+          }}
+          onMinimize={(id) => {
+            minimizeWindow(id);
+            // Immediately mark as less active
+            const winTarget = windows.find(w => w.id === id);
+            if (winTarget?.type === 'browser') {
+              setWindowTier(id, winTarget.webviewTier ?? 'hot', winTarget.snapshot);
+            }
+          }}
           onMaximize={handleMaximize}
           onStartDrag={handleStartDrag}
           onStartResize={handleStartResize}
           tempDragRect={wm.tempDragRect}
           tempResizeRect={wm.tempResizeRect}
-          pageComponent={getWindowPageComponent(win.type)}
+          pageComponent={isColdBrowser ? undefined : getWindowPageComponent(win.type)}
+          tier={isBrowser ? tier : undefined}
+          snapshot={win.snapshot}
         />
-      ))}
+        );
+      })}
     </>
   );
 }

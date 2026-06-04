@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon } from 'lucide-react';
+import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon, BotIcon } from 'lucide-react';
 import HomeInput, { type HomeSendPayload } from '../components/HomeInput';
 import PortalDropdown from '../components/PortalDropdown';
 import { toast } from 'sonner';
 import { apiFetch, API } from '../api';
 import { getGreeting, getTodayDate, generateMessageId, WELCOME_MESSAGES } from '../data/homeDefaults';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Provider display names (synced with src/data/providers.ts)
 const PROVIDER_NAMES: Record<string, string> = {
@@ -35,6 +37,96 @@ function formatTime(date: Date): string { return `${String(date.getHours()).padS
 /** Conversation session */
 interface Conversation { id: string; title: string; messages: HomeMessage[]; createdAt: string; }
 const CONV_KS = 'home_conversations';
+
+// ── Typewriter streaming text component ──
+function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) {
+  const [displayed, setDisplayed] = useState('');
+  const fullTextRef = useRef(text);
+
+  useEffect(() => {
+    fullTextRef.current = text;
+    if (!text) { setDisplayed(''); return; }
+
+    setDisplayed('');
+    let idx = 0;
+    const chars = [...text];
+    const timer = setInterval(() => {
+      if (idx >= chars.length) {
+        clearInterval(timer);
+        return;
+      }
+      setDisplayed(chars.slice(0, idx + 1).join(''));
+      idx++;
+    }, Math.max(speed, 5));
+
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  if (!displayed) return <span className="text-wiki-text3 text-sm italic">AI 思考中...</span>;
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ className, children, ...props }: any) {
+          const isInline = !className;
+          if (isInline) {
+            return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
+          }
+          return (
+            <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <code className={className} {...props}>{children}</code>
+            </pre>
+          );
+        },
+        p({ children }: any) {
+          return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
+        },
+        ul({ children }: any) {
+          return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
+        },
+        ol({ children }: any) {
+          return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
+        },
+      }}
+    >
+      {displayed}
+    </ReactMarkdown>
+  );
+}
+
+// ── Markdown renderer (without streaming) ──
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ className, children, ...props }: any) {
+          const isInline = !className;
+          if (isInline) {
+            return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
+          }
+          return (
+            <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <code className={className} {...props}>{children}</code>
+            </pre>
+          );
+        },
+        p({ children }: any) {
+          return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
+        },
+        ul({ children }: any) {
+          return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
+        },
+        ol({ children }: any) {
+          return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
+        },
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
 
 // ── Simple memory extraction from conversation ──
 // Extracts key facts/preferences from user messages using pattern matching.
@@ -152,6 +244,9 @@ function Home({ onOpenTab }: HomeProps) {
   const [selectedModel, setSelectedModel] = useState('');
   const [toolsEnabled, setToolsEnabled] = useState(false);
 
+  // Auto-reply toggle
+  const [autoReply, setAutoReply] = useState(false);
+
   // Conversation management
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -189,7 +284,8 @@ function Home({ onOpenTab }: HomeProps) {
     };
     load();
     window.addEventListener('focus', load);
-    return () => window.removeEventListener('focus', load);
+    window.addEventListener('model-config-changed', load);
+    return () => { window.removeEventListener('focus', load); window.removeEventListener('model-config-changed', load); };
   }, []);
 
   const currentModelLabel = (() => {
@@ -210,6 +306,16 @@ function Home({ onOpenTab }: HomeProps) {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
+  // ── Restore last active conversation on mount ──
+  useEffect(() => {
+    const convs = loadConversations();
+    if (convs.length > 0) {
+      const last = convs[0]; // sorted newest first
+      setActiveConvId(last.id);
+      setMessages(last.messages);
+    }
+  }, []);
+
   // Build agent system prompt from user role profile + persistent memories
   const buildSystemPrompt = useCallback(() => {
     const p = userProfile;
@@ -221,8 +327,12 @@ function Home({ onOpenTab }: HomeProps) {
     if (p.skills) parts.push(`技能：${p.skills}`);
     parts.push(`对话要求：请严格以「${p.role}」角色的专业视角回答问题，使用中文，保持专业但友好的语气。`);
     parts.push('当用户咨询与你角色无关的问题时，也应从你角色的专业角度给出建议。');
+    if (autoReply) parts.push('[[自动回复模式]] 在回答结束后，请主动提出 1-2 个与当前话题相关的后续问题，引导用户继续深入对话。');
     return parts.join('\n');
-  }, [userProfile, memorySummary]);
+  }, [userProfile, memorySummary, autoReply]);
+
+  const autoReplyRef = useRef(autoReply);
+  autoReplyRef.current = autoReply;
 
   const handleSend = useCallback(async (payload: HomeSendPayload) => {
     const now = new Date();
@@ -287,7 +397,7 @@ function Home({ onOpenTab }: HomeProps) {
       const errMsg: HomeMessage = { id: generateMessageId(), role: 'assistant', content: `请求失败：${e.message || '未知错误'}`, time: formatTime(new Date()) };
       setMessages(prev => [...prev, errMsg]);
     } finally { setSending(false); }
-  }, [messages, buildSystemPrompt, activeConvId, selectedProvider, selectedModel, toolsEnabled]);
+  }, [messages, buildSystemPrompt, activeConvId, selectedProvider, selectedModel, toolsEnabled, autoReply]);
 
   // Helper to save conversation (extracted for reuse)
   const saveConversation = useCallback((finalMessages: HomeMessage[]) => {
@@ -369,64 +479,76 @@ function Home({ onOpenTab }: HomeProps) {
   const hasMessages = messages.length > 0;
 
   return (
-    <div data-cmp="Home" className="flex flex-col h-full relative">
-      {/* Top-left: model selector */}
-      <div className="absolute top-3 left-6 z-10">
-        <PortalDropdown
-          open={modelDropdownOpen}
-          onClose={() => setModelDropdownOpen(false)}
-          alignX="left"
-          alignY="below"
-          trigger={
-            <button
-              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-              className="flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors"
-              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
-            >
-              <span className="truncate max-w-[160px]">{currentModelLabel}</span>
-              <ChevronDownIcon size={11} style={{ transform: modelDropdownOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
-            </button>
-          }
-        >
-          <div className="w-64 max-h-48 overflow-y-auto rounded-lg shadow-lg"
-            style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            {providers.map(p => (
-              <div key={p.provider}>
-                <div className="text-[10px] px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
-                {p.models.map(m => (
-                  <div key={p.provider + '|' + m.id}
-                    onClick={() => { setSelectedProvider(p.provider); setSelectedModel(String(m.modelId)); try { localStorage.setItem('home_last_model', JSON.stringify({ provider: p.provider, modelId: m.modelId })); } catch {} setModelDropdownOpen(false); }}
-                    className="px-3 py-1.5 text-xs cursor-pointer hover:bg-wiki-surface2 transition-colors truncate"
-                    style={{
-                      color: selectedProvider === p.provider && selectedModel === String(m.modelId) ? 'var(--wiki-text)' : 'var(--wiki-text2)',
-                      fontWeight: selectedProvider === p.provider && selectedModel === String(m.modelId) ? 600 : 400,
-                    }}>
-                    {m.name.includes(' - ') ? m.name.split(' - ').pop() : m.name}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </PortalDropdown>
-      </div>
+    <div data-cmp="Home" className="flex flex-col h-full">
+      {/* Top controls row — in normal flow so scroll area respects its height */}
+      <div className="flex items-center justify-between px-6 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center gap-3">
+          <PortalDropdown
+            open={modelDropdownOpen}
+            onClose={() => setModelDropdownOpen(false)}
+            alignX="left"
+            alignY="below"
+            trigger={
+              <button
+                onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                className="flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors"
+                style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
+              >
+                <span className="truncate max-w-[160px]">{currentModelLabel}</span>
+                <ChevronDownIcon size={11} style={{ transform: modelDropdownOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
+              </button>
+            }
+          >
+            <div className="w-64 max-h-48 overflow-y-auto rounded-lg shadow-lg"
+              style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              {providers.map(p => (
+                <div key={p.provider}>
+                  <div className="text-[10px] px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
+                  {p.models.map(m => (
+                    <div key={p.provider + '|' + m.id}
+                      onClick={() => { setSelectedProvider(p.provider); setSelectedModel(String(m.modelId)); try { localStorage.setItem('home_last_model', JSON.stringify({ provider: p.provider, modelId: m.modelId })); } catch {} setModelDropdownOpen(false); }}
+                      className="px-3 py-1.5 text-xs cursor-pointer hover:bg-wiki-surface2 transition-colors truncate"
+                      style={{
+                        color: selectedProvider === p.provider && selectedModel === String(m.modelId) ? 'var(--wiki-text)' : 'var(--wiki-text2)',
+                        fontWeight: selectedProvider === p.provider && selectedModel === String(m.modelId) ? 600 : 400,
+                      }}>
+                      {m.name.includes(' - ') ? m.name.split(' - ').pop() : m.name}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </PortalDropdown>
+        </div>
 
-      {/* Top-right buttons — no border separator, absolute positioned */}
-      <div className="absolute top-3 right-6 flex items-center gap-2 z-10">
-        <button
-          onClick={handleNewChat}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
-        >
-          <PlusIcon size={13} />新对话
-        </button>
-        <div className="relative">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowHistory(!showHistory)}
+            onClick={() => setAutoReply(!autoReply)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+            title={autoReply ? '关闭自动回复' : '开启自动回复'}
+            style={{ 
+              background: autoReply ? 'var(--wiki-info)' : 'var(--wiki-surface2)', 
+              color: autoReply ? '#fff' : 'var(--wiki-text2)', 
+              border: '1px solid var(--wiki-border)' 
+            }}
+          >
+            <BotIcon size={13} />自动回复
+          </button>
+          <button
+            onClick={handleNewChat}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
             style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
           >
-            <ClockIcon size={13} />历史对话
+            <PlusIcon size={13} />新对话
           </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
+            >
+              <ClockIcon size={13} />历史对话
+            </button>
             {showHistory && (
               <div className="absolute top-full mt-2 right-0 w-80 max-h-80 overflow-y-auto rounded-xl shadow-xl z-30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                 <div className="sticky top-0 px-4 py-2.5 text-xs font-semibold" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
@@ -468,6 +590,7 @@ function Home({ onOpenTab }: HomeProps) {
             )}
           </div>
         </div>
+      </div>
 
       {/* Scrollable content */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin px-6">
@@ -509,9 +632,13 @@ function Home({ onOpenTab }: HomeProps) {
                         <span>已通过 {msg._meta.toolCallCount} 次工具调用获取信息</span>
                       </div>
                     )}
-                    <div className="px-4 py-2.5 rounded-xl text-sm leading-relaxed whitespace-pre-wrap break-words"
+                    <div className="px-4 py-2.5 rounded-xl text-sm leading-relaxed break-words"
                       style={{ background: isUser ? 'var(--wiki-text)' : 'var(--wiki-surface2)', color: isUser ? 'var(--wiki-bg)' : 'var(--wiki-text)', borderBottomRightRadius: isUser ? '4px' : undefined, borderBottomLeftRadius: isUser ? undefined : '4px' }}>
-                      {msg.content}
+                      {isUser ? (
+                        <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                      ) : (
+                        <MarkdownContent text={msg.content} />
+                      )}
                     </div>
                     <div className="text-xs mt-1 flex items-center gap-2 justify-end" style={{ color: 'var(--wiki-text3)' }}>
                       <span>{msg.time}</span>
@@ -530,9 +657,10 @@ function Home({ onOpenTab }: HomeProps) {
           </div>
         )}
       </div>
-      {/* Fixed bottom input — visible only when conversation started */}
+      {/* Fixed bottom input — visible only when conversation started, 20px wider than feed */}
       {hasMessages && (
-        <div className="flex-shrink-0 px-6 pb-4 pt-2">
+        <div className="flex-shrink-0 px-0 pb-4 pt-2 w-full flex justify-center">
+          <div style={{ width: 'calc(42rem + 20px)', maxWidth: 'calc(100% - 1rem)' }}>
           <HomeInput
             onSend={handleSend}
             disabled={sending}
@@ -540,8 +668,9 @@ function Home({ onOpenTab }: HomeProps) {
             selectedModel={selectedModel}
             toolsEnabled={toolsEnabled}
             onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-            onMcpToggle={() => setMcpEnabled(!toolsEnabled)}
+            onMcpToggle={() => setToolsEnabled(!toolsEnabled)}
           />
+          </div>
         </div>
       )}
     </div>

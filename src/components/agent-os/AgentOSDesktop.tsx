@@ -1,4 +1,4 @@
-import { useState, useCallback, useReducer, useMemo } from 'react';
+import { useState, useCallback, useReducer, useEffect } from 'react';
 import MenuBar from './MenuBar';
 import DesktopArea from './DesktopArea';
 import DockBar from './DockBar';
@@ -31,12 +31,8 @@ export default function AgentOSDesktop() {
   // Increment on settings change to force DesktopArea/DockBar to re-read localStorage
   const [settingsVersion, bumpSettings] = useReducer((v: number) => v + 1, 0);
 
-  // ── Dock state: reads localStorage + windows ──
+  // ── Dock state: reads localStorage ──
   const [dockBehavior, setDockBehavior] = useState<DockBehavior>(readDockBehavior);
-  const hasMaximizedWindow = useMemo(
-    () => state.windows.some((w) => w.isMaximized),
-    [state.windows],
-  );
 
   // Refresh dock behavior when settings close
   const bumpSettingsAndRefresh = useCallback(() => {
@@ -44,13 +40,29 @@ export default function AgentOSDesktop() {
     setDockBehavior(readDockBehavior());
   }, []);
 
+  // Listen for dock-changed event for instant apply
+  useEffect(() => {
+    const handler = () => {
+      bumpSettingsAndRefresh();
+    };
+    window.addEventListener('agent-os-dock-changed', handler);
+    return () => window.removeEventListener('agent-os-dock-changed', handler);
+  }, [bumpSettingsAndRefresh]);
+
+  // Listen for wallpaper-changed event for instant apply
+  useEffect(() => {
+    const handler = () => bumpSettings();
+    window.addEventListener('agent-os-wallpaper-changed', handler);
+    return () => window.removeEventListener('agent-os-wallpaper-changed', handler);
+  }, []);
+
   const handleCloseSettings = useCallback(() => {
     setShowSettings(false);
     bumpSettingsAndRefresh();
   }, [bumpSettingsAndRefresh]);
 
-  // Effective dock state: only deviate from 'show' when a window IS maximized
-  const dockState: DockBehavior = hasMaximizedWindow ? dockBehavior : 'show';
+  // Effective dock state: always use the user's chosen behavior
+  const dockState: DockBehavior = dockBehavior;
 
   const handleOpenUrl = useCallback(
     (url: string, title: string) => {

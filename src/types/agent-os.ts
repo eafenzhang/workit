@@ -12,6 +12,15 @@ export interface WindowRect {
 
 // ── Window & dock types ──────────────────────────────────────────
 
+/** Webview cache tier for performance management */
+export type WebviewTier = 'hot' | 'warm' | 'cold';
+
+/** Snapshot of browser state when window goes cold */
+export interface BrowserSnapshot {
+  url: string;
+  title: string;
+}
+
 /** A single OS desktop window */
 export interface OSWindow {
   id: string;
@@ -28,6 +37,16 @@ export interface OSWindow {
   preMaximizeRect: WindowRect | null;
   /** Initial URL for browser-type windows */
   initialUrl?: string;
+  /** Webview cache tier for performance */
+  webviewTier?: WebviewTier;
+  /** Last time this window was active (Date.now()) */
+  lastActiveTime?: number;
+  /** Snapshot for cold-tier browser windows */
+  snapshot?: BrowserSnapshot;
+  /** Route params for sub-view pages (requirements-detail, knowledge-create, etc.) */
+  initialTab?: { type: string; reqId?: number; params?: any };
+  initialView?: string;
+  docId?: number;
 }
 
 /** A single Dock bar icon entry */
@@ -61,7 +80,8 @@ export type AgentOSAction =
   | { type: 'MINIMIZE_WINDOW'; payload: { id: string } }
   | { type: 'TOGGLE_MAXIMIZE'; payload: { id: string; desktopRect: WindowRect } }
   | { type: 'MOVE_WINDOW'; payload: { id: string; x: number; y: number } }
-  | { type: 'RESIZE_WINDOW'; payload: { id: string; width: number; height: number; x?: number; y?: number } };
+  | { type: 'RESIZE_WINDOW'; payload: { id: string; width: number; height: number; x?: number; y?: number } }
+  | { type: 'SET_WINDOW_TIER'; payload: { id: string; tier: WebviewTier; snapshot?: BrowserSnapshot } };
 
 // ── Page component map ───────────────────────────────────────────
 
@@ -75,8 +95,10 @@ export const WINDOW_DEFAULT_HEIGHT = 560;
 export const WINDOW_MIN_WIDTH = 400;
 export const WINDOW_MIN_HEIGHT = 300;
 
-/** localStorage key prefix — shared across the AgentOS module */
+/** localStorage key prefix — shared across the AgentOS module
+ *  @see STORAGE_KEYS.AGENT_OS_MODE */
 export const LS_MODE_KEY = 'agent-os-mode';
+/** @see STORAGE_KEYS.AGENT_OS_WINDOWS */
 export const LS_WINDOWS_KEY = 'agent-os-windows';
 
 // ── Factory ──────────────────────────────────────────────────────
@@ -230,6 +252,22 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
       };
     }
 
+    case 'SET_WINDOW_TIER': {
+      const { id, tier, snapshot } = action.payload;
+      return {
+        ...state,
+        windows: state.windows.map(w => {
+          if (w.id !== id) return w;
+          return {
+            ...w,
+            webviewTier: tier,
+            ...(snapshot !== undefined ? { snapshot } : {}),
+            ...(tier !== 'cold' ? { snapshot: undefined } : {}),
+          };
+        }),
+      };
+    }
+
     case 'RESIZE_WINDOW': {
       const { id, width, height, x, y } = action.payload;
       return {
@@ -253,3 +291,10 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
       return state;
   }
 }
+
+// ── Tier management helpers ──────────────────────────────────────
+
+export const HOT_MAX = 2;
+export const WARM_MAX = 3;
+export const HOT_TO_WARM_MS = 3_000;
+export const WARM_TO_COLD_MS = 30_000;

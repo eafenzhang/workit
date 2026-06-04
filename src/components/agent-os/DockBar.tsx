@@ -53,7 +53,7 @@ export default function DockBar({
   settingsVersion?: number;
   dockState?: DockState;
 }) {
-  const { state, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow } = useAgentOS();
+  const { state, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow, closeWindow } = useAgentOS();
   const { windows } = state;
 
   const [isDark, setIsDark] = useState<boolean>(() =>
@@ -62,21 +62,10 @@ export default function DockBar({
 
   const [dockHovered, setDockHovered] = useState(false);
 
-  // ── Browser context menu (right-click browser icon → list all browser windows) ──
-  const [browserMenu, setBrowserMenu] = useState<{ x: number; y: number } | null>(null);
-
   const browserWindows = useMemo(
     () => windows.filter((w: OSWindow) => w.type === 'browser' && !w.isMinimized),
     [windows],
   );
-
-  // Close context menu on any click outside
-  useEffect(() => {
-    if (!browserMenu) return;
-    const close = () => setBrowserMenu(null);
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
-  }, [browserMenu]);
 
   useEffect(() => {
     const check = () => setIsDark(document.documentElement.classList.contains('dark'));
@@ -87,6 +76,11 @@ export default function DockBar({
 
   const isOpen = useCallback(
     (type: string) => windows.some((w: OSWindow) => w.type === type && !w.isMinimized),
+    [windows],
+  );
+
+  const isMinimized = useCallback(
+    (type: string) => windows.some((w: OSWindow) => w.type === type && w.isMinimized),
     [windows],
   );
 
@@ -112,106 +106,177 @@ export default function DockBar({
     [windows, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow],
   );
 
-  // Right-click browser icon → list all browser windows
+  // Right-click browser icon → open Finder-style modal listing all windows
   const handleBrowserContextMenu = useCallback(
     (type: string, e: React.MouseEvent) => {
       if (type !== 'browser') return;
       e.preventDefault();
-      setBrowserMenu({ x: e.clientX, y: e.clientY });
+      setBrowserModalOpen(true);
     },
     [],
   );
 
-  // ── Hide mode ──
-  if (dockState === 'hide') {
-    return null;
-  }
-
   const isFloat = dockState === 'float';
+  const isHide = dockState === 'hide';
+
+  // Float: always visible at full opacity, click-through when not hovered
+  // Hide (auto-hide): hidden by default, fades in on bottom hover
+  // Show: always visible
+  const showDock = isHide ? dockHovered : true;
+
+  // ── Browser context menu modal (Finder-style centered overlay) ──
+  const [browserModalOpen, setBrowserModalOpen] = useState(false);
+
+  // Keyboard: Escape to close
+  useEffect(() => {
+    if (!browserModalOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBrowserModalOpen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [browserModalOpen]);
 
   return (
-    <div
-      className="absolute bottom-0 left-0 right-0 flex justify-center pb-2"
-      style={{ zIndex: isFloat ? 9999 : 50 }}
-      onMouseEnter={() => { if (isFloat) setDockHovered(true); }}
-      onMouseLeave={() => { if (isFloat) setDockHovered(false); }}
-    >
+    <>
+      {/* ── Hover trigger zone for auto-hide mode ── */}
+      {isHide && (
+        <div
+          className="absolute bottom-0 left-0 right-0"
+          style={{ height: '72px', zIndex: 9998 }}
+          onMouseEnter={() => setDockHovered(true)}
+          onMouseLeave={() => setDockHovered(false)}
+        />
+      )}
+
       <div
-        className="flex items-center gap-1 px-3 py-2"
-        style={{
-          height: '68px',
-          borderRadius: '20px',
-          background: isDark
-            ? 'rgba(20,20,25,0.78)'
-            : 'rgba(248,248,252,0.82)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-          border: isDark
-            ? '1px solid rgba(255,255,255,0.08)'
-            : '1px solid rgba(255,255,255,0.6)',
-          boxShadow: isDark
-            ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
-            : '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
-          opacity: isFloat ? (dockHovered ? 1 : 0.85) : 1,
-          // Float mode: only the glass panel blocks clicks; the outer zone stays hit-testable
-          pointerEvents: isFloat && !dockHovered ? 'none' : 'auto',
-        }}
+        className="absolute bottom-0 left-0 right-0 flex justify-center pb-2"
+        style={{ zIndex: isFloat || isHide ? 9999 : 50 }}
+        onMouseEnter={() => { if (isHide) setDockHovered(true); }}
+        onMouseLeave={() => { if (isHide) setDockHovered(false); }}
       >
+        <div
+          className="flex items-center gap-1 px-3 py-2"
+          style={{
+            height: '68px',
+            borderRadius: '20px',
+            background: isDark
+              ? 'rgba(20,20,25,0.78)'
+              : 'rgba(248,248,252,0.82)',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            border: isDark
+              ? '1px solid rgba(255,255,255,0.08)'
+              : '1px solid rgba(255,255,255,0.6)',
+            boxShadow: isDark
+              ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
+              : '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
+            opacity: showDock ? 1 : 0,
+            transform: showDock ? 'translateY(0)' : 'translateY(8px)',
+            transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
+            pointerEvents: isHide && !dockHovered ? 'none' : 'auto',
+          }}
+        >
         {DOCK_ITEMS.map((item) => (
           <DockIcon
             key={item.id}
             item={item}
             color={item.color}
             isOpen={isOpen(item.type)}
+            isMinimized={isMinimized(item.type)}
+            noDot={item.type === 'browser' ? browserWindows.length === 0 : undefined}
             onClick={handleDockClick}
             onContextMenu={handleBrowserContextMenu}
           />
         ))}
       </div>
 
-      {/* ── Browser context menu (right-click) ── */}
-      {browserMenu && (
+      {/* ── Browser window list modal (Finder-style centered) ── */}
+      {browserModalOpen && (
         <div
-          className="fixed rounded-lg py-1 shadow-lg z-[10000]"
+          className="fixed inset-0 z-[10000] flex items-center justify-center"
           style={{
-            left: browserMenu.x,
-            top: browserMenu.y,
-            background: 'var(--wiki-surface)',
-            border: '1px solid var(--wiki-border)',
-            minWidth: '280px',
-            maxHeight: '320px',
-            overflowY: 'auto',
+            background: 'rgba(0,0,0,0.45)',
+            animation: 'fadeIn 0.2s ease-out',
           }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={() => setBrowserModalOpen(false)}
         >
-          {browserWindows.length === 0 ? (
+          <div
+            className="rounded-xl overflow-hidden w-[420px] max-h-[440px] flex flex-col mx-4"
+            style={{
+              background: 'var(--wiki-surface)',
+              border: '1px solid var(--wiki-border)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ── Header ── */}
             <div
-              className="px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors"
-              style={{ color: 'var(--wiki-text3)', fontSize: '12px' }}
-              onClick={() => {
-                openNewBrowserWindow();
-                setBrowserMenu(null);
-              }}
+              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--wiki-border)' }}
             >
-              新建浏览器窗口
-            </div>
-          ) : (
-            browserWindows.map((bw) => (
-              <div
-                key={bw.id}
-                className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors truncate"
-                style={{ color: 'var(--wiki-text)', fontSize: '13px' }}
-                onClick={() => {
-                  focusWindow(bw.id);
-                  setBrowserMenu(null);
-                }}
-              >
-                {bw.url || bw.title || bw.id}
+              <div className="flex items-center gap-2">
+                <Globe size={15} style={{ color: 'var(--wiki-text2)' }} />
+                <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>
+                  浏览器窗口 ({browserWindows.length})
+                </span>
               </div>
-            ))
-          )}
+              <button
+                onClick={() => setBrowserModalOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-wiki-surface2 transition-colors"
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.5" y1="1.5" x2="9.5" y2="9.5" stroke="var(--wiki-text3)" strokeWidth="1.2"/><line x1="9.5" y1="1.5" x2="1.5" y2="9.5" stroke="var(--wiki-text3)" strokeWidth="1.2"/></svg>
+              </button>
+            </div>
+
+            {/* ── Window list ── */}
+            <div className="flex-1 overflow-y-auto">
+              {browserWindows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2">
+                  <Globe size={28} style={{ color: 'var(--wiki-text3)', opacity: 0.4 }} />
+                  <span className="text-sm" style={{ color: 'var(--wiki-text3)' }}>无打开窗口</span>
+                </div>
+              ) : (
+                browserWindows.map((bw) => (
+                  <div
+                    key={bw.id}
+                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors group"
+                    style={{ borderBottom: '1px solid var(--wiki-border)', color: 'var(--wiki-text)', fontSize: '13px' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--wiki-surface2)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    onClick={() => {
+                      focusWindow(bw.id);
+                      setBrowserModalOpen(false);
+                    }}
+                  >
+                    <Globe size={15} style={{ color: 'var(--wiki-text3)', flexShrink: 0 }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs truncate" style={{ color: 'var(--wiki-text)' }}>
+                        {bw.title || bw.initialUrl || '新标签页'}
+                      </div>
+                      <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>
+                        {bw.initialUrl || bw.url || ''}
+                      </div>
+                    </div>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-1 rounded hover:bg-red-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeWindow(bw.id);
+                        if (browserWindows.length <= 1) setBrowserModalOpen(false);
+                      }}
+                      title="关闭"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="2" y1="2" x2="9" y2="9" stroke="var(--wiki-text3)" strokeWidth="1.2"/><line x1="9" y1="2" x2="2" y2="9" stroke="var(--wiki-text3)" strokeWidth="1.2"/></svg>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
+    </>
   );
 }

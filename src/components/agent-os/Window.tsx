@@ -2,6 +2,7 @@ import React, { Suspense, useCallback, useState, useEffect, type MouseEvent, typ
 import WindowTitleBar from './WindowTitleBar';
 import type { OSWindow } from '../../types/agent-os';
 import type { ResizeEdge, TempDragRect, TempResizeRect } from '../../hooks/useWindowManager';
+import { useAgentOS } from '../../context/AgentOSContext';
 
 // ── Resize handle cursor mapping ─────────────────────────────────
 
@@ -51,6 +52,10 @@ interface WindowProps {
   tempResizeRect: TempResizeRect | null;
   /** Lazy page component to render in the window body */
   pageComponent: React.LazyExoticComponent<ComponentType<Record<string, unknown>>> | undefined;
+  /** Webview cache tier (for browser windows) */
+  tier?: 'hot' | 'warm' | 'cold';
+  /** Browser snapshot for cold tier */
+  snapshot?: { url: string; title: string };
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -67,7 +72,26 @@ export default function Window({
   tempDragRect,
   tempResizeRect,
   pageComponent: PageComponent,
+  tier,
+  snapshot,
 }: WindowProps) {
+  const { openWindow } = useAgentOS();
+
+  // Sub-tab navigation callback: opens a new Agent OS window with routing params
+  const onOpenSubTab = useCallback(
+    (title: string, type: string, extra?: Record<string, any>) => {
+      const routeParams: Record<string, any> = {};
+      if (type.includes('requirements')) {
+        routeParams.initialTab = { type, ...(extra || {}) };
+      } else if (type.includes('knowledge')) {
+        routeParams.initialView = type;
+        if (extra?.docId) routeParams.docId = extra.docId;
+      }
+      openWindow(type, title, routeParams);
+    },
+    [openWindow],
+  );
+
   // ── Mount animation ──
   const [animated, setAnimated] = useState(false);
   useEffect(() => {
@@ -176,7 +200,18 @@ export default function Window({
       <div className="flex-1 overflow-hidden relative" style={{ background: 'var(--wiki-surface)' }}>
         {PageComponent ? (
           <Suspense fallback={<WindowLoading />}>
-            <PageComponent initialUrl={win.initialUrl} />
+            <PageComponent
+              initialUrl={win.initialUrl}
+              visible={!isHidden && isFocused}
+              tier={tier}
+              snapshot={snapshot}
+              windowId={win.id}
+              initialTab={win.initialTab}
+              initialView={win.initialView}
+              docId={win.docId}
+              onOpenSubTab={onOpenSubTab}
+              onCloseSelf={handleClose}
+            />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full" style={{ color: 'var(--wiki-text3)' }}>

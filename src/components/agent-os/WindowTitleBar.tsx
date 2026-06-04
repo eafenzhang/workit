@@ -42,6 +42,8 @@ export default function WindowTitleBar({
       className="flex items-center h-9 flex-shrink-0 select-none relative"
       style={{
         background: 'var(--wiki-surface)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         borderBottom: '1px solid var(--wiki-border)',
         borderTopLeftRadius: '8px',
         borderTopRightRadius: '8px',

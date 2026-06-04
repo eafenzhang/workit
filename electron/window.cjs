@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { log } = require('./database.cjs');
 
-const isDev = process.defaultApp || /electron/.test(process.argv[0]);
+const isDev = process.env.NODE_ENV === 'development' || !!process.env.VITE_DEV_SERVER_URL;
 
 let mainWindow = null;
 let qcWindow = null;

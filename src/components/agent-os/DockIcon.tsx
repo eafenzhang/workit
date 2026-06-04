@@ -4,6 +4,10 @@ import type { DockItem } from '../../types/agent-os';
 interface DockIconProps {
   item: DockItem;
   isOpen: boolean;
+  /** Whether this app has a minimized window running in the background */
+  isMinimized: boolean;
+  /** For browser: suppress dot when no windows exist at all */
+  noDot?: boolean;
   color: string;
   onClick: (type: string) => void;
   onContextMenu?: (type: string, e: React.MouseEvent) => void;
@@ -13,7 +17,7 @@ interface DockIconProps {
  * A single icon in the Dock bar with filled icon, brand color,
  * glass hover effect, running indicator, and tooltip.
  */
-export default function DockIcon({ item, isOpen, color, onClick, onContextMenu }: DockIconProps) {
+export default function DockIcon({ item, isOpen, isMinimized, noDot, color, onClick, onContextMenu }: DockIconProps) {
   const [isHovered, setIsHovered] = useState(false);
   const Icon = item.icon;
 
@@ -65,13 +69,13 @@ export default function DockIcon({ item, isOpen, color, onClick, onContextMenu }
       <div
         className="transition-all duration-200"
         style={{
-          width: isOpen ? '5px' : '4px',
-          height: isOpen ? '5px' : '4px',
+          width: isOpen || isMinimized ? '5px' : '4px',
+          height: isOpen || isMinimized ? '5px' : '4px',
           borderRadius: '50%',
-          background: isOpen ? color : 'var(--wiki-text3)',
+          background: isOpen ? color : isMinimized ? '#10b981' : 'var(--wiki-text3)',
           marginTop: '3px',
-          opacity: isOpen ? 1 : 0,
-          boxShadow: isOpen ? `0 0 6px ${color}80` : 'none',
+          opacity: (isOpen || isMinimized) && !noDot ? 1 : 0,
+          boxShadow: isOpen ? `0 0 6px ${color}80` : isMinimized ? '0 0 6px rgba(16,185,129,0.6)' : 'none',
         }}
       />
 

@@ -54,6 +54,13 @@ export default function DesktopArea({
     }
   }, [settingsVersion]);
 
+  // Listen for wallpaper-changed event for instant apply
+  useEffect(() => {
+    const handler = () => setWallpaper(loadWallpaper());
+    window.addEventListener('agent-os-wallpaper-changed', handler);
+    return () => window.removeEventListener('agent-os-wallpaper-changed', handler);
+  }, []);
+
   const bgStyle =
     wallpaper.type === 'image'
       ? {

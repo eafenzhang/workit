@@ -28,11 +28,15 @@ const COLOR_PRESETS = [
   { id: 'plum', bg: '#2a1a1a', label: '暗红' },
   { id: 'deep-blue', bg: '#1a1a2a', label: '深蓝' },
   { id: 'olive', bg: '#2a2a1a', label: '暗金' },
+  { id: 'light-blue', bg: '#dceefb', label: '浅蓝' },
+  { id: 'light-green', bg: '#e8f5e9', label: '浅绿' },
+  { id: 'light-gray', bg: '#f0f0f0', label: '浅灰' },
+  { id: 'cream', bg: '#faf8f5', label: '米白' },
 ];
 
 const DOCK_OPTIONS: { value: DockFullscreenBehavior; label: string }[] = [
   { value: 'show', label: '始终显示' },
-  { value: 'hide', label: '隐藏' },
+  { value: 'hide', label: '自动隐藏' },
   { value: 'float', label: '悬浮显示' },
 ];
 
@@ -86,25 +90,34 @@ function saveDockBehavior(behavior: DockFullscreenBehavior) {
 export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSettingsModalProps) {
   const [wallpaper, setWallpaper] = useState<WallpaperState>(loadWallpaper);
   const [dockBehavior, setDockBehavior] = useState<DockFullscreenBehavior>(loadDockBehavior);
+  const [animating, setAnimating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Refresh state when modal opens
+  // Fade animation
   useEffect(() => {
     if (isOpen) {
       setWallpaper(loadWallpaper());
       setDockBehavior(loadDockBehavior());
+      requestAnimationFrame(() => setAnimating(true));
+    } else {
+      setAnimating(false);
     }
   }, [isOpen]);
+
+  const animateClose = useCallback(() => {
+    setAnimating(false);
+    setTimeout(onClose, 200);
+  }, [onClose]);
 
   // ── Keyboard: Escape to close ──
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') animateClose();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
+  }, [isOpen, animateClose]);
 
   // ── Handlers ──
 
@@ -141,13 +154,17 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
   const isCurrentColor = (color: string) =>
     wallpaper.type === 'color' && wallpaper.value === color;
 
-  if (!isOpen) return null;
+  if (!isOpen && !animating) return null;
 
   return (
     <div
       className="fixed inset-0 z-[2000] flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={onClose}
+      style={{
+        background: 'rgba(0,0,0,0.45)',
+        opacity: animating ? 1 : 0,
+        transition: 'opacity 0.2s ease-out',
+      }}
+      onClick={animateClose}
     >
       <div
         className="rounded-xl overflow-hidden w-[420px] max-h-[560px] flex flex-col mx-4"
@@ -155,6 +172,9 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
           background: 'var(--wiki-surface)',
           border: '1px solid var(--wiki-border)',
           boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
+          opacity: animating ? 1 : 0,
+          transform: animating ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(8px)',
+          transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -167,7 +187,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
             桌面设置
           </span>
           <button
-            onClick={onClose}
+            onClick={animateClose}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-wiki-surface2 transition-colors"
             aria-label="关闭"
           >
@@ -248,10 +268,10 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
           {/* ── Divider ── */}
           <div style={{ borderTop: '1px solid var(--wiki-border)' }} />
 
-          {/* ── Dock fullscreen behavior ── */}
+          {/* ── Dock behavior ── */}
           <section>
             <h3 className="text-xs font-semibold mb-3" style={{ color: 'var(--wiki-text2)' }}>
-              Dock 栏全屏行为
+              Dock栏行为
             </h3>
             <div
               className="rounded-lg p-1 flex gap-1"
@@ -285,7 +305,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
               ))}
             </div>
             <p className="text-[10px] mt-2" style={{ color: 'var(--wiki-text3)' }}>
-              全屏窗口时 Dock 栏的显示方式
+              Dock 栏的显示方式
             </p>
           </section>
         </div>
