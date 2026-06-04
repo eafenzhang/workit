@@ -14,6 +14,8 @@ import {
   type OSWindow,
   type WindowRect,
   type WindowPageMap,
+  type WebviewTier,
+  type BrowserSnapshot,
   createInitialState,
   agentOSReducer,
   WINDOW_DEFAULT_WIDTH,
@@ -39,7 +41,13 @@ const BrowserPage = React.lazy(() => import('../pages/Browser'));
 export const PAGE_COMPONENT_MAP: WindowPageMap = {
   home: HomePage,
   requirements: RequirementsPage,
+  'requirements-detail': RequirementsPage,
+  'requirements-create': RequirementsPage,
+  'requirements-edit': RequirementsPage,
   knowledge: KnowledgePage,
+  'knowledge-detail': KnowledgePage,
+  'knowledge-create': KnowledgePage,
+  'knowledge-edit': KnowledgePage,
   insights: InsightsPage,
   mcp: AppEcosystemPage,
   model: ModelPage,
@@ -53,7 +61,9 @@ export const PAGE_COMPONENT_MAP: WindowPageMap = {
 
 export interface AgentOSContextType {
   state: AgentOSState;
-  openWindow: (type: string, title: string) => void;
+  openWindow: (type: string, title: string, extra?: Record<string, any>) => void;
+  /** Open a NEW window (always creates, no dedup) with extra params for sub-views */
+  openSubWindow: (type: string, title: string, extra?: Record<string, any>) => void;
   /** Open a NEW browser window (does not deduplicate — each call = new window) */
   openNewBrowserWindow: (initialUrl?: string) => void;
   /** Open a browser window with a specific URL */
@@ -66,6 +76,10 @@ export interface AgentOSContextType {
   resizeWindow: (id: string, width: number, height: number, x?: number, y?: number) => void;
   toggleOSMode: () => void;
   getWindowPageComponent: (type: string) => React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>> | undefined;
+  /** Set webview cache tier and optional snapshot for a window */
+  setWindowTier: (id: string, tier: WebviewTier, snapshot?: BrowserSnapshot) => void;
+  /** Track which window was active before the current one */
+  previousActiveId: React.RefObject<string | null>;
 }
 
 const AgentOSContext = createContext<AgentOSContextType | null>(null);
@@ -79,6 +93,9 @@ interface AgentOSProviderProps {
 export function AgentOSProvider({ children }: AgentOSProviderProps) {
   const [state, dispatch] = useReducer(agentOSReducer, undefined, createInitialState);
   const initializedRef = useRef(false);
+  const previousActiveId = useRef<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // ── localStorage hydration (once on mount) ──
 
@@ -146,6 +163,26 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     };
   }, [state.isOSMode, state.windows, state.nextZIndex, state.isInitialized]);
 
+  // ── Last-chance persistence on tab close (before debounce fires) ──
+  useEffect(() => {
+    const flush = () => {
+      try {
+        localStorage.setItem(LS_MODE_KEY, String(stateRef.current.isOSMode));
+        localStorage.setItem(
+          LS_WINDOWS_KEY,
+          JSON.stringify({
+            windows: stateRef.current.windows,
+            nextZIndex: stateRef.current.nextZIndex,
+          }),
+        );
+      } catch {
+        // Silently ignore
+      }
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => window.removeEventListener('beforeunload', flush);
+  }, []);
+
   // ── Helpers ────────────────────────────────────────────────────
 
   function calcCascadePosition(windowCount: number) {
@@ -163,16 +200,19 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   // ── Action creators ────────────────────────────────────────────
 
   const openWindow = useCallback(
-    (type: string, title: string) => {
-      // Check if a window of this type already exists
-      const existing = state.windows.find(w => w.type === type);
-      if (existing) {
-        // Focus + un-minimize
-        dispatch({ type: 'FOCUS_WINDOW', payload: { id: existing.id } });
-        return;
+    (type: string, title: string, extra?: Record<string, any>) => {
+      const s = stateRef.current;
+      // Check if a window of this type already exists (skip dedup for sub-views like detail/create)
+      const isSubView = type.includes('-');
+      if (!isSubView && !extra) {
+        const existing = s.windows.find(w => w.type === type);
+        if (existing) {
+          dispatch({ type: 'FOCUS_WINDOW', payload: { id: existing.id } });
+          return;
+        }
       }
 
-      const pos = calcCascadePosition(state.windows.length);
+      const pos = calcCascadePosition(s.windows.length);
       const newWindow: OSWindow = {
         id: `${type}-${Date.now()}`,
         type,
@@ -181,21 +221,33 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
         y: pos.y,
         width: WINDOW_DEFAULT_WIDTH,
         height: WINDOW_DEFAULT_HEIGHT,
-        zIndex: state.nextZIndex,
+        zIndex: s.nextZIndex,
         isMinimized: false,
         isMaximized: false,
         preMaximizeRect: null,
+        ...(extra?.initialTab ? { initialTab: extra.initialTab } : {}),
+        ...(extra?.initialView ? { initialView: extra.initialView } : {}),
+        ...(extra?.docId != null ? { docId: extra.docId } : {}),
       };
 
       dispatch({ type: 'OPEN_WINDOW', payload: { window: newWindow } });
     },
-    [state.windows, state.nextZIndex],
+    [],
+  );
+
+  /** Open a sub-window — always creates new, no dedup, with full extra params */
+  const openSubWindow = useCallback(
+    (type: string, title: string, extra?: Record<string, any>) => {
+      openWindow(type, title, extra);
+    },
+    [],
   );
 
   /** Always creates a new browser window (no deduplication) */
   const openNewBrowserWindow = useCallback((initialUrl?: string) => {
-    const pos = calcCascadePosition(state.windows.length);
-    const tabIdx = state.windows.filter(w => w.type === 'browser').length + 1;
+    const s = stateRef.current;
+    const pos = calcCascadePosition(s.windows.length);
+    const tabIdx = s.windows.filter(w => w.type === 'browser').length + 1;
     const urlLabel = initialUrl ? ` — ${new URL(initialUrl).hostname}` : '';
     const newWindow: OSWindow = {
       id: `browser-${Date.now()}`,
@@ -205,25 +257,29 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       y: pos.y,
       width: WINDOW_DEFAULT_WIDTH,
       height: WINDOW_DEFAULT_HEIGHT,
-      zIndex: state.nextZIndex,
+      zIndex: s.nextZIndex,
       isMinimized: false,
       isMaximized: false,
       preMaximizeRect: null,
       initialUrl,
     };
     dispatch({ type: 'OPEN_WINDOW', payload: { window: newWindow } });
-  }, [state.windows, state.nextZIndex]);
+  }, []);
 
   /** Open a browser window pre-loaded with a specific URL */
   const openBrowserWithUrl = useCallback((url: string, title?: string) => {
     openNewBrowserWindow(url);
-  }, [openNewBrowserWindow]);
+  }, []);
 
   const closeWindow = useCallback((id: string) => {
     dispatch({ type: 'CLOSE_WINDOW', payload: { id } });
   }, []);
 
   const focusWindow = useCallback((id: string) => {
+    const s = stateRef.current;
+    if (s.activeWindowId && s.activeWindowId !== id) {
+      previousActiveId.current = s.activeWindowId;
+    }
     dispatch({ type: 'FOCUS_WINDOW', payload: { id } });
   }, []);
 
@@ -236,7 +292,8 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   }, []);
 
   const moveWindow = useCallback((id: string, x: number, y: number) => {
-    dispatch({ type: 'MOVE_WINDOW', payload: { id, x, y } });
+    // Clamp Y to not go above the menu bar (32px)
+    dispatch({ type: 'MOVE_WINDOW', payload: { id, x: Math.max(x, 0), y: Math.max(y, 32) } });
   }, []);
 
   const resizeWindow = useCallback(
@@ -250,6 +307,10 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     dispatch({ type: 'TOGGLE_OS_MODE' });
   }, []);
 
+  const setWindowTier = useCallback((id: string, tier: WebviewTier, snapshot?: BrowserSnapshot) => {
+    dispatch({ type: 'SET_WINDOW_TIER', payload: { id, tier, snapshot } });
+  }, []);
+
   const getWindowPageComponent = useCallback(
     (type: string) => PAGE_COMPONENT_MAP[type],
     [],
@@ -261,6 +322,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     () => ({
       state,
       openWindow,
+      openSubWindow,
       openNewBrowserWindow,
       openBrowserWithUrl,
       closeWindow,
@@ -271,20 +333,11 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       resizeWindow,
       toggleOSMode,
       getWindowPageComponent,
+      setWindowTier,
+      previousActiveId,
     }),
     [
       state,
-      openWindow,
-      openNewBrowserWindow,
-      openBrowserWithUrl,
-      closeWindow,
-      focusWindow,
-      minimizeWindow,
-      toggleMaximize,
-      moveWindow,
-      resizeWindow,
-      toggleOSMode,
-      getWindowPageComponent,
     ],
   );
 
