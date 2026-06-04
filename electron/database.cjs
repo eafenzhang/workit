@@ -234,25 +234,32 @@ async function initDatabase(userDataPath) {
     currentVersion = 2;
   }
 
+  // ── v3: content_blocks column + models.endpoint column ──
+  if (currentVersion < 3) {
+    try {
+      db.run("ALTER TABLE requirements ADD COLUMN content_blocks TEXT DEFAULT '[]'");
+      log('initDatabase: v3 migration: content_blocks column added');
+    } catch (e) {
+      // Column may already exist from pre-versioned migration
+      if (!String(e.message || '').includes('duplicate column')) {
+        console.error('[db] v3 migration: failed to add content_blocks:', e.message);
+      }
+    }
+    try {
+      db.run("ALTER TABLE models ADD COLUMN endpoint TEXT DEFAULT '/chat/completions'");
+      log('initDatabase: v3 migration: endpoint column added to models');
+    } catch (e) {
+      if (!String(e.message || '').includes('duplicate column')) {
+        console.error('[db] v3 migration: failed to add endpoint:', e.message);
+      }
+    }
+    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (3)");
+    currentVersion = 3;
+    log('initDatabase: migration v3 complete (content_blocks + endpoint)');
+  }
+
   // Migrate old status
   db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
-
-  // Migrate: add content_blocks column for unified content rendering
-  try {
-    db.run("ALTER TABLE requirements ADD COLUMN content_blocks TEXT DEFAULT '[]'");
-    log('initDatabase: content_blocks column added');
-  } catch (e) {
-    // Column may already exist — ignore
-    log('initDatabase: content_blocks migration (column may already exist)', e);
-  }
-
-  // Migrate: add endpoint column to models table
-  try {
-    db.run("ALTER TABLE models ADD COLUMN endpoint TEXT DEFAULT '/chat/completions'");
-    log('initDatabase: endpoint column added to models');
-  } catch (e) {
-    // Column may already exist — ignore
-  }
 
   // Performance: add index for list query ORDER BY created_at DESC
   db.run('CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at)');
@@ -317,10 +324,11 @@ function encryptApiKey(plainText) {
     if (safeStorage.isEncryptionAvailable()) {
       return safeStorage.encryptString(plainText).toString('base64');
     }
+    throw new Error('safeStorage encryption not available');
   } catch (e) {
-    log('encryptApiKey failed, storing as plaintext', e);
+    log('encryptApiKey failed: API key cannot be stored securely', e);
+    throw e;
   }
-  return plainText;
 }
 
 // P0-03: Decrypt API key with fallback for old plaintext data
@@ -704,27 +712,34 @@ async function handleToolCalls(toolCalls, isAnthropic, db) {
 }
 
 function formatReq(r) {
-  // NOTE: ALTER TABLE ADD COLUMN appends to end. content_blocks is at index 19, NOT 15.
-  // Original columns 15-18 (workflow_handler, workflow_history, created_at, updated_at)
-  // remain at their original positions.
+  // NOTE: sql.js stmt.get() returns array-like objects with both numerical indices
+  // and named properties. Named access is preferred for maintainability, with
+  // numerical index as fallback for compatibility with array-only result modes.
+  // ALTER TABLE ADD COLUMN appends to end — content_blocks is at the last position.
   return {
-    id: r[0], title: r[1], desc: r[2], category: r[3], module: r[4]||'用户端', priority: r[5],
-    status: r[6], assignee: r[7], creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
-    images: JSON.parse(r[11]||'[]'), aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
-    imageDescriptions: JSON.parse(r[14]||'[]'),
-    workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
-    createdAt: r[17], updatedAt: r[18],
-    contentBlocks: (() => { try { return JSON.parse(r[19] || '[]'); } catch { return []; } })(),
+    id: r.id ?? r[0], title: r.title ?? r[1], desc: r.description ?? r[2],
+    category: r.category ?? r[3], module: r.module ?? (r[4] || '用户端'), priority: r.priority ?? r[5],
+    status: r.status ?? r[6], assignee: r.assignee ?? r[7], creator: r.creator ?? r[8],
+    dueDate: r.due_date ?? r[9], tags: JSON.parse((r.tags ?? r[10]) || '[]'),
+    images: JSON.parse((r.images ?? r[11]) || '[]'), aiSummary: (r.ai_summary ?? r[12]) || '',
+    aiTags: JSON.parse((r.ai_tags ?? r[13]) || '[]'),
+    imageDescriptions: JSON.parse((r.image_descriptions ?? r[14]) || '[]'),
+    workflowHandler: (r.workflow_handler ?? r[15]) || '',
+    workflowHistory: JSON.parse((r.workflow_history ?? r[16]) || '[]'),
+    createdAt: r.created_at ?? r[17], updatedAt: r.updated_at ?? r[18],
+    contentBlocks: (() => { try { return JSON.parse((r.content_blocks ?? r[19]) || '[]'); } catch { return []; } })(),
   };
 }
 
 // Lightweight formatter for list queries — only fields needed by list view
 function formatReqList(r) {
   return {
-    id: r[0], title: r[1], desc: r[2], category: r[3], module: r[4]||'用户端', priority: r[5],
-    status: r[6], assignee: r[7], creator: r[8],
-    images: JSON.parse(r[9]||'[]'), aiSummary: r[10]||'', aiTags: JSON.parse(r[11]||'[]'),
-    createdAt: r[12],
+    id: r.id ?? r[0], title: r.title ?? r[1], desc: r.description ?? r[2],
+    category: r.category ?? r[3], module: r.module ?? (r[4] || '用户端'), priority: r.priority ?? r[5],
+    status: r.status ?? r[6], assignee: r.assignee ?? r[7], creator: r.creator ?? r[8],
+    images: JSON.parse((r.images ?? r[9]) || '[]'), aiSummary: (r.ai_summary ?? r[10]) || '',
+    aiTags: JSON.parse((r.ai_tags ?? r[11]) || '[]'),
+    createdAt: r.created_at ?? r[12],
   };
 }
 
