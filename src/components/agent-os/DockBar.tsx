@@ -106,12 +106,18 @@ export default function DockBar({
     [windows, openWindow, openNewBrowserWindow, focusWindow, minimizeWindow],
   );
 
-  // Right-click browser icon → open Finder-style modal listing all windows
-  const handleBrowserContextMenu = useCallback(
+  // Right-click: browser → Finder modal; others → context menu
+  const [contextMenu, setContextMenu] = useState<{ type: string; label: string; x: number; y: number } | null>(null);
+
+  const handleContextMenu = useCallback(
     (type: string, e: React.MouseEvent) => {
-      if (type !== 'browser') return;
       e.preventDefault();
-      setBrowserModalOpen(true);
+      if (type === 'browser') {
+        setBrowserModalOpen(true);
+        return;
+      }
+      const item = DOCK_ITEMS.find((d) => d.type === type);
+      setContextMenu({ type, label: item?.label || type, x: e.clientX, y: e.clientY });
     },
     [],
   );
@@ -127,7 +133,7 @@ export default function DockBar({
   // ── Browser context menu modal (Finder-style centered overlay) ──
   const [browserModalOpen, setBrowserModalOpen] = useState(false);
 
-  // Keyboard: Escape to close
+  // Keyboard: Escape to close browser modal
   useEffect(() => {
     if (!browserModalOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -136,6 +142,16 @@ export default function DockBar({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [browserModalOpen]);
+
+  // Keyboard: Escape to close context menu
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [contextMenu]);
 
   return (
     <>
@@ -186,7 +202,7 @@ export default function DockBar({
             isMinimized={isMinimized(item.type)}
             noDot={item.type === 'browser' ? browserWindows.length === 0 : undefined}
             onClick={handleDockClick}
-            onContextMenu={handleBrowserContextMenu}
+            onContextMenu={handleContextMenu}
           />
         ))}
       </div>
@@ -273,6 +289,60 @@ export default function DockBar({
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dock icon context menu (non-browser apps) ── */}
+      {contextMenu && (
+        <div
+          className="fixed inset-0 z-[10001]"
+          onClick={() => setContextMenu(null)}
+        >
+          <div
+            className="absolute rounded-xl overflow-hidden min-w-[180px]"
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+              background: isDark
+                ? 'rgba(28,28,33,0.92)'
+                : 'rgba(255,255,255,0.88)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              border: isDark
+                ? '1px solid rgba(255,255,255,0.1)'
+                : '1px solid rgba(0,0,0,0.08)',
+              boxShadow: isDark
+                ? '0 8px 32px rgba(0,0,0,0.5)'
+                : '0 8px 32px rgba(0,0,0,0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="px-4 py-2.5 text-xs font-medium"
+              style={{
+                color: 'var(--wiki-text)',
+                borderBottom: '1px solid var(--wiki-border)',
+              }}
+            >
+              {contextMenu.label} ({windows.filter((w: OSWindow) => w.type === contextMenu.type).length} 个窗口)
+            </div>
+            <button
+              onClick={() => {
+                windows
+                  .filter((w: OSWindow) => w.type === contextMenu.type)
+                  .forEach((w) => closeWindow(w.id));
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-wiki-surface2 transition-colors flex items-center gap-2"
+              style={{ color: 'var(--wiki-text)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13">
+                <line x1="2" y1="2" x2="11" y2="11" stroke="var(--wiki-text3)" strokeWidth="1.2" strokeLinecap="round"/>
+                <line x1="11" y1="2" x2="2" y2="11" stroke="var(--wiki-text3)" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+              关闭所有窗口
+            </button>
           </div>
         </div>
       )}
