@@ -38,14 +38,19 @@ function faviconUrl(url: string): string {
 function generateTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 
 export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChange, onOpenNewTab, visible, tier = 'hot', snapshot }: Props) {
-  const { closeWindow, state } = useAgentOS();
+  const { closeWindow, state, setWindowData } = useAgentOS();
 
-  // ── Tab state ──
+  // ── Tab state (init from persisted window data) ──
   const [tabs, setTabs] = useState<BrowserTab[]>(() => {
+    const win = state.windows.find(w => w.id === windowId);
+    if (win?.browserTabs && win.browserTabs.length > 0) return win.browserTabs;
     const firstId = generateTabId();
     return [{ id: firstId, url: initialUrl || '', title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
   });
-  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id || '');
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    const win = state.windows.find(w => w.id === windowId);
+    return win?.activeBrowserTabId || tabs[0]?.id || '';
+  });
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const url = activeTab?.url || '';
@@ -54,7 +59,17 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
   // Sync inputUrl when switching tabs
   useEffect(() => { setInputUrl(activeTab?.url || ''); }, [activeTabId]);
 
-  // ── Refs ──
+  // Persist tab state to OS window (debounced)
+  useEffect(() => {
+    if (!windowId) return;
+    const timer = setTimeout(() => {
+      setWindowData(windowId, {
+        browserTabs: tabs,
+        activeBrowserTabId: activeTabId,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [tabs, activeTabId, windowId, setWindowData]);
   const wvContainerRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<any>(null);
   const activeTabRef = useRef(activeTab); activeTabRef.current = activeTab;
@@ -210,6 +225,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.className = 'flex-1 w-full border-0';
     wv.style.cssText = 'height:100%;display:flex;';
     wv.setAttribute('allowpopups', '');
+    wv.setAttribute('partition', `persist:browser:${windowId || 'default'}`);
     wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
     attachWebviewEvents(wv);
 

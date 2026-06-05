@@ -78,6 +78,8 @@ export interface AgentOSContextType {
   getWindowPageComponent: (type: string) => React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>> | undefined;
   /** Set webview cache tier and optional snapshot for a window */
   setWindowTier: (id: string, tier: WebviewTier, snapshot?: BrowserSnapshot) => void;
+  /** Update arbitrary window data (e.g. browserTabs for persistence) */
+  setWindowData: (id: string, data: Partial<OSWindow>) => void;
   /** Track which window was active before the current one */
   previousActiveId: React.RefObject<string | null>;
 }
@@ -311,6 +313,10 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
     dispatch({ type: 'SET_WINDOW_TIER', payload: { id, tier, snapshot } });
   }, []);
 
+  const setWindowData = useCallback((id: string, data: Partial<OSWindow>) => {
+    dispatch({ type: 'SET_WINDOW_DATA', payload: { id, data } });
+  }, []);
+
   const getWindowPageComponent = useCallback(
     (type: string) => PAGE_COMPONENT_MAP[type],
     [],
@@ -334,6 +340,7 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
       toggleOSMode,
       getWindowPageComponent,
       setWindowTier,
+      setWindowData,
       previousActiveId,
     }),
     [

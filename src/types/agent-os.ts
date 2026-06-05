@@ -49,6 +49,9 @@ export interface OSWindow {
   docId?: number;
   /** Generic params (e.g. { url: string } for browser tabs) */
   params?: Record<string, any>;
+  /** Browser window tab state — persisted across sessions */
+  browserTabs?: { id: string; url: string; title: string }[];
+  activeBrowserTabId?: string;
 }
 
 /** A single Dock bar icon entry */
@@ -83,7 +86,8 @@ export type AgentOSAction =
   | { type: 'TOGGLE_MAXIMIZE'; payload: { id: string; desktopRect: WindowRect } }
   | { type: 'MOVE_WINDOW'; payload: { id: string; x: number; y: number } }
   | { type: 'RESIZE_WINDOW'; payload: { id: string; width: number; height: number; x?: number; y?: number } }
-  | { type: 'SET_WINDOW_TIER'; payload: { id: string; tier: WebviewTier; snapshot?: BrowserSnapshot } };
+  | { type: 'SET_WINDOW_TIER'; payload: { id: string; tier: WebviewTier; snapshot?: BrowserSnapshot } }
+  | { type: 'SET_WINDOW_DATA'; payload: { id: string; data: Partial<OSWindow> } };
 
 // ── Page component map ───────────────────────────────────────────
 
@@ -286,6 +290,16 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
             ...(y !== undefined ? { y } : {}),
           };
         }),
+      };
+    }
+
+    case 'SET_WINDOW_DATA': {
+      const { id, data } = action.payload;
+      return {
+        ...state,
+        windows: state.windows.map(w =>
+          w.id === id ? { ...w, ...data } : w,
+        ),
       };
     }
 
