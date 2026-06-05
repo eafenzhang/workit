@@ -244,9 +244,6 @@ function Home({ onOpenTab }: HomeProps) {
   const [selectedModel, setSelectedModel] = useState('');
   const [toolsEnabled, setToolsEnabled] = useState(false);
 
-  // Auto-reply toggle
-  const [autoReply, setAutoReply] = useState(false);
-
   // Conversation management
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -327,12 +324,8 @@ function Home({ onOpenTab }: HomeProps) {
     if (p.skills) parts.push(`技能：${p.skills}`);
     parts.push(`对话要求：请严格以「${p.role}」角色的专业视角回答问题，使用中文，保持专业但友好的语气。`);
     parts.push('当用户咨询与你角色无关的问题时，也应从你角色的专业角度给出建议。');
-    if (autoReply) parts.push('[[自动回复模式]] 在回答结束后，请主动提出 1-2 个与当前话题相关的后续问题，引导用户继续深入对话。');
     return parts.join('\n');
-  }, [userProfile, memorySummary, autoReply]);
-
-  const autoReplyRef = useRef(autoReply);
-  autoReplyRef.current = autoReply;
+  }, [userProfile, memorySummary]);
 
   const handleSend = useCallback(async (payload: HomeSendPayload) => {
     const now = new Date();
@@ -397,7 +390,7 @@ function Home({ onOpenTab }: HomeProps) {
       const errMsg: HomeMessage = { id: generateMessageId(), role: 'assistant', content: `请求失败：${e.message || '未知错误'}`, time: formatTime(new Date()) };
       setMessages(prev => [...prev, errMsg]);
     } finally { setSending(false); }
-  }, [messages, buildSystemPrompt, activeConvId, selectedProvider, selectedModel, toolsEnabled, autoReply]);
+  }, [messages, buildSystemPrompt, activeConvId, selectedProvider, selectedModel, toolsEnabled]);
 
   // Helper to save conversation (extracted for reuse)
   const saveConversation = useCallback((finalMessages: HomeMessage[]) => {
@@ -522,18 +515,6 @@ function Home({ onOpenTab }: HomeProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAutoReply(!autoReply)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-            title={autoReply ? '关闭自动回复' : '开启自动回复'}
-            style={{ 
-              background: autoReply ? 'var(--wiki-info)' : 'var(--wiki-surface2)', 
-              color: autoReply ? '#fff' : 'var(--wiki-text2)', 
-              border: '1px solid var(--wiki-border)' 
-            }}
-          >
-            <BotIcon size={13} />自动回复
-          </button>
           <button
             onClick={handleNewChat}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"

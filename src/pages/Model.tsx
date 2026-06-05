@@ -256,12 +256,14 @@ export default function Model() {
               .map((m) => (
                 <div
                   key={m.id}
-                  className="rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:brightness-95"
+                  className="rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors"
                   style={{
                     background: 'var(--wiki-surface)',
                     border: `1px solid ${m.isDefault ? 'var(--wiki-warning)' : 'var(--wiki-border)'}`,
                   }}
                   onClick={() => openEdit(m)}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface2)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface)'; }}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -392,8 +394,8 @@ export default function Model() {
               />
             </div>
 
-            {/* Protocol type */}
-            <div className="mb-4">
+            {/* Protocol type — only for custom providers */}
+            {editProvider && !pConfig && (<div className="mb-4">
               <label className="block text-xs font-medium text-wiki-text3 mb-1.5">协议类型</label>
               <select value={formEndpoint} onChange={(e) => setFormEndpoint(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg text-xs outline-none"
@@ -401,7 +403,7 @@ export default function Model() {
                 <option value="/chat/completions">OpenAI 兼容 (/chat/completions)</option>
                 <option value="/v1/messages">Anthropic 协议 (/v1/messages)</option>
               </select>
-            </div>
+            </div>)}
 
             {/* API Key */}
             <div className="mb-6">

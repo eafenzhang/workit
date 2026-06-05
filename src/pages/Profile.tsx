@@ -204,7 +204,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="flex justify-center p-8 min-h-full">
+    <div className="flex justify-center p-8 min-h-full overflow-y-auto">
       <div className="w-full max-w-lg">
         <h1 className="text-xl font-semibold text-wiki-text mb-6">用户Agent</h1>
 

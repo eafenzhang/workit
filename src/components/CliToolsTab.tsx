@@ -190,11 +190,6 @@ export default function CliToolsTab({ hideToolbar }: { hideToolbar?: boolean }) 
           <TerminalIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 CLI 工具</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加 CLI 工具后，AI 可以直接调用命令行执行任务</p>
-          <button onClick={importAllDefaults}
-            className="mt-4 flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium"
-            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-            <PackagePlusIcon size={14} />一键添加默认工具集
-          </button>
         </div>
       )}
 

@@ -22,9 +22,11 @@ export default function ProviderCard({ provider, saved, onClick, onSetDefault }:
 
   return (
     <div
-      className="rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors hover:brightness-95"
+      className="rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors"
       style={{ background: 'var(--wiki-surface)', border: `1px solid ${borderColor}` }}
       onClick={onClick}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface2)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface)'; }}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

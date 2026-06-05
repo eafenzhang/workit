@@ -118,11 +118,6 @@ export default function SkillsTab({ hideToolbar }: { hideToolbar?: boolean }) {
           <ZapIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 Skill 技能</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加技能后，AI 可以通过系统提示自动调用相关能力</p>
-          <button onClick={importAllDefaults}
-            className="mt-4 flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium"
-            style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-            <PackagePlusIcon size={14} />一键添加默认技能集
-          </button>
         </div>
       )}
 
