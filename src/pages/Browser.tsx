@@ -1,234 +1,211 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ArrowLeftIcon, ArrowRightIcon, RotateCwIcon, ExternalLinkIcon, StarIcon, ClockIcon, XIcon, PlusIcon } from 'lucide-react';
+import {
+  ArrowLeftIcon, ArrowRightIcon, RotateCwIcon, ExternalLinkIcon,
+  StarIcon, XIcon, PlusIcon, SearchIcon, BookmarkIcon
+} from 'lucide-react';
 import { useAgentOS } from '../context/AgentOSContext';
 
 declare global { namespace JSX { interface IntrinsicElements { webview: any; } } }
+
+// ── Types ──
 
 interface BrowserTab {
   id: string;
   url: string;
   title: string;
+  isLoading: boolean;
 }
+
+interface Bookmark { url: string; title: string; addedAt: number; }
+
+// ── Constants ──
+
+const BM_KEY = 'workit_browser_bookmarks';
+const HIST_KEY = 'workit_browser_history';
+const MAX_TABS = 15;
+
+// ── Helpers ──
+
+function generateId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+function faviconUrl(url: string): string {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=16`; } catch { return ''; }
+}
+function normalizeUrl(input: string): string {
+  const u = input.trim();
+  if (!u) return 'about:blank';
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^[\w-]+(\.[\w-]+)+/.test(u) && !/\s/.test(u)) return `https://${u}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(u)}`;
+}
+
+// ── Props ──
 
 interface Props {
   initialUrl?: string;
   windowId?: string;
   onUrlChange?: (url: string) => void;
   onTitleChange?: (title: string) => void;
-  onOpenNewTab?: (url?: string) => void;
   visible?: boolean;
   tier?: 'hot' | 'warm' | 'cold';
   snapshot?: { url: string; title: string };
 }
 
-interface Bookmark { url: string; title: string; addedAt: number; }
-interface HistoryEntry { url: string; title: string; visitedAt: number; }
+// ── Component ──
 
-const BM_KEY = 'workit_browser_bookmarks';
-const HIST_KEY = 'workit_browser_history';
-
-function load<T>(key: string, fallback: T): T {
-  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; }
-}
-
-function faviconUrl(url: string): string {
-  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=16`; } catch { return ''; }
-}
-
-function generateTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
-
-export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChange, onOpenNewTab, visible, tier = 'hot', snapshot }: Props) {
-  const { closeWindow, state } = useAgentOS();
+export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChange, visible, tier, snapshot }: Props) {
+  const { closeWindow } = useAgentOS();
 
   // ── Tab state ──
   const [tabs, setTabs] = useState<BrowserTab[]>(() => {
-    const firstId = generateTabId();
-    return [{ id: firstId, url: initialUrl || '', title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
+    const firstId = generateId();
+    const firstUrl = initialUrl || 'about:blank';
+    return [{
+      id: firstId,
+      url: firstUrl,
+      title: initialUrl ? firstUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页',
+      isLoading: false,
+    }];
   });
-  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id || '');
-
+  const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-  const url = activeTab?.url || '';
-  const [inputUrl, setInputUrl] = useState(activeTab?.url || '');
 
-  // Sync inputUrl when switching tabs
-  useEffect(() => { setInputUrl(activeTab?.url || ''); }, [activeTabId]);
+  // ── URL input state ──
+  const [inputUrl, setInputUrl] = useState(activeTab?.url || '');
+  useEffect(() => { setInputUrl(activeTab?.url || ''); }, [activeTab?.url, activeTabId]);
+
+  // ── Bookmarks & panels ──
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
+    try { return JSON.parse(localStorage.getItem(BM_KEY) || '[]'); } catch { return []; }
+  });
+  const [showBookmarks, setShowBookmarks] = useState(false);
 
   // ── Refs ──
   const wvContainerRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<any>(null);
-  const activeTabRef = useRef(activeTab); activeTabRef.current = activeTab;
   const tabsRef = useRef(tabs); tabsRef.current = tabs;
   const activeTabIdRef = useRef(activeTabId); activeTabIdRef.current = activeTabId;
   const onUrlChangeRef = useRef(onUrlChange); onUrlChangeRef.current = onUrlChange;
   const onTitleChangeRef = useRef(onTitleChange); onTitleChangeRef.current = onTitleChange;
-  const pageTitleRef = useRef('');
-
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => load(BM_KEY, []));
-  const [history, setHistory] = useState<HistoryEntry[]>(() => load(HIST_KEY, []));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'bookmarks' | 'history'>('bookmarks');
-  const [browserLoading, setBrowserLoading] = useState(false);
-
-  // Context menu with fade animation
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; animating: boolean } | null>(null);
-  useEffect(() => {
-    if (!ctxMenu) return;
-    // Trigger fade-in
-    requestAnimationFrame(() => {
-      setCtxMenu(prev => prev ? { ...prev, animating: true } : null);
-    });
-    const animateClose = () => {
-      setCtxMenu(prev => prev ? { ...prev, animating: false } : null);
-      setTimeout(() => setCtxMenu(null), 150);
-    };
-    const handler = () => animateClose();
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [ctxMenu?.x, ctxMenu?.y]);
 
   // ── Tab operations ──
-  const updateTabUrl = useCallback((tabId: string, newUrl: string, newTitle?: string) => {
-    setTabs(prev => prev.map(t =>
-      t.id === tabId ? { ...t, url: newUrl, title: newTitle || newUrl.replace(/^https?:\/\//, '').substring(0, 30) } : t,
-    ));
+  const updateTab = useCallback((tabId: string, partial: Partial<BrowserTab>) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, ...partial } : t));
   }, []);
 
-  const openNewTab = useCallback((tabUrl?: string) => {
-    const id = generateTabId();
-    const newTab: BrowserTab = {
-      id, url: tabUrl || 'about:blank',
-      title: tabUrl ? tabUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页',
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(id);
-  }, []);
-
-  const closeTab = useCallback((tabId: string) => {
+  const addTab = useCallback((tabUrl?: string) => {
     setTabs(prev => {
-      if (prev.length <= 1) { if (windowId) closeWindow(windowId); return prev; }
+      if (prev.length >= MAX_TABS) return prev;
+      const id = generateId();
+      const url = normalizeUrl(tabUrl || '');
+      const newTab: BrowserTab = {
+        id, url,
+        title: tabUrl ? url.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页',
+        isLoading: false,
+      };
+      setActiveTabId(id);
+      return [...prev, newTab];
+    });
+  }, []);
+
+  const removeTab = useCallback((tabId: string) => {
+    setTabs(prev => {
+      if (prev.length <= 1) { closeWindow(windowId || ''); return prev; }
       const remaining = prev.filter(t => t.id !== tabId);
       if (activeTabIdRef.current === tabId) {
         const idx = prev.findIndex(t => t.id === tabId);
-        const newActive = remaining[Math.min(idx, remaining.length - 1)];
-        if (newActive) setActiveTabId(newActive.id);
+        setActiveTabId(remaining[Math.min(idx, remaining.length - 1)]?.id || remaining[0].id);
       }
       return remaining;
     });
   }, [windowId, closeWindow]);
 
   // ── Webview lifecycle ──
-  const tierRef = useRef(tier); tierRef.current = tier;
-
-  const handleWebviewLoad = useCallback((e: any) => {
-    try {
-      const wvUrl = e.target?.getURL?.() || webviewRef.current?.getURL?.();
-      if (wvUrl && wvUrl !== 'about:blank') {
-        setInputUrl(wvUrl);
-        updateTabUrl(activeTabIdRef.current, wvUrl);
-        onUrlChangeRef.current?.(wvUrl);
-      }
-    } catch {}
-  }, [updateTabUrl]);
-
-  const handlePageTitle = useCallback((e: any) => {
-    const title = e.title || '';
-    if (title && title !== 'about:blank') {
-      pageTitleRef.current = title;
-      onTitleChangeRef.current?.(title);
-      const curTab = tabsRef.current.find(t => t.id === activeTabIdRef.current);
-      if (curTab) {
-        updateTabUrl(curTab.id, curTab.url, title);
-        const cur = curTab.url;
-        setHistory(prev => {
-          const f = prev.filter(en => en.url !== cur);
-          const n = [{ url: cur, title: title.substring(0, 40), visitedAt: Date.now() }, ...f].slice(0, 100);
-          try { localStorage.setItem(HIST_KEY, JSON.stringify(n)); } catch {}
-          return n;
-        });
-      }
-    }
-  }, [updateTabUrl]);
-
-  const handleWillNavigate = useCallback((e: any) => {
-    const navUrl = e.url;
-    if (navUrl && /^https?:\/\//.test(navUrl)) {
-      setInputUrl(navUrl);
-      updateTabUrl(activeTabIdRef.current, navUrl);
-      onUrlChangeRef.current?.(navUrl);
-    }
-  }, [updateTabUrl]);
-
-  const handleStartLoading = useCallback(() => setBrowserLoading(true), []);
-  const handleStopLoading = useCallback(() => setBrowserLoading(false), []);
-
-  const attachWebviewEvents = useCallback((wv: any) => {
-    wv.addEventListener('did-finish-load', handleWebviewLoad);
-    wv.addEventListener('page-title-updated', handlePageTitle);
-    wv.addEventListener('will-navigate', handleWillNavigate);
-    wv.addEventListener('did-start-loading', handleStartLoading);
-    wv.addEventListener('did-stop-loading', handleStopLoading);
-    // Intercept window.open / target="_blank" → open as local tab
-    wv.addEventListener('new-window', (e: any) => {
-      const newUrl = e.url;
-      if (newUrl && /^https?:\/\//.test(newUrl)) {
-        openNewTab(newUrl);
-      }
-    });
-    wv.addEventListener('did-attach', () => {
-      try {
-        const wc = wv.getWebContents?.();
-        if (wc?.setWindowOpenHandler) {
-          wc.setWindowOpenHandler(({ url: newUrl }: { url: string }) => {
-            if (newUrl && /^https?:\/\//.test(newUrl)) openNewTab(newUrl);
-            return { action: 'deny' };
-          });
-        }
-      } catch {}
-    });
-  }, [handleWebviewLoad, handlePageTitle, handleWillNavigate, handleStartLoading, handleStopLoading, openNewTab]);
-
-  // Create / recreate webview on tier change or active tab change
   useEffect(() => {
     const container = wvContainerRef.current;
-    if (!container) return;
+    if (!container || tier === 'cold') return;
 
-    const removeWebview = () => {
-      if (webviewRef.current) {
-        try {
-          webviewRef.current.stop();
-          webviewRef.current.remove();
-        } catch {}
-        webviewRef.current = null;
+    // Remove old webview
+    if (webviewRef.current) {
+      try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
+      webviewRef.current = null;
+    }
+
+    // Create new webview for active tab
+    const wv = document.createElement('webview') as any;
+    wv.style.cssText = 'width:100%;height:100%;border:none;display:flex;';
+    wv.setAttribute('allowpopups', '');
+    wv.setAttribute('src', activeTab?.url || 'about:blank');
+    wv.setAttribute('partition', 'persist:browser');
+
+    // Event handlers using current refs
+    const onLoad = () => {
+      try {
+        const url = wv.getURL();
+        if (url && url !== 'about:blank') {
+          setInputUrl(url);
+          updateTab(activeTabIdRef.current, { url, isLoading: false });
+          onUrlChangeRef.current?.(url);
+        }
+      } catch {}
+    };
+    const onTitle = (e: any) => {
+      const title = e.title || '';
+      if (title && title !== 'about:blank') {
+        updateTab(activeTabIdRef.current, { title: title.substring(0, 50) });
+        onTitleChangeRef.current?.(title);
+        // Save to history
+        const cur = tabsRef.current.find(t => t.id === activeTabIdRef.current)?.url;
+        if (cur) {
+          try {
+            const stored = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+            const updated = [{ url: cur, title, visitedAt: Date.now() }, ...stored.filter((e: any) => e.url !== cur)].slice(0, 100);
+            localStorage.setItem(HIST_KEY, JSON.stringify(updated));
+          } catch {}
+        }
       }
     };
-    removeWebview();
+    const onNavigate = (e: any) => {
+      if (e.url && /^https?:\/\//.test(e.url)) {
+        setInputUrl(e.url);
+        updateTab(activeTabIdRef.current, { url: e.url, isLoading: true });
+      }
+    };
+    const onLoading = () => updateTab(activeTabIdRef.current, { isLoading: true });
+    const onStop = () => updateTab(activeTabIdRef.current, { isLoading: false });
+    // Open new tabs for window.open() / target="_blank"
+    const onNewWindow = (e: any) => {
+      if (e.url && /^https?:\/\//.test(e.url)) addTab(e.url);
+    };
 
-    if (tier === 'cold') return;
+    wv.addEventListener('did-finish-load', onLoad);
+    wv.addEventListener('page-title-updated', onTitle);
+    wv.addEventListener('will-navigate', onNavigate);
+    wv.addEventListener('did-start-loading', onLoading);
+    wv.addEventListener('did-stop-loading', onStop);
+    wv.addEventListener('new-window', onNewWindow);
 
-    const wv = document.createElement('webview') as any;
-    wv.className = 'flex-1 w-full border-0';
-    wv.style.cssText = 'height:100%;display:flex;';
-    wv.setAttribute('allowpopups', '');
-    wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
-    attachWebviewEvents(wv);
-
-    if (tier === 'warm') { wv.style.display = 'none'; /* keep running in background */ }
+    // Only hide if warm tier, keep running
+    if (tier === 'warm') { wv.style.display = 'none'; }
+    // Cold tier: don't render at all
 
     container.appendChild(wv);
     webviewRef.current = wv;
-
-    return () => { removeWebview(); };
+    return () => { try { wv.remove(); } catch {} };
   }, [tier, activeTabId]);
 
+  // Pause when not visible
+  useEffect(() => {
+    if (!webviewRef.current) return;
+    webviewRef.current.style.display = visible === false ? 'none' : 'flex';
+  }, [visible]);
+
   // ── Navigation ──
-  const navigateTo = (u: string) => {
-    let go = u.trim();
-    if (!/^https?:\/\//.test(go)) go = /\./.test(go) && !/\s/.test(go) ? `https://${go}` : `https://www.google.com/search?q=${encodeURIComponent(go)}`;
-    setInputUrl(go);
-    updateTabUrl(activeTabRef.current.id, go);
+  const navigate = (url: string) => {
+    const resolved = normalizeUrl(url);
+    setInputUrl(resolved);
+    updateTab(activeTabIdRef.current, { url: resolved, isLoading: true });
     if (webviewRef.current) {
-      try { webviewRef.current.loadURL(go); } catch {}
+      try { webviewRef.current.loadURL(resolved); } catch {}
     }
   };
 
@@ -236,242 +213,177 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
   const goForward = () => { try { webviewRef.current?.goForward(); } catch {} };
   const reload = () => {
     try { webviewRef.current?.reload(); } catch {
-      try { const c = webviewRef.current?.getURL?.() || activeTabRef.current?.url; if (c) webviewRef.current?.loadURL(c); } catch {}
+      try {
+        const u = webviewRef.current?.getURL?.() || activeTabRef.current?.url;
+        if (u) webviewRef.current?.loadURL(u);
+      } catch {}
     }
   };
+  const activeTabRef = useRef(activeTab); activeTabRef.current = activeTab;
 
-  // Track initialUrl changes (from parent)
-  useEffect(() => {
-    if (initialUrl && (!activeTab?.url || activeTab?.url === 'about:blank') && webviewRef.current) {
-      try { webviewRef.current.loadURL(initialUrl); updateTabUrl(activeTabRef.current.id, initialUrl); } catch {}
-    }
-  }, [initialUrl]);
-
-  // Pause webview when hidden
-  useEffect(() => {
-    if (visible === false) {
-      try { webviewRef.current?.stop(); } catch {}
-      if (webviewRef.current) webviewRef.current.style.display = 'none';
-    } else {
-      if (webviewRef.current) webviewRef.current.style.display = 'flex';
-    }
-  }, [visible]);
-
-  // ── UI handlers ──
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') navigateTo(inputUrl); };
-  const openExternal = () => { const u = activeTabRef.current?.url; if (u) { try { window.open(u, '_blank', 'noopener,noreferrer'); } catch {} } };
-  const openSidebar = (tab: 'bookmarks' | 'history') => { setSidebarTab(tab); setSidebarOpen(true); };
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    if (windowId) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, animating: false }); }
-  }, [windowId]);
-
-  const animateCloseMenu = useCallback(() => {
-    setCtxMenu(prev => prev ? { ...prev, animating: false } : null);
-    setTimeout(() => setCtxMenu(null), 150);
-  }, []);
-
-  const handleCloseAllBrowsers = useCallback(() => {
-    state.windows.filter(w => w.type === 'browser' && !w.isMinimized).forEach(w => closeWindow(w.id));
-    animateCloseMenu();
-  }, [state.windows, closeWindow, animateCloseMenu]);
-
-  const handleCloseBrowser = useCallback(() => {
-    if (windowId) closeWindow(windowId);
-    animateCloseMenu();
-  }, [windowId, closeWindow, animateCloseMenu]);
-
+  // ── Bookmark toggle ──
+  const isBookmarked = bookmarks.some(b => b.url === activeTab?.url);
   const toggleBookmark = () => {
-    const u = activeTabRef.current?.url; if (!u) return;
-    const t = pageTitleRef.current || u.replace(/^https?:\/\//, '').substring(0, 30);
+    const u = activeTab?.url;
+    if (!u || u === 'about:blank') return;
     setBookmarks(prev => {
-      const exists = prev.find(b => b.url === u);
-      const next = exists ? prev.filter(b => b.url !== u) : [{ url: u, title: t, addedAt: Date.now() }, ...prev].slice(0, 50);
+      const next = isBookmarked
+        ? prev.filter(b => b.url !== u)
+        : [{ url: u, title: activeTab?.title || u, addedAt: Date.now() }, ...prev].slice(0, 50);
       try { localStorage.setItem(BM_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   };
 
-  const isBookmarked = bookmarks.some(b => b.url === activeTabRef.current?.url);
+  const openExternal = () => {
+    try { window.open(activeTab?.url || '', '_blank', 'noopener,noreferrer'); } catch {}
+  };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') navigate(inputUrl);
+  };
+
+  // ── Loading bar ──
+  const isLoading = activeTab?.isLoading;
+
+  // ── Render ──
   return (
-    <div className="flex flex-col h-full relative">
-      {/* ── URL bar ── */}
-      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
-        <button onClick={goBack} className="p-1 rounded hover:bg-wiki-surface2 transition-colors"><ArrowLeftIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
-        <button onClick={goForward} className="p-1 rounded hover:bg-wiki-surface2 transition-colors"><ArrowRightIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
-        <button onClick={reload} className="p-1 rounded hover:bg-wiki-surface2 transition-colors"><RotateCwIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
-        <input value={inputUrl} onChange={e => setInputUrl(e.target.value)} onKeyDown={handleKeyDown}
-          className="flex-1 px-3 py-1.5 rounded text-xs outline-none browser-url-input"
-          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }} placeholder="输入网址或搜索..." />
-        <button onClick={toggleBookmark} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title={isBookmarked ? '取消收藏' : '加入收藏'}>
-          <StarIcon size={14} style={{ color: isBookmarked ? 'var(--wiki-warning)' : 'var(--wiki-text2)' }} /></button>
-        <button onClick={() => openSidebar('bookmarks')} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title="收藏夹 & 历史">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="10" rx="1" stroke="var(--wiki-text2)" strokeWidth="1.1" fill="none"/><line x1="10" y1="1" x2="10" y2="13" stroke="var(--wiki-text2)" strokeWidth="1"/></svg>
+    <div className="flex flex-col h-full">
+      {/* URL Bar */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0"
+        style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
+        <button onClick={goBack} className="p-1 rounded hover:bg-wiki-surface2" title="后退">
+          <ArrowLeftIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
         </button>
-        <button onClick={openExternal} className="p-1 rounded hover:bg-wiki-surface2 transition-colors" title="系统浏览器" data-bypass-interceptor>
-          <ExternalLinkIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
-      </div>
-
-      {/* ── Tab bar (compact bookmarks-style chips) ── */}
-      <div className="flex items-center gap-0.5 px-3 py-1.5 flex-shrink-0 overflow-x-auto" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className="group flex items-center gap-1 px-2 py-1 rounded cursor-pointer flex-shrink-0 transition-colors"
-            style={{
-              background: tab.id === activeTabId ? 'var(--wiki-surface2)' : 'transparent',
-            }}
-            onClick={() => setActiveTabId(tab.id)}
-          >
-            {tab.url && tab.url !== 'about:blank' && (
-              <img src={faviconUrl(tab.url)} className="w-3.5 h-3.5 flex-shrink-0" alt="" loading="lazy"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            )}
-            <span className="text-[11px] truncate max-w-[120px]" style={{ color: tab.id === activeTabId ? 'var(--wiki-text)' : 'var(--wiki-text2)' }}>
-              {tab.title || '新标签页'}
-            </span>
-            <button
-              onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
-              className="hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full text-[10px] hover:text-red-500 flex-shrink-0"
-              style={{ color: 'var(--wiki-text3)' }}
-            >×</button>
-          </div>
-        ))}
-        <button onClick={() => openNewTab()} className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-wiki-surface2 transition-colors" title="新建标签页">
-          <PlusIcon size={13} style={{ color: 'var(--wiki-text3)' }} />
+        <button onClick={goForward} className="p-1 rounded hover:bg-wiki-surface2" title="前进">
+          <ArrowRightIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
+        </button>
+        <button onClick={reload} className="p-1 rounded hover:bg-wiki-surface2" title="刷新">
+          <RotateCwIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
+        </button>
+        <input
+          value={inputUrl}
+          onChange={e => setInputUrl(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="flex-1 px-3 py-1.5 rounded text-xs outline-none"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}
+          placeholder="输入网址或搜索..."
+        />
+        <button onClick={toggleBookmark} className="p-1 rounded hover:bg-wiki-surface2" title={isBookmarked ? '取消收藏' : '加入收藏'}>
+          <StarIcon size={15} style={{ color: isBookmarked ? 'var(--wiki-warning)' : 'var(--wiki-text2)' }} />
+        </button>
+        <button onClick={() => setShowBookmarks(!showBookmarks)} className="p-1 rounded hover:bg-wiki-surface2" title="收藏夹">
+          <BookmarkIcon size={15} style={{ color: showBookmarks ? 'var(--wiki-accent)' : 'var(--wiki-text2)' }} />
+        </button>
+        <button onClick={openExternal} className="p-1 rounded hover:bg-wiki-surface2" title="系统浏览器打开">
+          <ExternalLinkIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
         </button>
       </div>
 
-      {/* ── Unified Sidebar (Bookmarks + History) ── */}
-      {sidebarOpen && (
+      {/* Tab Bar */}
+      <div className="flex items-center flex-shrink-0" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              className="group flex items-center gap-1 px-3 py-1.5 cursor-pointer flex-shrink-0 max-w-[160px]"
+              style={{
+                background: tab.id === activeTabId ? 'var(--wiki-surface2)' : 'transparent',
+                borderRight: '1px solid var(--wiki-border)',
+                borderBottom: tab.id === activeTabId ? '2px solid var(--wiki-accent)' : '2px solid transparent',
+              }}
+              onClick={() => setActiveTabId(tab.id)}
+            >
+              {tab.url && tab.url !== 'about:blank' && (
+                <img src={faviconUrl(tab.url)} className="w-3.5 h-3.5 flex-shrink-0" alt=""
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              )}
+              <span className="text-[11px] truncate" style={{ color: tab.id === activeTabId ? 'var(--wiki-text)' : 'var(--wiki-text2)' }}>
+                {tab.title || '新标签页'}
+              </span>
+              {tab.isLoading && (
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: 'var(--wiki-accent)', animation: 'pulse 1.5s infinite' }} />
+              )}
+              <button onClick={e => { e.stopPropagation(); removeTab(tab.id); }}
+                className="hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full hover:bg-red-100 flex-shrink-0">
+                <XIcon size={10} style={{ color: 'var(--wiki-text3)' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => addTab()}
+          className="flex-shrink-0 w-7 h-7 flex items-center justify-center hover:bg-wiki-surface2 transition-colors"
+          title="新建标签页">
+          <PlusIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
+        </button>
+      </div>
+
+      {/* Loading progress bar */}
+      {isLoading && (
+        <div className="flex-shrink-0" style={{ height: 2, background: 'linear-gradient(90deg, var(--wiki-accent), var(--wiki-info), var(--wiki-accent))', backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+      )}
+      <style>{`
+        @keyframes shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+        @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+      `}</style>
+
+      {/* Bookmarks sidebar */}
+      {showBookmarks && (
         <>
-          <div className="fixed inset-0 z-[9999]" onClick={() => setSidebarOpen(false)} />
-          <div
-            className="absolute top-0 right-0 bottom-0 w-[280px] flex flex-col z-[10000]"
-            style={{ background: 'var(--wiki-surface)', borderLeft: '1px solid var(--wiki-border)', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}
-          >
-            {/* Tab header */}
-            <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-              <button
-                onClick={() => setSidebarTab('bookmarks')}
-                className="flex-1 py-2.5 text-xs font-medium transition-colors"
-                style={{
-                  color: sidebarTab === 'bookmarks' ? 'var(--wiki-text)' : 'var(--wiki-text3)',
-                  borderBottom: sidebarTab === 'bookmarks' ? '2px solid var(--wiki-accent)' : '2px solid transparent',
-                }}
-              >收藏夹 ({bookmarks.length})</button>
-              <button
-                onClick={() => setSidebarTab('history')}
-                className="flex-1 py-2.5 text-xs font-medium transition-colors"
-                style={{
-                  color: sidebarTab === 'history' ? 'var(--wiki-text)' : 'var(--wiki-text3)',
-                  borderBottom: sidebarTab === 'history' ? '2px solid var(--wiki-accent)' : '2px solid transparent',
-                }}
-              >历史记录 ({history.length})</button>
-              <button onClick={() => setSidebarOpen(false)} className="w-8 flex items-center justify-center hover:bg-wiki-surface2">
+          <div className="fixed inset-0 z-[9999]" onClick={() => setShowBookmarks(false)} />
+          <div className="absolute top-0 right-0 bottom-0 w-[260px] flex flex-col z-[10000]"
+            style={{ background: 'var(--wiki-surface)', borderLeft: '1px solid var(--wiki-border)', boxShadow: '-4px 0 16px rgba(0,0,0,0.1)' }}>
+            <div className="flex items-center justify-between px-3 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+              <span className="text-xs font-semibold" style={{ color: 'var(--wiki-text)' }}>收藏夹 ({bookmarks.length})</span>
+              <button onClick={() => setShowBookmarks(false)} className="p-1 rounded hover:bg-wiki-surface2">
                 <XIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
               </button>
             </div>
-
-            {/* Content */}
             <div className="flex-1 overflow-y-auto">
-              {sidebarTab === 'bookmarks' ? (
-                bookmarks.length === 0 ? (
-                  <div className="text-xs text-wiki-text3 p-4 text-center">暂无收藏<br/><span className="text-[10px]">点击地址栏 ☆ 添加收藏</span></div>
-                ) : (
-                  bookmarks.map(bm => (
-                    <div key={bm.url} className="flex items-center gap-2 px-3 py-2.5 group hover:bg-wiki-surface2 transition-colors cursor-pointer"
-                      style={{ borderBottom: '1px solid var(--wiki-border)' }}
-                      onClick={() => { navigateTo(bm.url); setSidebarOpen(false); }}>
-                      <img src={faviconUrl(bm.url)} className="w-4 h-4 flex-shrink-0 rounded-sm" alt="" loading="lazy"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs truncate" style={{ color: 'var(--wiki-text)' }}>{bm.title}</div>
-                        <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>{bm.url}</div>
-                      </div>
-                      <button onClick={e => { e.stopPropagation(); setBookmarks(prev => { const n = prev.filter(b => b.url !== bm.url); try { localStorage.setItem(BM_KEY, JSON.stringify(n)); } catch {} return n; }); }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 transition-opacity">
-                        <XIcon size={10} style={{ color: 'var(--wiki-text3)' }} />
-                      </button>
-                    </div>
-                  ))
-                )
-              ) : (
-                history.length === 0 ? (
-                  <div className="text-xs text-wiki-text3 p-4 text-center">暂无历史记录</div>
-                ) : (
-                  history.slice(0, 100).map(e => (
-                    <div key={e.url + e.visitedAt} className="flex items-center gap-2 px-3 py-2.5 group hover:bg-wiki-surface2 transition-colors cursor-pointer"
-                      style={{ borderBottom: '1px solid var(--wiki-border)' }}
-                      onClick={() => { navigateTo(e.url); setSidebarOpen(false); }}>
-                      <img src={faviconUrl(e.url)} className="w-4 h-4 flex-shrink-0 rounded-sm" alt="" loading="lazy"
-                        onError={e2 => { (e2.target as HTMLImageElement).style.display = 'none'; }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs truncate" style={{ color: 'var(--wiki-text)' }}>{e.title}</div>
-                        <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>{e.url}</div>
-                      </div>
-                      <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--wiki-text3)' }}>
-                        {new Date(e.visitedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  ))
-                )
-              )}
+              {bookmarks.length === 0 ? (
+                <div className="text-xs text-center p-4" style={{ color: 'var(--wiki-text3)' }}>点击地址栏 ☆ 添加收藏</div>
+              ) : bookmarks.map(bm => (
+                <div key={bm.url}
+                  className="flex items-center gap-2 px-3 py-2.5 group hover:bg-wiki-surface2 cursor-pointer"
+                  style={{ borderBottom: '1px solid var(--wiki-border)' }}
+                  onClick={() => { navigate(bm.url); setShowBookmarks(false); }}>
+                  <img src={faviconUrl(bm.url)} className="w-4 h-4 rounded-sm flex-shrink-0" alt=""
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs truncate" style={{ color: 'var(--wiki-text)' }}>{bm.title}</div>
+                    <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>{bm.url}</div>
+                  </div>
+                  <button onClick={e => {
+                    e.stopPropagation();
+                    setBookmarks(prev => {
+                      const n = prev.filter(b => b.url !== bm.url);
+                      try { localStorage.setItem(BM_KEY, JSON.stringify(n)); } catch {}
+                      return n;
+                    });
+                  }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50">
+                    <XIcon size={10} style={{ color: 'var(--wiki-text3)' }} />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </>
       )}
 
-      {/* Loading progress */}
-      <style>{`
-        .browser-progress { height: 2px; background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1); background-size: 200% 100%; animation: progress-pulse 1.5s ease-in-out infinite; }
-        @keyframes progress-pulse { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-      `}</style>
-      {browserLoading && <div className="browser-progress" />}
+      {/* Webview container */}
+      <div ref={wvContainerRef} className="flex-1 flex flex-col overflow-hidden"
+        style={{ background: 'var(--wiki-surface2)', display: 'flex' }} />
 
-      {/* Webview / Cold placeholder */}
-      <div
-        ref={wvContainerRef}
-        className="flex-1 flex flex-col overflow-hidden"
-        style={{ display: 'flex' }}
-        onContextMenu={handleContextMenu}
-      >
-        {tier === 'cold' && (
-          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
-            <div className="text-center px-6">
-              <div className="text-xs text-wiki-text3 mb-1">浏览器已休眠</div>
-              <div className="text-[11px] text-wiki-text3 opacity-60 truncate max-w-[300px]">
-                {snapshot?.title || initialUrl || '无标题'}
-              </div>
+      {/* Cold tier placeholder */}
+      {tier === 'cold' && (
+        <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: 'var(--wiki-surface2)' }}>
+          <div className="text-center">
+            <div className="text-xs mb-1" style={{ color: 'var(--wiki-text3)' }}>浏览器已休眠</div>
+            <div className="text-[11px] truncate max-w-[300px]" style={{ color: 'var(--wiki-text3)', opacity: 0.6 }}>
+              {snapshot?.title || initialUrl || '点击重新加载'}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Context menu with fade animation */}
-      {ctxMenu && (
-        <div className="fixed z-[10000]" style={{ left: ctxMenu.x, top: ctxMenu.y }}>
-          <div className="rounded-lg py-1 shadow-lg" style={{
-            background: 'var(--wiki-surface)',
-            border: '1px solid var(--wiki-border)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-            minWidth: '180px',
-            opacity: ctxMenu.animating ? 1 : 0,
-            transform: ctxMenu.animating ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-4px)',
-            transition: 'opacity 0.15s ease-out, transform 0.15s ease-out',
-          }}
-            onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors text-sm" style={{ color: 'var(--wiki-text)' }} onClick={handleCloseBrowser}>
-            <XIcon size={14} style={{ color: 'var(--wiki-danger)' }} />
-            <span>关闭此窗口</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-wiki-surface2 transition-colors text-sm" style={{ color: 'var(--wiki-text)', borderTop: '1px solid var(--wiki-border)' }}
-            onClick={handleCloseAllBrowsers}>
-            <XIcon size={14} style={{ color: 'var(--wiki-danger)' }} />
-            <span>关闭所有窗口</span>
-          </div>
-        </div>
         </div>
       )}
     </div>
