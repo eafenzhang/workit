@@ -213,7 +213,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
     attachWebviewEvents(wv);
 
-    if (tier === 'warm') { wv.style.display = 'none'; try { wv.stop(); } catch {} }
+    if (tier === 'warm') { wv.style.display = 'none'; /* keep running in background */ }
 
     container.appendChild(wv);
     webviewRef.current = wv;

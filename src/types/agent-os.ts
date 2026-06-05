@@ -297,6 +297,6 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
 // ── Tier management helpers ──────────────────────────────────────
 
 export const HOT_MAX = 2;
-export const WARM_MAX = 3;
-export const HOT_TO_WARM_MS = 3_000;
-export const WARM_TO_COLD_MS = 30_000;
+export const WARM_MAX = 10;
+export const HOT_TO_WARM_MS = 30_000;
+export const WARM_TO_COLD_MS = 300_000;
