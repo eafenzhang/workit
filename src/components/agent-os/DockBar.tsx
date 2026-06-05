@@ -154,13 +154,20 @@ export default function DockBar({
     return () => document.removeEventListener('keydown', handler);
   }, [contextMenu]);
 
-  // ── Background app manager ──
-  const [bgManagerOpen, setBgManagerOpen] = useState(false);
-  const allWindows = windows as OSWindow[];
-  const backgroundWindows = useMemo(
-    () => allWindows.filter(w => w.isMinimized),
-    [allWindows],
+  // ── 最近任务 (all running windows, not just minimized) ──
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false);
+  const runningWindows = useMemo(
+    () => (windows as OSWindow[]).filter(w => !w.isMinimized),
+    [windows],
   );
+
+  // Escape key to close task manager
+  useEffect(() => {
+    if (!taskManagerOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setTaskManagerOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [taskManagerOpen]);
 
   return (
     <>
@@ -202,6 +209,20 @@ export default function DockBar({
             pointerEvents: isHide && !dockHovered ? 'none' : 'auto',
           }}
         >
+        {/* ── 最近任务 button ── */}
+        <button
+          onClick={() => setTaskManagerOpen(true)}
+          className="flex flex-col items-center justify-center w-[60px] transition-all duration-200 hover:scale-110"
+          title={`最近任务 (${runningWindows.length})`}
+        >
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-1"
+            style={{ background: 'var(--wiki-surface2)' }}>
+            <Layers size={20} style={{ color: 'var(--wiki-text2)' }} />
+          </div>
+          <span className="text-[10px] leading-tight" style={{ color: 'var(--wiki-text3)' }}>最近</span>
+        </button>
+        <div className="w-px h-8 mx-1" style={{ background: 'var(--wiki-border)' }} />
+
         {DOCK_ITEMS.map((item) => (
           <DockIcon
             key={item.id}
@@ -216,85 +237,75 @@ export default function DockBar({
         ))}
       </div>
 
-      {/* ── Background app manager (left-side button) ── */}
-      <button
-        onClick={() => setBgManagerOpen(true)}
-        className="absolute left-4 bottom-4 w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110"
-        style={{
-          background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
-        }}
-        title={`后台应用 (${backgroundWindows.length})`}
-      >
-        <Layers size={18} style={{ color: 'var(--wiki-text2)' }} />
-        {backgroundWindows.length > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold"
-            style={{ background: 'var(--wiki-danger)', color: '#fff' }}>
-            {backgroundWindows.length}
-          </span>
-        )}
-      </button>
-
-      {/* ── Background manager modal (tiled layout) ── */}
-      {bgManagerOpen && (
+      {/* ── 最近任务 - fullscreen semi-transparent overlay ── */}
+      {taskManagerOpen && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setBgManagerOpen(false)}
+          className="fixed inset-0 z-[10000] overflow-y-auto"
+          style={{
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+          onClick={() => setTaskManagerOpen(false)}
         >
-          <div
-            className="rounded-xl overflow-hidden w-[520px] max-h-[400px] flex flex-col mx-4"
-            style={{
-              background: 'var(--wiki-surface)',
-              border: '1px solid var(--wiki-border)',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-              <div className="flex items-center gap-2">
-                <Layers size={15} style={{ color: 'var(--wiki-text2)' }} />
-                <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>
-                  后台应用 ({backgroundWindows.length})
-                </span>
-              </div>
-              <button onClick={() => setBgManagerOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-wiki-surface2">
-                <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.5" y1="1.5" x2="9.5" y2="9.5" stroke="var(--wiki-text3)" strokeWidth="1.2"/><line x1="9.5" y1="1.5" x2="1.5" y2="9.5" stroke="var(--wiki-text3)" strokeWidth="1.2"/></svg>
+          <div className="min-h-full p-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold" style={{ color: '#fff' }}>
+                最近任务 ({runningWindows.length})
+              </h2>
+              <button
+                onClick={() => setTaskManagerOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="#fff" strokeWidth="1.5"/><line x1="12" y1="2" x2="2" y2="12" stroke="#fff" strokeWidth="1.5"/></svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {backgroundWindows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 gap-2">
-                  <Layers size={28} style={{ color: 'var(--wiki-text3)', opacity: 0.4 }} />
-                  <span className="text-sm" style={{ color: 'var(--wiki-text3)' }}>无后台应用</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {backgroundWindows.map(w => {
-                    const item = DOCK_ITEMS.find(d => d.type === w.type);
-                    const Icon = item?.icon || Globe;
-                    return (
-                      <button
-                        key={w.id}
-                        onClick={() => { focusWindow(w.id); setBgManagerOpen(false); }}
-                        className="flex items-center gap-2.5 p-3 rounded-lg text-left transition-colors"
-                        style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface2)'; }}
-                      >
-                        <Icon size={18} style={{ color: item?.color || 'var(--wiki-text2)', flexShrink: 0 }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs truncate font-medium" style={{ color: 'var(--wiki-text)' }}>{w.title}</div>
-                          <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>{item?.label || w.type}</div>
+
+            {runningWindows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Layers size={48} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                <span className="mt-4 text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>无运行中应用</span>
+              </div>
+            ) : (
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                {runningWindows.map(w => {
+                  const item = DOCK_ITEMS.find(d => d.type === w.type);
+                  const Icon = item?.icon || Globe;
+                  return (
+                    <button
+                      key={w.id}
+                      onClick={() => { focusWindow(w.id); setTaskManagerOpen(false); }}
+                      className="flex flex-col gap-3 p-4 rounded-xl text-left transition-all hover:scale-[1.02]"
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: item?.color + '30' || 'rgba(255,255,255,0.1)' }}>
+                          <Icon size={20} style={{ color: item?.color || '#fff' }} />
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate" style={{ color: '#fff' }}>{w.title}</div>
+                          <div className="text-xs mt-0.5 truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>{item?.label || w.type}</div>
+                        </div>
+                      </div>
+                      {/* Mini preview area (just a colored placeholder) */}
+                      <div className="w-full h-24 rounded-lg" style={{
+                        background: `linear-gradient(135deg, ${item?.color || '#3b82f6'}40, ${item?.color || '#6366f1'}20)`,
+                        border: '1px solid rgba(255,255,255,0.06)',
+                      }}>
+                        <div className="flex items-center justify-center h-full">
+                          <Icon size={32} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
