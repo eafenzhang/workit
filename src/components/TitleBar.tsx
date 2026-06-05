@@ -37,8 +37,8 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
 
   return (
     <div
-      className="flex items-center h-10 flex-shrink-0 select-none w-full group"
-      style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)', WebkitAppRegion: 'drag' } as any}
+      className="glass flex items-center h-10 flex-shrink-0 select-none w-full group"
+      style={{ borderBottom: '1px solid var(--wiki-border)', WebkitAppRegion: 'drag' } as any}
     >
       {/* Sidebar toggle button — hidden in OS mode */}
       {!isOSMode && (

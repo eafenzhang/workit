@@ -64,7 +64,7 @@ function Sidebar({
   return (
     <aside
       data-cmp="Sidebar"
-      className="flex flex-col h-full relative transition-[width,min-width,opacity] duration-300 ease-in-out"
+      className="glass flex flex-col h-full relative transition-[width,min-width,opacity] duration-300 ease-in-out"
       style={{
         ...ASIDE_STYLE,
         width,

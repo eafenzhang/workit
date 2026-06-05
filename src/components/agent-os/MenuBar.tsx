@@ -55,11 +55,8 @@ export default function MenuBar({ isOSMode, onToggleOSMode, onOpenFinder, onOpen
 
   return (
     <div
-      className="flex items-center h-8 flex-shrink-0 select-none relative"
+      className="glass flex items-center h-8 flex-shrink-0 select-none relative"
       style={{
-        background: 'var(--wiki-surface)',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         borderBottom: '1px solid var(--wiki-border)',
         fontSize: '13px',
         color: 'var(--wiki-text2)',
