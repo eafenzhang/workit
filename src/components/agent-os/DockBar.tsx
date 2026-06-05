@@ -227,7 +227,7 @@ export default function DockBar({
           style={{ width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           title={`最近任务 (${runningWindows.length})`}
         >
-          <Layers size={22} style={{ color: 'var(--wiki-text2)' }} />
+          <Layers size={22} style={{ color: 'var(--wiki-text3)' }} />
         </button>
 
         {DOCK_ITEMS.map((item) => (
@@ -266,9 +266,7 @@ export default function DockBar({
 
           {/* Scrollable grid */}
           <div
-            className="flex-1 overflow-y-auto px-8 pb-4"
-            onClick={e => e.stopPropagation()}
-            style={{ scrollbarWidth: 'auto', msOverflowStyle: 'auto' }}
+            className="flex-1 overflow-y-auto px-8 pb-4 scrollbar-thin"
           >
             {runningWindows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
