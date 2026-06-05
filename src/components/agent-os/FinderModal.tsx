@@ -167,6 +167,7 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
             <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>
               访达
             </span>
+            <span className="text-[11px]" style={{ color: 'var(--wiki-text3)' }}>({bookmarks.length})</span>
           </div>
           <button
             onClick={animateClose}
@@ -320,7 +321,6 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
             <PlusIcon size={13} />
             新建书签
           </button>
-          <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--wiki-text3)' }}>{bookmarks.length} 个</span>
         </div>
       </div>
     </div>
