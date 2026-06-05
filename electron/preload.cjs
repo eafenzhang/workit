@@ -102,4 +102,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpConnect: (serverId) => ipcRenderer.invoke('mcp:connect', serverId),
   /** Disconnect from a specific MCP server */
   mcpDisconnect: (serverId) => ipcRenderer.invoke('mcp:disconnect', serverId),
+  // ── Browser webview new-window ── (Electron 22+ setWindowOpenHandler IPC relay)
+  onBrowserNewWindow: (cb) => {
+    const handler = (_event, url) => cb(url);
+    ipcRenderer.on('browser:new-window', handler);
+    return () => ipcRenderer.removeListener('browser:new-window', handler);
+  },
 });

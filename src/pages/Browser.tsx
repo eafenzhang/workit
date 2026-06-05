@@ -183,25 +183,22 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.addEventListener('will-navigate', handleWillNavigate);
     wv.addEventListener('did-start-loading', handleStartLoading);
     wv.addEventListener('did-stop-loading', handleStopLoading);
-    // Intercept window.open / target="_blank" → open as local tab
+    // new-window fallback (Electron < 22) — intercepted by main process on 22+
     wv.addEventListener('new-window', (e: any) => {
       const newUrl = e.url;
-      if (newUrl && /^https?:\/\//.test(newUrl)) {
-        openNewTab(newUrl);
-      }
-    });
-    wv.addEventListener('did-attach', () => {
-      try {
-        const wc = wv.getWebContents?.();
-        if (wc?.setWindowOpenHandler) {
-          wc.setWindowOpenHandler(({ url: newUrl }: { url: string }) => {
-            if (newUrl && /^https?:\/\//.test(newUrl)) openNewTab(newUrl);
-            return { action: 'deny' };
-          });
-        }
-      } catch {}
+      if (newUrl && /^https?:\/\//.test(newUrl)) openNewTab(newUrl);
     });
   }, [handleWebviewLoad, handlePageTitle, handleWillNavigate, handleStartLoading, handleStopLoading, openNewTab]);
+
+  // Listen for browser:new-window IPC from main process (Electron 22+ setWindowOpenHandler)
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onBrowserNewWindow) return;
+    const unsub = api.onBrowserNewWindow((url: string) => {
+      if (url && /^https?:\/\//.test(url)) openNewTab(url);
+    });
+    return () => { unsub?.(); };
+  }, [openNewTab]);
 
   // Create / recreate webview only on tab switch (not on tier change)
   useEffect(() => {
@@ -239,8 +236,11 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
       try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
       webviewRef.current = null;
     } else if (tier === 'warm') {
-      webviewRef.current.style.display = 'none';
+      // Use visibility:hidden instead of display:none — Chrome/Electron
+      // browserplugin reloads the page when display:none is removed.
+      webviewRef.current.style.visibility = 'hidden';
     } else {
+      webviewRef.current.style.visibility = 'visible';
       webviewRef.current.style.display = 'flex';
     }
   }, [tier]);

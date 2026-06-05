@@ -69,8 +69,19 @@ app.on('before-quit', (event) => {
 });
 
 app.on('web-contents-created', (_, contents) => {
-  // Skip webview guest WebContents — they manage their own navigation
-  if (contents.getType() === 'webview') return;
+  // Handle webview guest contents — intercept window.open / target="_blank"
+  if (contents.getType() === 'webview') {
+    contents.setWindowOpenHandler(({ url }) => {
+      const { getMainWindow: gmw } = require('./window.cjs');
+      const mw = gmw();
+      if (mw && !mw.isDestroyed()) {
+        mw.webContents.send('browser:new-window', url);
+      }
+      return { action: 'deny' };
+    });
+    return;
+  }
+  // Restrict navigation for main app windows
   contents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost:5173') && !url.startsWith('file://') && !url.startsWith('http://localhost')) event.preventDefault();
   });
