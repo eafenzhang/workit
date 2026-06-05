@@ -260,6 +260,7 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
 
     case 'SET_WINDOW_TIER': {
       const { id, tier, snapshot } = action.payload;
+      const now = Date.now();
       return {
         ...state,
         windows: state.windows.map(w => {
@@ -267,6 +268,7 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
           return {
             ...w,
             webviewTier: tier,
+            lastActiveTime: tier === 'hot' ? now : w.lastActiveTime,
             ...(snapshot !== undefined ? { snapshot } : {}),
             ...(tier !== 'cold' ? { snapshot: undefined } : {}),
           };

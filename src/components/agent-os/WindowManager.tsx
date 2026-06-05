@@ -80,18 +80,18 @@ export default function WindowManager({ dockState = 'show' }: { dockState?: Dock
           onClose={closeWindow}
           onFocus={(id) => {
             focusWindow(id);
-            // Update lastActiveTime when focused
+            // Always promote focused browser window to hot tier
             const winTarget = windows.find(w => w.id === id);
-            if (winTarget) {
-              setWindowTier(id, tier, winTarget.snapshot);
+            if (winTarget?.type === 'browser') {
+              setWindowTier(id, 'hot', winTarget.snapshot);
             }
           }}
           onMinimize={(id) => {
             minimizeWindow(id);
-            // Immediately mark as less active
+            // Demote minimized browser to warm to save resources
             const winTarget = windows.find(w => w.id === id);
             if (winTarget?.type === 'browser') {
-              setWindowTier(id, winTarget.webviewTier ?? 'hot', winTarget.snapshot);
+              setWindowTier(id, 'warm', winTarget.snapshot);
             }
           }}
           onMaximize={handleMaximize}
