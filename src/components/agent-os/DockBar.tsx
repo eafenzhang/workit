@@ -265,10 +265,13 @@ export default function DockBar({
                       setBrowserModalOpen(false);
                     }}
                   >
-                    <Globe size={15} style={{ color: 'var(--wiki-text3)', flexShrink: 0 }} />
+                    <Globe size={15} style={{ color: bw.webviewTier === 'warm' ? '#f59e0b' : 'var(--wiki-text3)', flexShrink: 0 }} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs truncate" style={{ color: 'var(--wiki-text)' }}>
+                      <div className="text-xs truncate flex items-center gap-1" style={{ color: 'var(--wiki-text)' }}>
                         {bw.title || bw.initialUrl || '新标签页'}
+                        {bw.webviewTier === 'warm' && (
+                          <span className="text-[10px] px-1 rounded" style={{ background: '#f59e0b20', color: '#f59e0b' }}>后台</span>
+                        )}
                       </div>
                       <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>
                         {bw.initialUrl || bw.params?.url || ''}
@@ -287,6 +290,32 @@ export default function DockBar({
                     </button>
                   </div>
                 ))
+              )}
+            </div>
+
+            {/* ── Footer ── */}
+            <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+              <button
+                className="flex-1 py-1.5 text-xs rounded-md hover:bg-wiki-surface2 transition-colors"
+                style={{ color: 'var(--wiki-accent)' }}
+                onClick={() => {
+                  openNewBrowserWindow();
+                  setBrowserModalOpen(false);
+                }}
+              >
+                新建窗口
+              </button>
+              {browserWindows.length > 0 && (
+                <button
+                  className="flex-1 py-1.5 text-xs rounded-md hover:bg-red-50 transition-colors"
+                  style={{ color: 'var(--wiki-danger)' }}
+                  onClick={() => {
+                    browserWindows.forEach(bw => closeWindow(bw.id));
+                    setBrowserModalOpen(false);
+                  }}
+                >
+                  关闭全部 ({browserWindows.length})
+                </button>
               )}
             </div>
           </div>
