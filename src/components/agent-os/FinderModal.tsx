@@ -115,8 +115,6 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
     setEditUrlValue(bm.url);
   }, []);
 
-  const [editUrlValue, setEditUrlValue] = useState('');
-
   const saveEdit = useCallback(() => {
     if (!editingUrl) return;
     const normalizedUrl = editUrlValue.trim();
@@ -196,7 +194,7 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
               style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}
             />
             <div className="flex gap-1">
-              <button onClick={saveNewBookmark} className="px-3 py-1 rounded text-xs" style={{ background: 'var(--wiki-accent)', color: '#fff' }}>
+              <button onClick={saveNewBookmark} className="px-3 py-1 rounded text-xs" style={{ background: 'var(--wiki-accent)', color: 'var(--wiki-bg)' }}>
                 <CheckIcon size={12} className="inline mr-1" />保存
               </button>
               <button onClick={() => { setShowNewForm(false); setNewUrl(''); setNewTitle(''); }} className="px-3 py-1 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text2)' }}>
@@ -248,7 +246,7 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
                       />
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={saveEdit} className="px-2 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-accent)', color: '#fff' }}>
+                      <button onClick={saveEdit} className="px-2 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-accent)', color: 'var(--wiki-bg)' }}>
                         <CheckIcon size={12} /> 保存
                       </button>
                       <button onClick={() => setEditingUrl(null)} className="px-2 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>

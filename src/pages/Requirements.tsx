@@ -521,10 +521,14 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
               className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors"
               style={{
                 background: filterStatus === stat.status ? stat.color : 'var(--wiki-surface)',
-                color: filterStatus === stat.status ? '#fff' : 'var(--wiki-text3)',
+                color: filterStatus === stat.status
+                  ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
+                  : 'var(--wiki-text3)',
                 border: filterStatus === stat.status ? 'none' : '1px solid var(--wiki-border)',
               }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: filterStatus === stat.status ? '#fff' : stat.color }} />
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: filterStatus === stat.status
+                ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
+                : stat.color }} />
               <span className="text-xs font-medium">{stat.label}</span>
               <span className="text-xs font-bold">{stat.count}</span>
             </div>
