@@ -271,13 +271,14 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     }
   }, [initialUrl]);
 
-  // Pause webview when hidden
+  // Keep webview alive when window is hidden — no stop(), use visibility only
   useEffect(() => {
+    if (!webviewRef.current) return;
     if (visible === false) {
-      try { webviewRef.current?.stop(); } catch {}
-      if (webviewRef.current) webviewRef.current.style.display = 'none';
+      webviewRef.current.style.visibility = 'hidden';
     } else {
-      if (webviewRef.current) webviewRef.current.style.display = 'flex';
+      webviewRef.current.style.visibility = 'visible';
+      webviewRef.current.style.display = 'flex';
     }
   }, [visible]);
 
