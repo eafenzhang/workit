@@ -203,17 +203,14 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     });
   }, [handleWebviewLoad, handlePageTitle, handleWillNavigate, handleStartLoading, handleStopLoading, openNewTab]);
 
-  // Create / recreate webview on tier change or active tab change
+  // Create / recreate webview only on tab switch (not on tier change)
   useEffect(() => {
     const container = wvContainerRef.current;
     if (!container) return;
 
     const removeWebview = () => {
       if (webviewRef.current) {
-        try {
-          webviewRef.current.stop();
-          webviewRef.current.remove();
-        } catch {}
+        try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
         webviewRef.current = null;
       }
     };
@@ -229,13 +226,24 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
     attachWebviewEvents(wv);
 
-    if (tier === 'warm') { wv.style.display = 'none'; /* keep running in background */ }
-
     container.appendChild(wv);
     webviewRef.current = wv;
 
     return () => { removeWebview(); };
-  }, [tier, activeTabId]);
+  }, [activeTabId]);
+
+  // Tier-based visibility: only hide/show, never destroy
+  useEffect(() => {
+    if (!webviewRef.current) return;
+    if (tier === 'cold') {
+      try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
+      webviewRef.current = null;
+    } else if (tier === 'warm') {
+      webviewRef.current.style.display = 'none';
+    } else {
+      webviewRef.current.style.display = 'flex';
+    }
+  }, [tier]);
 
   // ── Navigation ──
   const navigateTo = (u: string) => {
