@@ -47,6 +47,8 @@ export interface OSWindow {
   initialTab?: { type: string; reqId?: number; params?: any };
   initialView?: string;
   docId?: number;
+  /** Generic params (e.g. { url: string } for browser tabs) */
+  params?: Record<string, any>;
 }
 
 /** A single Dock bar icon entry */

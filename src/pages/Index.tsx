@@ -61,23 +61,34 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
 };
 
 export default function Index() {
-  const [tabs, setTabs] = useState<GlobalTab[]>([{ id: 'home', title: '首页', type: 'home' }]);
-  const [activeTabId, setActiveTabId] = useState('home');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showWizard, setShowWizard] = useState(false);
-
   const { userProfile, saveProfile, isLoading } = useAuth();
 
-  // Agent OS mode
-  const { state: osState, toggleOSMode, openWindow, openNewBrowserWindow } = useAgentOS();
+  // Agent OS mode — source of truth for all window/page state
+  const { state: osState, toggleOSMode, openWindow, openNewBrowserWindow, closeWindow, focusWindow } = useAgentOS();
   const isOSMode = osState.isOSMode;
+
+  // Derive classic mode tabs from OS windows (single source of truth)
+  const tabs = React.useMemo<GlobalTab[]>(() => {
+    if (osState.windows.length === 0) return [{ id: 'home', title: '首页', type: 'home' }];
+    return osState.windows.map(w => ({
+      id: w.id,
+      title: w.title,
+      type: w.type,
+      reqId: w.initialTab?.reqId,
+      docId: w.docId,
+      params: w.params || (w.initialUrl ? { url: w.initialUrl } : w.initialTab?.params),
+    }));
+  }, [osState.windows]);
+  const activeTabId = osState.activeWindowId || (tabs[0]?.id || 'home');
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const hasAutoOpenedRef = React.useRef(false);
 
   // Auto-open home window when entering OS mode for the first time
   useEffect(() => {
     if (isOSMode && osState.isInitialized && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
-      // Only open if no windows are open yet
       if (osState.windows.length === 0) {
         openWindow('home', '首页');
       }
@@ -98,61 +109,43 @@ export default function Index() {
     }
   }, [isLoading]);
 
-  // Open a tab by type — if exists, switch to it; else create new
+  // Open a tab by type → unified: always opens an OS window
   const openTab = useCallback((type: string, title: string, extra?: Partial<GlobalTab>) => {
-    setTabs(prev => {
-      const existing = prev.find(t => t.type === type && t.reqId === extra?.reqId);
-      if (existing) { setActiveTabId(existing.id); return prev; }
-      const newTab: GlobalTab = { id: type + '-' + Date.now(), title, type, ...extra };
-      setActiveTabId(newTab.id);
-      // Limit max tabs: remove oldest when exceeding MAX_TABS
-      const next = [...prev, newTab];
-      return next.length > MAX_TABS ? next.slice(next.length - MAX_TABS) : next;
-    });
-  }, []);
+    const params: Record<string, any> = { params: extra?.params };
+    if (extra?.reqId != null) params.initialTab = { type, reqId: extra.reqId, params: extra?.params };
+    if (extra?.docId != null) params.docId = extra.docId;
+    if (type.includes('knowledge-')) {
+      params.initialView = type;
+      if (extra?.docId != null) params.docId = extra.docId;
+    }
+    openWindow(type, title, params);
+  }, [openWindow]);
 
   /** Wizard completion handler */
   const handleWizardComplete = useCallback((profile: Parameters<typeof saveProfile>[0]) => {
     saveProfile(profile);
     setShowWizard(false);
-    // Open profile tab after wizard completes
     openTab('profile', '用户Agent');
   }, [saveProfile, openTab]);
 
   const closeTab = useCallback((tabId: string) => {
-    setTabs(prev => {
-      if (prev.length <= 1) return prev;
-      const idx = prev.findIndex(t => t.id === tabId);
-      const next = prev.filter(t => t.id !== tabId);
-      if (activeTabId === tabId) {
-        const newIdx = Math.min(idx, next.length - 1);
-        setActiveTabId(next[newIdx]?.id || 'home');
-      }
-      return next;
-    });
-  }, [activeTabId]);
+    // Don't close the last tab
+    if (tabs.length <= 1) return;
+    closeWindow(tabId);
+  }, [tabs.length, closeWindow]);
 
-  const switchTab = useCallback((tabId: string) => setActiveTabId(tabId), []);
+  const switchTab = useCallback((tabId: string) => focusWindow(tabId), [focusWindow]);
 
-  // Update browser tab URL in params (persists across tab switches)
+  // Browser handlers — unused in classic mode now (Browser component handles its own state)
   const updateBrowserUrl = useCallback((tabId: string, url: string) => {
-    setTabs(prev => prev.map(t =>
-      t.id === tabId && t.type === 'browser'
-        ? { ...t, params: { ...t.params, url } }
-        : t
-    ));
+    // Browser component handles URL independently via AgentOSContext
   }, []);
 
-  // Update browser tab title from webview page title
   const updateBrowserTitle = useCallback((tabId: string, title: string) => {
-    setTabs(prev => prev.map(t =>
-      t.id === tabId && t.type === 'browser'
-        ? { ...t, title: title.substring(0, 20) || '浏览器' }
-        : t
-    ));
+    // Browser component handles title independently via AgentOSContext
   }, []);
 
-  // Sidebar menu click → open tab
+  // Sidebar menu click → open tab/window
   const handleMenuClick = useCallback((menuType: string, menuTitle: string) => {
     openTab(menuType, menuTitle);
   }, [openTab]);
@@ -212,9 +205,9 @@ export default function Index() {
         );
       })}
       </div>
-      {/* Close all tabs — browser-style, same size/position */}
+      {/* Close all tabs */}
       {tabs.length > 1 && (
-        <button onClick={() => { setTabs([{ id: 'home', title: '首页', type: 'home' }]); setActiveTabId('home'); }}
+        <button onClick={() => { osState.windows.filter(w => w.type !== 'home').forEach(w => closeWindow(w.id)); }}
           className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors"
           style={{ WebkitAppRegion: 'no-drag', color: 'var(--wiki-text3)' } as any}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; (e.currentTarget as HTMLElement).style.background = 'var(--wiki-surface2)'; }}

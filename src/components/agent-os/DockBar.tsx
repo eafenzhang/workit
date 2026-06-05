@@ -271,7 +271,7 @@ export default function DockBar({
                         {bw.title || bw.initialUrl || '新标签页'}
                       </div>
                       <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>
-                        {bw.initialUrl || bw.url || ''}
+                        {bw.initialUrl || bw.params?.url || ''}
                       </div>
                     </div>
                     <button
