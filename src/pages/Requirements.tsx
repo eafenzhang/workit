@@ -323,16 +323,12 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     ];
   }, [allStatusCounts]);
 
-  // Open detail — fall back to local view when onOpenSubTab not available (classic mode)
+  // Open detail — always use local view to stay in the same page context
   const openDetail = useCallback((req: Requirement) => {
-    if (onOpenSubTab) {
-      onOpenSubTab(req.aiSummary || req.title?.substring(0, 20) || '详情', 'requirements-detail', { reqId: req.id });
-    } else {
-      setDetailBlocks(req.contentBlocks);
-      setLocalReqId(req.id);
-      setLocalView('requirements-detail');
-    }
-  }, [onOpenSubTab]);
+    setDetailBlocks(req.contentBlocks);
+    setLocalReqId(req.id);
+    setLocalView('requirements-detail');
+  }, []);
 
   const openCreate = () => {
     if (onOpenSubTab) {
@@ -363,7 +359,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
 
   const openEdit = useCallback((req: Requirement) => {
     setEditingReq(req);
-    setForm({ title: req.title || '', desc: req.desc, module: req.module || '用户端', priority: req.priority, remark: req.desc || '' });
+    setForm({ title: req.title || '', desc: req.desc, module: req.module || '用户端', priority: req.priority, remark: '' });
     setImages(req.images || []);
     setDetailBlocks(req.contentBlocks);
     setLocalView('requirements-edit');
@@ -602,59 +598,60 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   if (viewType === 'requirements-detail' && detailReq) {
     return (
       <div data-cmp="RequirementsDetail" className="flex flex-col h-full">
-        <div className="flex items-center gap-3 px-8 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center gap-2 px-8 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+          {/* Back button — icon only, before title */}
+          <button onClick={() => { setLocalView(null); setLocalReqId(null); }} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="返回列表">
+            <ChevronLeftIcon size={18} style={{ color: 'var(--wiki-text2)' }} />
+          </button>
           <div className="flex-1 min-w-0">
             <div className="text-base font-bold text-wiki-text truncate">{detailReq.title}</div>
             <div className="flex flex-wrap gap-2 mt-1.5">
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: statusConfig[detailReq.status]?.bg, color: statusConfig[detailReq.status]?.color }}>{detailReq.status}</span>
+              {/* Next-status arrow */}
+              {(() => {
+                const so = ['待评估','设计中','实现中','测试中','已完成'];
+                const ci = so.indexOf(detailReq.status);
+                if (ci < so.length - 1) {
+                  const nextStep = so[ci + 1];
+                  return (
+                    <button onClick={() => { setRemarkModal({ step: nextStep, reqId: detailReq.id }); setRemarkText(''); }}
+                      className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0" title={`流转到${nextStep}`}>
+                      <ChevronRightIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: priorityConfig[detailReq.priority]?.bg, color: priorityConfig[detailReq.priority]?.color }}>{detailReq.priority}</span>
             </div>
           </div>
-          {/* Action buttons */}
-          <button onClick={() => handleAnalyze(detailReq)} disabled={analyzing} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: analyzing ? 'var(--wiki-surface2)' : 'rgba(99,102,241,0.12)', color: analyzing ? 'var(--wiki-text2)' : '#6366f1' }}>
-            <SparklesIcon size={13} /><span>{analyzing ? '分析中...' : 'AI分析'}</span>
+          {/* Action buttons — icon only */}
+          <button onClick={() => handleAnalyze(detailReq)} disabled={analyzing} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="AI分析" style={{ color: analyzing ? 'var(--wiki-text2)' : '#6366f1' }}>
+            <SparklesIcon size={15} />
           </button>
-          <button onClick={() => openEdit(detailReq)} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
-            <EditIcon size={13} /> 编辑
+          <button onClick={() => openEdit(detailReq)} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="编辑">
+            <EditIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
           </button>
-          <button onClick={() => handleDelete(detailReq.id)} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-            <TrashIcon size={13} /> 删除
-          </button>
-          <button onClick={onCloseSelf} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
-            <ChevronLeftIcon size={14} /> 返回列表
+          <button onClick={() => handleDelete(detailReq.id)} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="删除">
+            <TrashIcon size={15} style={{ color: '#ef4444' }} />
           </button>
         </div>
-        {/* Workflow — 流转 */}
-        <div className="px-8 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-wiki-text3 flex-shrink-0">流转:</span>
-            {['待评估','设计中','实现中','测试中','已完成'].map((step, i) => {
-              const so = ['待评估','设计中','实现中','测试中','已完成'];
-              const ci = so.indexOf(detailReq.status);
-              const done = i < ci; const cur = i === ci;
-              const statusCfg = statusConfig[step] || statusConfig['待评估'];
-              const StepIcon = statusCfg.icon;
-              return (
-                <button key={step} onClick={async () => {
-                  if (done || cur || i > ci + 1) return;
-                  setRemarkModal({ step, reqId: detailReq.id });
-                  setRemarkText('');
-                }}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors"
-                  style={{
-                    background: done ? '#10b98120' : cur ? 'var(--wiki-text)' : 'transparent',
-                    color: done ? '#10b981' : cur ? 'var(--wiki-bg)' : i === ci + 1 ? 'var(--wiki-text2)' : 'var(--wiki-text3)',
-                    cursor: i === ci + 1 ? 'pointer' : 'default',
-                  }}>
-                  <StepIcon size={12} />
-                  <span>{step}</span>
-                  {done && <span className="text-[10px]">✓</span>}
-                </button>
-              );
-            })}
+        {/* Workflow history — compact progress track */}
+        {detailReq.workflowHistory?.length > 0 && (
+          <div className="px-8 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+            <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>
+              {detailReq.workflowHistory.map((h, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <span>→</span>}
+                  <span>{h.from}</span>
+                </span>
+              ))}
+              <span>→</span>
+              <span style={{ color: 'var(--wiki-text)' }}>{detailReq.status}</span>
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
           <div className="flex flex-col gap-4">
             {(detailReq.aiSummary || (detailReq.aiTags?.length > 0)) && (
