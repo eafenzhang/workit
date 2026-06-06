@@ -158,6 +158,35 @@ const MemoizedContentBlocks = memo(function MemoizedContentBlocks({
   return <ContentBlockRenderer blocks={blocks} />;
 });
 
+function WorkflowHistory({ history, currentStatus }: { history: { from: string; to: string; handler: string; time: string; memo?: string; at?: string }[]; currentStatus: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="px-8 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+      <button onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 text-xs text-wiki-text3 hover:text-wiki-text2 transition-colors w-full">
+        <ChevronDownIcon size={10} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+        <span>操作记录 ({history.length})</span>
+      </button>
+      {expanded && (
+        <div className="mt-2 flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
+          {history.map((h, i) => (
+            <div key={i} className="flex items-start gap-2 text-[11px] py-1 px-2 rounded" style={{ background: 'var(--wiki-surface2)' }}>
+              <span className="px-1 py-0.5 rounded text-[10px] flex-shrink-0" style={{ background: statusConfig[h.from]?.bg || 'var(--wiki-surface)', color: statusConfig[h.from]?.color || 'var(--wiki-text3)' }}>{h.from}</span>
+              <span style={{ color: 'var(--wiki-text3)' }}>→</span>
+              <span className="px-1 py-0.5 rounded text-[10px] flex-shrink-0" style={{ background: statusConfig[h.to]?.bg || 'var(--wiki-surface)', color: statusConfig[h.to]?.color || 'var(--wiki-text3)' }}>{h.to}</span>
+              <span className="flex-1 min-w-0 text-wiki-text3 ml-1">
+                {h.handler && <span className="mr-2">{h.handler}</span>}
+                {h.time && <span className="mr-2">{h.time}</span>}
+                {h.memo && <span className="text-wiki-text2">{h.memo}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const { user } = useAuth();
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -175,7 +204,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const [moduleSidebar, setModuleSidebar] = useState(false); // collapsible module sidebar
+  const [moduleSidebarOpen, setModuleSidebarOpen] = useState(false); // default collapsed, like Knowledge sidebar
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -371,6 +400,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     setDetailBlocks(req.contentBlocks);
     setLocalView('requirements-edit');
     setLocalReqId(req.id);
+    setRemarkModal(null); // ensure edit doesn't trigger status flow
   }, []);
 
   // CRUD
@@ -421,7 +451,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     if (!editingReq) return;
     apiFetch(`/api/requirements/${editingReq.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: form.title || editingReq.title, desc: form.desc, module: form.module, priority: form.priority, images }),
+      body: JSON.stringify({ title: form.title || editingReq.title, desc: form.desc, module: form.module, priority: form.priority, status: editingReq.status, images }),
     }).then(r => r.json()).then(() => {
       setEditingReq(null); resetForm(); fetchPage(currentPage);
       // Return to detail view (not close the tab)
@@ -538,31 +568,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           </div>
         )}
-        {/* Module management */}
-        <div className="mx-8 mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-wiki-text3 flex-shrink-0">模块管理:</span>
-            {moduleList.map(m => (
-              <div key={m.id} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
-                style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                <span className="text-wiki-text2">{m.name}</span>
-                <button onClick={() => setModuleEdit({ id: m.id, name: m.name })} className="opacity-50 hover:opacity-100 ml-0.5" title="编辑">✎</button>
-                <button onClick={() => handleDeleteModule(m.id, m.name)} className="opacity-50 hover:opacity-100 text-red-400" title="删除">×</button>
-              </div>
-            ))}
-            <button onClick={handleAddModule} className="text-xs px-2 py-0.5 rounded border border-dashed"
-              style={{ color: 'var(--wiki-text3)', borderColor: 'var(--wiki-border)' }}>+ 添加</button>
-          </div>
-        </div>
-        {moduleEdit && (
-          <div className="mx-8 mb-4 flex items-center gap-2">
-            <input autoFocus className="text-xs px-2 py-1 rounded outline-none" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-              value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
-              onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
-            <button onClick={handleEditModule} className="text-xs px-2 py-1 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
-            <button onClick={() => setModuleEdit(null)} className="text-xs px-2 py-1 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-          </div>
-        )}
         <div className="flex gap-3 mb-4 px-8">
           {statusStats.map((stat) => (
             <div key={stat.label} onClick={() => setFilterStatus(stat.status === filterStatus ? '全部' : stat.status)}
@@ -582,34 +587,67 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           ))}
         </div>
-        <div className="flex flex-1 min-h-0 px-8 gap-3">
-          {/* Module sidebar — collapsible */}
-          <div className="flex-shrink-0 flex flex-col" style={{ width: moduleSidebar ? '140px' : '28px', transition: 'width 0.2s' }}>
-            <button onClick={() => setModuleSidebar(!moduleSidebar)}
-              className="w-full flex items-center gap-1 py-1 text-xs text-wiki-text3 hover:text-wiki-text2"
-              title={moduleSidebar ? '收起模块' : '展开模块'}>
-              {moduleSidebar ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
-              {moduleSidebar && <span>模块</span>}
+        <div className="flex flex-1 min-h-0 px-8 gap-0">
+          {/* Module sidebar — Knowledge-style, default collapsed */}
+          <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: moduleSidebarOpen ? '180px' : '30px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none' }}>
+            <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
+              className="flex items-center gap-1.5 py-2 px-1 text-xs text-wiki-text3 hover:text-wiki-text2 border-b"
+              style={{ borderColor: moduleSidebarOpen ? 'var(--wiki-border)' : 'transparent' }}
+              title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
+              {moduleSidebarOpen ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
+              {moduleSidebarOpen && <span className="font-medium uppercase tracking-wider text-[10px]">模块</span>}
             </button>
-            {moduleSidebar && (
-              <div className="flex-1 overflow-y-auto scrollbar-thin mt-1">
-                <div onClick={() => setFilterCategory('全部')} className={`text-xs py-1 px-2 rounded cursor-pointer transition-colors ${filterCategory === '全部' ? '' : ''}`}
-                  style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text3)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
-                  全部 ({totalCount})
+            {moduleSidebarOpen && (
+              <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 flex flex-col gap-0.5">
+                <div onClick={() => setFilterCategory('全部')}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
+                  style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
+                  <span className="flex-1">全部</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: filterCategory === '全部' ? 'var(--wiki-border)' : 'var(--wiki-surface2)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
                 </div>
-                {modules.map(m => (
-                  <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
-                    className="text-xs py-1 px-2 rounded cursor-pointer transition-colors truncate"
-                    style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text3)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
-                    title={m}>
-                    {m}
+                {modules.map(m => {
+                  const mdl = moduleList.find(ml => ml.name === m);
+                  return (
+                    <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
+                      className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors truncate"
+                      style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
+                      title={m}>
+                      <span className="flex-1 truncate">{m}</span>
+                      {mdl && (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); setModuleEdit({ id: mdl.id, name: mdl.name }); }}
+                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-wiki-text" style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
+                          <button onClick={e => { e.stopPropagation(); handleDeleteModule(mdl.id, mdl.name); }}
+                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-red-500" style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {moduleSidebarOpen && (
+              <div className="flex items-center gap-1 px-2 py-2 border-t flex-shrink-0" style={{ borderColor: 'var(--wiki-border)' }}>
+                <button onClick={handleAddModule}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
+                  <PlusIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+                </button>
+                {moduleEdit && (
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <input autoFocus className="text-[10px] px-1.5 py-0.5 rounded outline-none flex-1 min-w-0"
+                      style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+                      value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
+                      onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
+                    <button onClick={handleEditModule} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
+                    <button onClick={() => setModuleEdit(null)} className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
           {/* List */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 pb-6" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 pb-6 pl-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {requirements.map((req) => (
             <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
               onPriorityChange={(reqId, p) => {
@@ -647,7 +685,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <div className="text-base font-bold text-wiki-text truncate">{detailReq.title}</div>
             <div className="flex flex-wrap gap-2 mt-1.5">
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: statusConfig[detailReq.status]?.bg, color: statusConfig[detailReq.status]?.color }}>{detailReq.status}</span>
               {/* Next-status transition button */}
               {(() => {
                 const so = ['待评估','设计中','实现中','测试中','已完成'];
@@ -705,6 +742,10 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             })}
           </div>
         </div>
+        {/* Workflow history — expandable */}
+        {(detailReq.workflowHistory?.length ?? 0) > 0 && (
+          <WorkflowHistory history={detailReq.workflowHistory!} currentStatus={detailReq.status} />
+        )}
         <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
           <div className="flex flex-col gap-4">
             {(detailReq.aiSummary || (detailReq.aiTags?.length > 0)) && (
