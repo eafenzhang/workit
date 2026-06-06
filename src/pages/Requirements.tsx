@@ -84,46 +84,47 @@ const statusConfig: Record<string, { color: string; bg: string; icon: typeof Che
 };
 
 const priorityConfig: Record<string, { color: string; bg: string }> = {
+  '无': { color: `var(--wiki-text3)`, bg: `rgba(128,128,128,0.1)` },
   '高': { color: `#ef4444`, bg: `rgba(239,68,68,0.12)` },
   '中': { color: `#f59e0b`, bg: `rgba(245,158,11,0.12)` },
   '低': { color: `#10b981`, bg: `rgba(16,185,129,0.12)` },
 };
 
-const priorities = ['高', '中', '低'];
+const priorities = ['无', '高', '中', '低'];
 
-// Memoized list item to avoid re-rendering all items on any state change
+// Memoized list item
 const ReqListItem = memo(function ReqListItem({
-  req, onOpen, formatDate,
+  req, onOpen, formatDate, onPriorityChange,
 }: {
   req: Requirement;
   onOpen: (req: Requirement) => void;
   formatDate: (d: string) => string;
-  onPriorityChange?: (req: Requirement, p: string) => void;
+  onPriorityChange?: (reqId: number, p: string) => void;
 }) {
-  const statusCfg = statusConfig[req.status] || statusConfig['待评估'];
   const priorityCfg = priorityConfig[req.priority] || priorityConfig['中'];
-  const StatusIcon = statusCfg.icon;
+  const statusCfg = statusConfig[req.status] || statusConfig['待评估'];
   return (
     <div onClick={() => onOpen(req)}
       className="px-4 py-2.5 rounded-lg cursor-pointer transition-colors duration-150 group flex items-center gap-3"
       style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--wiki-surface2)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'var(--wiki-surface)'; }}>
-      {/* Left: status icon — vertically centered */}
-      <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: statusCfg.bg }}>
-        <StatusIcon size={13} style={{ color: statusCfg.color }} />
+      {/* Left: priority badge with inline edit */}
+      <div className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>
+        <select
+          value={req.priority}
+          onChange={e => onPriorityChange?.(req.id, e.target.value)}
+          className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none text-center"
+          style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none', width: '28px' }}
+          title="修改优先级">
+          {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
       </div>
-      {/* Right: content */}
+      {/* Content */}
       <div className="flex-1 min-w-0">
-        {/* Row 1: title + priority */}
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-wiki-text truncate flex-1">{req.title}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 cursor-pointer hover:opacity-80"
-            style={{ background: priorityCfg.bg, color: priorityCfg.color }}
-            onClick={e => { e.stopPropagation(); }}
-            title="点击修改优先级">{req.priority}</span>
         </div>
-        {/* Row 2: description | meta */}
         <div className="flex items-center gap-3 mt-1">
           <span className="text-xs text-wiki-text3 line-clamp-1 flex-1">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</span>
           <div className="flex items-center gap-2 text-xs text-wiki-text3 flex-shrink-0">
@@ -133,6 +134,11 @@ const ReqListItem = memo(function ReqListItem({
           </div>
         </div>
       </div>
+      {/* Right: status text badge */}
+      <span className="text-[10px] font-medium px-2 py-0.5 rounded flex-shrink-0"
+        style={{ background: statusCfg.bg, color: statusCfg.color }}>
+        {req.status}
+      </span>
     </div>
   );
 });
@@ -169,6 +175,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilter, setShowFilter] = useState(false);
+  const [moduleSidebar, setModuleSidebar] = useState(false); // collapsible module sidebar
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -178,7 +185,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   // Status counts from API (unfiltered, for the status bar)
   const [allStatusCounts, setAllStatusCounts] = useState<Record<string, number>>({ '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 });
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
-  const [form, setForm] = useState({ title: '', desc: '', module: '用户端', priority: '中', remark: '' });
+  const [form, setForm] = useState({ title: '', desc: '', module: '用户端', priority: '无', remark: '' });
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -431,7 +438,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     });
   };
 
-  const resetForm = () => { setForm({ title: '', desc: '', module: '用户端', priority: '中', remark: '' }); setImages([]); };
+  const resetForm = () => { setForm({ title: '', desc: '', module: '用户端', priority: '无', remark: '' }); setImages([]); };
 
   const uploadFile = async (file: File) => {
     setUploading(true);
@@ -575,10 +582,43 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           ))}
         </div>
-        <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 px-8 pb-6" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          {requirements.map((req) => (
-            <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate} />
+        <div className="flex flex-1 min-h-0 px-8 gap-3">
+          {/* Module sidebar — collapsible */}
+          <div className="flex-shrink-0 flex flex-col" style={{ width: moduleSidebar ? '140px' : '28px', transition: 'width 0.2s' }}>
+            <button onClick={() => setModuleSidebar(!moduleSidebar)}
+              className="w-full flex items-center gap-1 py-1 text-xs text-wiki-text3 hover:text-wiki-text2"
+              title={moduleSidebar ? '收起模块' : '展开模块'}>
+              {moduleSidebar ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
+              {moduleSidebar && <span>模块</span>}
+            </button>
+            {moduleSidebar && (
+              <div className="flex-1 overflow-y-auto scrollbar-thin mt-1">
+                <div onClick={() => setFilterCategory('全部')} className={`text-xs py-1 px-2 rounded cursor-pointer transition-colors ${filterCategory === '全部' ? '' : ''}`}
+                  style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text3)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
+                  全部 ({totalCount})
+                </div>
+                {modules.map(m => (
+                  <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
+                    className="text-xs py-1 px-2 rounded cursor-pointer transition-colors truncate"
+                    style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text3)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
+                    title={m}>
+                    {m}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* List */}
+          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 pb-6" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {requirements.map((req) => (
+            <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
+              onPriorityChange={(reqId, p) => {
+                apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
+                  setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, priority: p } : r));
+                });
+              }} />
           ))}
+          </div>
         </div>
         {totalCount > pageSize && (
           <div className="flex items-center justify-center gap-3 px-6 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
