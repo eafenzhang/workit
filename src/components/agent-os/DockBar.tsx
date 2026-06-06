@@ -224,10 +224,10 @@ export default function DockBar({
         <button
           onClick={openTaskManager}
           className="transition-all duration-200 hover:scale-110"
-          style={{ width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           title={`最近任务 (${runningWindows.length})`}
         >
-          <Layers size={22} style={{ color: 'var(--wiki-text3)' }} />
+          <Layers size={26} style={{ color: 'var(--wiki-text3)' }} />
         </button>
 
         {DOCK_ITEMS.map((item) => (
@@ -260,7 +260,7 @@ export default function DockBar({
           {/* Title */}
           <div className="flex-shrink-0 pt-12 pb-4 text-center" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>
-              最近任务 ({runningWindows.length})
+              最近任务
             </h2>
           </div>
 

@@ -163,9 +163,8 @@ export default function FinderModal({ isOpen, onClose, onOpenUrl }: FinderModalP
           <div className="flex items-center gap-2">
             <BookmarkIcon size={16} style={{ color: 'var(--wiki-text2)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>
-              访达
+              访达 ({bookmarks.length})
             </span>
-            <span className="text-[11px]" style={{ color: 'var(--wiki-text3)' }}>({bookmarks.length})</span>
           </div>
           <button
             onClick={animateClose}
