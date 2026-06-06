@@ -178,10 +178,13 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   // Status counts from API (unfiltered, for the status bar)
   const [allStatusCounts, setAllStatusCounts] = useState<Record<string, number>>({ '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 });
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
-  const [form, setForm] = useState({ title: '', desc: '', module: '用户端', priority: '中' });
+  const [form, setForm] = useState({ title: '', desc: '', module: '用户端', priority: '中', remark: '' });
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  // Status transition remark modal
+  const [remarkModal, setRemarkModal] = useState<{ step: string; reqId: number } | null>(null);
+  const [remarkText, setRemarkText] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewIdx, setPreviewIdx] = useState(0);
   // Dynamic modules from API
@@ -320,18 +323,47 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     ];
   }, [allStatusCounts]);
 
-  // Open detail in parent tab
+  // Open detail — fall back to local view when onOpenSubTab not available (classic mode)
   const openDetail = useCallback((req: Requirement) => {
-    onOpenSubTab?.(req.aiSummary || req.title?.substring(0, 20) || '详情', 'requirements-detail', { reqId: req.id });
+    if (onOpenSubTab) {
+      onOpenSubTab(req.aiSummary || req.title?.substring(0, 20) || '详情', 'requirements-detail', { reqId: req.id });
+    } else {
+      setDetailBlocks(req.contentBlocks);
+      setLocalReqId(req.id);
+      setLocalView('requirements-detail');
+    }
   }, [onOpenSubTab]);
 
   const openCreate = () => {
-    onOpenSubTab?.('新建条目', 'requirements-create');
+    if (onOpenSubTab) {
+      onOpenSubTab?.('新建条目', 'requirements-create');
+    } else {
+      resetForm();
+      setLocalReqId(null);
+      setLocalView('requirements-create');
+    }
   };
+
+  // Status transition with remark modal
+  const executeTransition = useCallback(async () => {
+    if (!remarkModal || !detailReq) return;
+    const { step, reqId } = remarkModal;
+    const body: any = { title: detailReq.title, desc: detailReq.desc, module: detailReq.module, priority: detailReq.priority, status: step, assignee: detailReq.assignee, workflow_handler: detailReq.assignee, images: detailReq.images };
+    const note = remarkText.trim();
+    body.workflow_history = JSON.stringify([...(detailReq.workflowHistory || []), { from: detailReq.status, to: step, at: new Date().toISOString(), memo: note, handler: detailReq.assignee }]);
+    try {
+      await apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, status: step, workflowHistory: [...(r.workflowHistory || []), { from: r.status, to: step, handler: detailReq.assignee, time: new Date().toLocaleString('zh-CN') }] } : r));
+      fetchPage(currentPage);
+      toast.success(`已流转到「${step}」`);
+    } catch { toast.error('流转失败'); }
+    setRemarkModal(null);
+    setRemarkText('');
+  }, [remarkModal, remarkText, detailReq, currentPage, fetchPage]);
 
   const openEdit = useCallback((req: Requirement) => {
     setEditingReq(req);
-    setForm({ title: req.title || '', desc: req.desc, module: req.module || '用户端', priority: req.priority });
+    setForm({ title: req.title || '', desc: req.desc, module: req.module || '用户端', priority: req.priority, remark: req.desc || '' });
     setImages(req.images || []);
     setDetailBlocks(req.contentBlocks);
     setLocalView('requirements-edit');
@@ -403,20 +435,33 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     });
   };
 
-  const resetForm = () => { setForm({ title: '', desc: '', module: '用户端', priority: '中' }); setImages([]); };
+  const resetForm = () => { setForm({ title: '', desc: '', module: '用户端', priority: '中', remark: '' }); setImages([]); };
 
-  const uploadImage = async (file: File) => {
-    setUploading(true); const formData = new FormData(); formData.append('image', file);
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
     try {
-      const res = await apiFetch('/api/requirements/upload-image', { method: 'POST', body: formData });
-      const data = await res.json(); setImages(prev => [...prev, data.url]);
-      toast.success('图片上传成功');
-    } catch { toast.error('图片上传失败'); }
+      const res = await apiFetch('/api/requirements/upload-file', { method: 'POST', body: formData });
+      const data = await res.json();
+      setImages(prev => [...prev, data.url]);
+      toast.success('上传成功');
+    } catch {
+      // Fallback: try legacy image endpoint
+      try {
+        const formData2 = new FormData();
+        formData2.append('image', file);
+        const res2 = await apiFetch('/api/requirements/upload-image', { method: 'POST', body: formData2 });
+        const data2 = await res2.json();
+        setImages(prev => [...prev, data2.url]);
+        toast.success('上传成功');
+      } catch { toast.error('上传失败'); }
+    }
     finally { setUploading(false); }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) Array.from(e.target.files).forEach(f => uploadImage(f));
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) Array.from(e.target.files).forEach(f => uploadFile(f));
   };
 
   const removeImage = (url: string) => { setImages(prev => prev.filter(u => u !== url)); };
@@ -593,21 +638,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
               return (
                 <button key={step} onClick={async () => {
                   if (done || cur || i > ci + 1) return;
-                  const memo = prompt(`流转到「${step}」\n请输入备注（可选）:`);
-                  if (memo === null) return; // user cancelled
-                  const body: any = { title: detailReq.title, desc: detailReq.desc, module: detailReq.module, priority: detailReq.priority, status: step, assignee: detailReq.assignee, workflow_handler: detailReq.assignee, images: detailReq.images };
-                  if (memo) body.workflow_history = JSON.stringify([...(detailReq.workflowHistory || []), { from: detailReq.status, to: step, at: new Date().toISOString(), memo, handler: detailReq.assignee }]);
-                  try {
-                    await apiFetch(`/api/requirements/${detailReq.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                    // Update local state immediately for instant UI feedback
-                    setRequirements(prev => prev.map(r =>
-                      r.id === detailReq.id
-                        ? { ...r, status: step, workflowHistory: [...(r.workflowHistory || []), { from: r.status, to: step, handler: detailReq.assignee, time: new Date().toLocaleString('zh-CN') }] }
-                        : r
-                    ));
-                    fetchPage(currentPage); // refresh list in background
-                    toast.success(`已流转到「${step}」`);
-                  } catch { toast.error('流转失败'); }
+                  setRemarkModal({ step, reqId: detailReq.id });
+                  setRemarkText('');
                 }}
                   className="flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors"
                   style={{
@@ -674,7 +706,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
           </div>
           {images.length > 0 && (<div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">图片附件</div><div className="flex flex-wrap gap-2">{images.map((img, i) => (<div key={i} className="relative"><img src={img} className="w-20 h-20 rounded object-cover cursor-pointer hover:opacity-80" onClick={() => { previewImages.current = images; setPreviewIdx(i); setPreviewImage(img); }} /><button onClick={() => removeImage(img)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs">×</button></div>))}</div></div>)}
           <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">描述</div><textarea className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none" style={{ background: 'transparent', border: 'none' }} rows={6} placeholder="详细描述内容..." value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} /></div>
-          <div><input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleImageSelect} /><button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={13} /> 添加图片附件</button></div>
+          <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}><div className="text-xs text-wiki-text3 mb-2">备注</div><textarea className="w-full px-3 py-2 rounded-lg text-xs text-wiki-text outline-none resize-none" style={{ background: 'transparent', border: 'none' }} rows={3} placeholder="备注信息（可选）..." value={form.remark} onChange={e => setForm({ ...form, remark: e.target.value })} /></div>
+          <div><input type="file" ref={fileInputRef} accept="*/*" multiple className="hidden" onChange={handleFileSelect} /><button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}><ImageIcon size={13} /> 添加附件</button></div>
         </div>
       </div>
       {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}>
@@ -684,6 +717,27 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
         {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
         <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
       </div>)}
+
+      {/* ── Status transition remark modal ── */}
+      {remarkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }} onClick={() => setRemarkModal(null)}>
+          <div className="w-[380px] rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-wiki-text mb-3">流转到「{remarkModal.step}」</h3>
+            <textarea
+              value={remarkText}
+              onChange={e => setRemarkText(e.target.value)}
+              placeholder="输入备注（可选）..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-none"
+              style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+            />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setRemarkModal(null)} className="flex-1 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+              <button onClick={executeTransition} className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>确认流转</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
