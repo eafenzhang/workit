@@ -6,7 +6,7 @@ import DockIcon from './DockIcon';
 // ── Filled icons with brand colors ──
 
 import {
-  Home,
+  Bot,
   Sparkles,
   Database,
   Lightbulb,
@@ -22,7 +22,7 @@ import {
 // ── Dock items with filled icons and brand colors ──
 
 const DOCK_ITEMS: (DockItem & { color: string })[] = [
-  { id: 'home', label: '首页', icon: Home, type: 'home', color: '#6366f1' },
+  { id: 'home', label: '首页', icon: Bot, type: 'home', color: '#6366f1' },
   { id: 'requirements', label: '采集库', icon: Sparkles, type: 'requirements', color: '#f59e0b' },
   { id: 'knowledge', label: '知识库', icon: Database, type: 'knowledge', color: '#10b981' },
   { id: 'insights', label: '洞察分析', icon: Lightbulb, type: 'insights', color: '#8b5cf6' },

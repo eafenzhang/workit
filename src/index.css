@@ -127,10 +127,10 @@
 /* Dark mode - Claude Code style: pure black, minimal, professional */
 .dark {
   /* Pure black background, white text */
-  --wiki-bg: #000000;
-  --wiki-surface: #0a0a0a;
-  --wiki-surface2: #222222;
-  --wiki-border: rgba(255, 255, 255, 0.1);
+  --wiki-bg: #0d0d0d;
+  --wiki-surface: #161616;
+  --wiki-surface2: #2a2a2a;
+  --wiki-border: rgba(255, 255, 255, 0.08);
   --wiki-accent: #ffffff;
   --wiki-accent2: rgba(255, 255, 255, 0.8);
   --wiki-accent3: rgba(255, 255, 255, 0.4);
@@ -148,20 +148,20 @@
   --wiki-overlay: rgba(0, 0, 0, 0.5);
   --wiki-overlay-heavy: rgba(0, 0, 0, 0.92);
 
-  --background: #000000;
+  --background: #0d0d0d;
   --foreground: #ffffff;
-  --card: #0a0a0a;
+  --card: #161616;
   --card-foreground: #ffffff;
-  --popover: #141414;
+  --popover: #1a1a1a;
   --popover-foreground: #ffffff;
   --primary: #ffffff;
-  --primary-foreground: #000000;
-  --secondary: #141414;
+  --primary-foreground: #0d0d0d;
+  --secondary: #1a1a1a;
   --secondary-foreground: #ffffff;
-  --muted: #141414;
+  --muted: #1a1a1a;
   --muted-foreground: rgba(255, 255, 255, 0.5);
   --accent: #ffffff;
-  --accent-foreground: #000000;
+  --accent-foreground: #0d0d0d;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.1);
@@ -172,13 +172,13 @@
   --chart-3: rgba(255, 255, 255, 0.4);
   --chart-4: rgba(255, 255, 255, 0.2);
   --chart-5: rgba(255, 255, 255, 0.1);
-  --sidebar: #0a0a0a;
+  --sidebar: #161616;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #141414;
+  --sidebar-primary-foreground: #0d0d0d;
+  --sidebar-accent: #1a1a1a;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: rgba(255, 255, 255, 0.3);
   --shadow-color: transparent;
   --shadow-x: 0px;
@@ -283,7 +283,7 @@
     -webkit-backdrop-filter: blur(20px) saturate(160%);
   }
   .dark .glass {
-    background: rgba(10, 10, 10, 0.78);
+    background: rgba(14, 14, 14, 0.82);
   }
   .glass-subtle {
     background: rgba(255, 255, 255, 0.5);
@@ -291,7 +291,7 @@
     -webkit-backdrop-filter: blur(12px) saturate(140%);
   }
   .dark .glass-subtle {
-    background: rgba(10, 10, 10, 0.6);
+    background: rgba(14, 14, 14, 0.65);
   }
   /* Fade animation utilities */
   .fade-enter {
