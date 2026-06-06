@@ -519,135 +519,132 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   // ---- List View ----
   if (viewType === 'requirements' || viewType === 'requirements-list') {
     return (
-      <div data-cmp="Requirements" className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-4 px-8 pt-8">
-          <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪采集条目</p></div>
-          <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><PlusIcon size={16} /><span>新建条目</span></button>
-        </div>
-        <div className="flex items-center gap-3 mb-4 px-8">
-          <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
-            <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
-            {searchInput && <button onClick={() => { setSearchInput(''); setSearch(''); }} className="text-wiki-text3 hover:text-wiki-text transition-colors"><XIcon size={14} /></button>}
-          </div>
-          <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-            style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)`, color: `var(--wiki-text2)` }}>
-            <FilterIcon size={14} /><span>筛选</span>
-            <ChevronDownIcon size={12} style={{ transform: showFilter ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+      <div data-cmp="Requirements" className="flex h-full overflow-hidden">
+        {/* Module sidebar — entire page left, Knowledge-style */}
+        <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
+          style={{ width: moduleSidebarOpen ? '180px' : '32px', borderRight: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
+          <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
+            className="flex items-center gap-1.5 py-2 px-1.5 text-xs text-wiki-text3 hover:text-wiki-text2 border-b flex-shrink-0"
+            style={{ borderColor: 'var(--wiki-border)' }}
+            title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
+            {moduleSidebarOpen ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
+            {moduleSidebarOpen && <span className="font-medium uppercase tracking-wider text-[10px]">模块</span>}
           </button>
-        </div>
-        {showFilter && (
-          <div className="mx-8 mb-4 p-4 rounded-lg" style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)` }}>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">模块</label>
-                <select className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-                  <option value="全部">全部</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+          {moduleSidebarOpen && (
+            <div className="flex-1 overflow-y-auto scrollbar-thin p-2 flex flex-col gap-0.5 min-h-0">
+              <div onClick={() => setFilterCategory('全部')}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
+                style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
+                <span className="flex-1">全部</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: filterCategory === '全部' ? 'var(--wiki-border)' : 'var(--wiki-surface2)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
               </div>
-              <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">优先级</label>
-                <select className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-                  <option value="全部">全部</option>{priorities.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">负责人</label>
-                <input className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none w-28" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} placeholder="搜索..." value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">开始日期</label>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
-                  <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
-                  <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">截止日期</label>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
-                  <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
-                  <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex items-end"><button onClick={() => { setFilterCategory('全部'); setFilterPriority('全部'); setFilterAssignee('全部'); setDateFrom(''); setDateTo(''); }} className="px-3 py-2 rounded-md text-xs" style={{ color: `var(--wiki-text2)` }}>重置筛选</button></div>
-            </div>
-          </div>
-        )}
-        <div className="flex gap-3 mb-4 px-8">
-          {statusStats.map((stat) => (
-            <div key={stat.label} onClick={() => setFilterStatus(stat.status === filterStatus ? '全部' : stat.status)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-              style={{
-                background: filterStatus === stat.status ? stat.color : 'var(--wiki-surface)',
-                color: filterStatus === stat.status
-                  ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
-                  : 'var(--wiki-text3)',
-                border: filterStatus === stat.status ? 'none' : '1px solid var(--wiki-border)',
-              }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: filterStatus === stat.status
-                ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
-                : stat.color }} />
-              <span className="text-xs font-medium">{stat.label}</span>
-              <span className="text-xs font-bold">{stat.count}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-1 min-h-0 px-8 gap-0">
-          {/* Module sidebar — Knowledge-style, default collapsed */}
-          <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
-            style={{ width: moduleSidebarOpen ? '180px' : '30px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none' }}>
-            <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
-              className="flex items-center gap-1.5 py-2 px-1 text-xs text-wiki-text3 hover:text-wiki-text2 border-b"
-              style={{ borderColor: moduleSidebarOpen ? 'var(--wiki-border)' : 'transparent' }}
-              title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
-              {moduleSidebarOpen ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
-              {moduleSidebarOpen && <span className="font-medium uppercase tracking-wider text-[10px]">模块</span>}
-            </button>
-            {moduleSidebarOpen && (
-              <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 flex flex-col gap-0.5">
-                <div onClick={() => setFilterCategory('全部')}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
-                  style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
-                  <span className="flex-1">全部</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: filterCategory === '全部' ? 'var(--wiki-border)' : 'var(--wiki-surface2)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
-                </div>
-                {modules.map(m => {
-                  const mdl = moduleList.find(ml => ml.name === m);
-                  return (
-                    <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
-                      className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors truncate"
-                      style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
-                      title={m}>
-                      <span className="flex-1 truncate">{m}</span>
-                      {mdl && (
-                        <>
-                          <button onClick={e => { e.stopPropagation(); setModuleEdit({ id: mdl.id, name: mdl.name }); }}
-                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-wiki-text" style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
-                          <button onClick={e => { e.stopPropagation(); handleDeleteModule(mdl.id, mdl.name); }}
-                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-red-500" style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {moduleSidebarOpen && (
-              <div className="flex items-center gap-1 px-2 py-2 border-t flex-shrink-0" style={{ borderColor: 'var(--wiki-border)' }}>
-                <button onClick={handleAddModule}
-                  className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
-                  <PlusIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
-                </button>
-                {moduleEdit && (
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <input autoFocus className="text-[10px] px-1.5 py-0.5 rounded outline-none flex-1 min-w-0"
-                      style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-                      value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
-                      onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
-                    <button onClick={handleEditModule} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
-                    <button onClick={() => setModuleEdit(null)} className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+              {modules.map(m => {
+                const mdl = moduleList.find(ml => ml.name === m);
+                return (
+                  <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
+                    className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors truncate"
+                    style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
+                    title={m}>
+                    <span className="flex-1 truncate">{m}</span>
+                    {mdl && (
+                      <>
+                        <button onClick={e => { e.stopPropagation(); setModuleEdit({ id: mdl.id, name: mdl.name }); }}
+                          className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-wiki-text" style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
+                        <button onClick={e => { e.stopPropagation(); handleDeleteModule(mdl.id, mdl.name); }}
+                          className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-red-500" style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
+                      </>
+                    )}
                   </div>
-                )}
+                );
+              })}
+            </div>
+          )}
+          {moduleSidebarOpen && (
+            <div className="flex items-center gap-1 p-2 border-t flex-shrink-0" style={{ borderColor: 'var(--wiki-border)' }}>
+              <button onClick={handleAddModule}
+                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
+                <PlusIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+              </button>
+              {moduleEdit && (
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <input autoFocus className="text-[10px] px-1.5 py-0.5 rounded outline-none flex-1 min-w-0"
+                    style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+                    value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
+                  <button onClick={handleEditModule} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
+                  <button onClick={() => setModuleEdit(null)} className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Main content area */}
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex items-center justify-between mb-4 px-8 pt-8 flex-shrink-0">
+            <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪采集条目</p></div>
+            <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><PlusIcon size={16} /><span>新建条目</span></button>
+          </div>
+          <div className="flex items-center gap-3 mb-4 px-8 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
+              <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+              {searchInput && <button onClick={() => { setSearchInput(''); setSearch(''); }} className="text-wiki-text3 hover:text-wiki-text transition-colors"><XIcon size={14} /></button>}
+            </div>
+            <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+              style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)`, color: `var(--wiki-text2)` }}>
+              <FilterIcon size={14} /><span>筛选</span>
+              <ChevronDownIcon size={12} style={{ transform: showFilter ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+            </button>
+          </div>
+          {showFilter && (
+            <div className="mx-8 mb-4 p-4 rounded-lg flex-shrink-0" style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)` }}>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">优先级</label>
+                  <select className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+                    <option value="全部">全部</option>{priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">负责人</label>
+                  <input className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none w-28" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} placeholder="搜索..." value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">开始日期</label>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
+                    <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                    <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">截止日期</label>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
+                    <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                    <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex items-end"><button onClick={() => { setFilterCategory('全部'); setFilterPriority('全部'); setFilterAssignee('全部'); setDateFrom(''); setDateTo(''); }} className="px-3 py-2 rounded-md text-xs" style={{ color: `var(--wiki-text2)` }}>重置筛选</button></div>
               </div>
-            )}
+            </div>
+          )}
+          <div className="flex gap-3 mb-4 px-8 flex-shrink-0">
+            {statusStats.map((stat) => (
+              <div key={stat.label} onClick={() => setFilterStatus(stat.status === filterStatus ? '全部' : stat.status)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+                style={{
+                  background: filterStatus === stat.status ? stat.color : 'var(--wiki-surface)',
+                  color: filterStatus === stat.status
+                    ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
+                    : 'var(--wiki-text3)',
+                  border: filterStatus === stat.status ? 'none' : '1px solid var(--wiki-border)',
+                }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: filterStatus === stat.status
+                  ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
+                  : stat.color }} />
+                <span className="text-xs font-medium">{stat.label}</span>
+                <span className="text-xs font-bold">{stat.count}</span>
+              </div>
+            ))}
           </div>
           {/* List */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 pb-6 pl-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {requirements.map((req) => (
             <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
               onPriorityChange={(reqId, p) => {
@@ -657,17 +654,17 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
               }} />
           ))}
           </div>
+          {totalCount > pageSize && (
+            <div className="flex items-center justify-center gap-3 px-6 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+              <button onClick={() => fetchPage(currentPage - 1)} disabled={currentPage <= 1}
+                className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>上一页</button>
+              <span className="text-xs text-wiki-text2">{currentPage} / {totalPages}</span>
+              <button onClick={() => fetchPage(currentPage + 1)} disabled={currentPage >= totalPages}
+                className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>下一页</button>
+              <span className="text-xs text-wiki-text3">共 {totalCount} 条</span>
+            </div>
+          )}
         </div>
-        {totalCount > pageSize && (
-          <div className="flex items-center justify-center gap-3 px-6 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-            <button onClick={() => fetchPage(currentPage - 1)} disabled={currentPage <= 1}
-              className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>上一页</button>
-            <span className="text-xs text-wiki-text2">{currentPage} / {totalPages}</span>
-            <button onClick={() => fetchPage(currentPage + 1)} disabled={currentPage >= totalPages}
-              className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>下一页</button>
-            <span className="text-xs text-wiki-text3">共 {totalCount} 条</span>
-          </div>
-        )}
       </div>
     );
   }
