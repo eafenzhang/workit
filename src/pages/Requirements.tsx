@@ -608,7 +608,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <div className="flex flex-wrap gap-2 mt-1.5">
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
               <span className="text-xs px-2 py-0.5 rounded" style={{ background: statusConfig[detailReq.status]?.bg, color: statusConfig[detailReq.status]?.color }}>{detailReq.status}</span>
-              {/* Next-status arrow */}
+              {/* Next-status transition button */}
               {(() => {
                 const so = ['待评估','设计中','实现中','测试中','已完成'];
                 const ci = so.indexOf(detailReq.status);
@@ -616,8 +616,9 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                   const nextStep = so[ci + 1];
                   return (
                     <button onClick={() => { setRemarkModal({ step: nextStep, reqId: detailReq.id }); setRemarkText(''); }}
-                      className="p-0.5 rounded hover:bg-wiki-surface2 flex-shrink-0" title={`流转到${nextStep}`}>
-                      <ChevronRightIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors hover:opacity-80"
+                      style={{ background: statusConfig[nextStep]?.bg, color: statusConfig[nextStep]?.color }}>
+                      → {nextStep}
                     </button>
                   );
                 }
@@ -637,21 +638,33 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <TrashIcon size={15} style={{ color: '#ef4444' }} />
           </button>
         </div>
-        {/* Workflow history — compact progress track */}
-        {detailReq.workflowHistory?.length > 0 && (
-          <div className="px-8 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-            <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>
-              {detailReq.workflowHistory.map((h, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <span>→</span>}
-                  <span>{h.from}</span>
-                </span>
-              ))}
-              <span>→</span>
-              <span style={{ color: 'var(--wiki-text)' }}>{detailReq.status}</span>
-            </div>
+        {/* Workflow status bar — compact step indicators */}
+        <div className="px-8 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-wiki-text3 flex-shrink-0 mr-1">流转:</span>
+            {['待评估','设计中','实现中','测试中','已完成'].map((step, i) => {
+              const so = ['待评估','设计中','实现中','测试中','已完成'];
+              const ci = so.indexOf(detailReq.status);
+              const done = i < ci; const cur = i === ci;
+              return (
+                <button key={step} onClick={() => {
+                  if (done || cur || i > ci + 1) return;
+                  setRemarkModal({ step, reqId: detailReq.id });
+                  setRemarkText('');
+                }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors"
+                  style={{
+                    background: done ? '#10b98120' : cur ? 'var(--wiki-text)' : 'transparent',
+                    color: done ? '#10b981' : cur ? 'var(--wiki-bg)' : i === ci + 1 ? 'var(--wiki-text2)' : 'var(--wiki-text3)',
+                    cursor: i === ci + 1 ? 'pointer' : 'default',
+                  }}>
+                  {step}
+                  {done && ' ✓'}
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
         <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
           <div className="flex flex-col gap-4">
             {(detailReq.aiSummary || (detailReq.aiTags?.length > 0)) && (
