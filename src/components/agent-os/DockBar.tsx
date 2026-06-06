@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';
@@ -35,6 +35,47 @@ const DOCK_ITEMS: (DockItem & { color: string })[] = [
 ];
 
 type DockState = 'show' | 'hide' | 'float';
+
+/** Internal replica of DockIcon for the 最近任务 button */
+function TaskIcon({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  const color = '#6b7280'; // neutral gray
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex flex-col items-center justify-end relative focus:outline-none"
+      style={{ width: '48px', height: '56px', border: 'none', background: 'transparent', padding: 0 }}
+      aria-label="最近任务"
+      title="最近任务"
+    >
+      <div className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
+        style={{
+          width: '44px', height: '44px',
+          background: hovered ? `${color}22` : 'transparent',
+          transform: hovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
+          boxShadow: hovered ? `0 8px 16px ${color}33` : 'none',
+        }}>
+        <Layers size={26} style={{
+          color: hovered ? color : 'var(--wiki-text3)',
+          filter: hovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
+          transition: 'color 0.2s, filter 0.2s',
+        }} strokeWidth={hovered ? 2.4 : 1.6} />
+      </div>
+      <span className="absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-all duration-150"
+        style={{
+          bottom: '100%', marginBottom: '10px',
+          background: hovered ? 'var(--wiki-text)' : 'transparent',
+          color: hovered ? 'var(--wiki-bg)' : 'transparent',
+          opacity: hovered ? 1 : 0,
+          transform: hovered ? 'translateY(0)' : 'translateY(4px)',
+        }}>
+        最近任务
+      </span>
+    </button>
+  );
+}
 
 /**
  * macOS-style bottom Dock bar positioned absolute in the shared container.
@@ -220,30 +261,8 @@ export default function DockBar({
             pointerEvents: isHide && !dockHovered ? 'none' : 'auto',
           }}
         >
-        {/* ── 最近任务 button ── */}
-        <button
-          onClick={openTaskManager}
-          className="flex flex-col items-center justify-end relative focus:outline-none"
-          style={{ width: '48px', height: '56px', border: 'none', background: 'transparent', padding: 0 }}
-          title={`最近任务 (${runningWindows.length})`}
-          onMouseEnter={e => {
-            const icon = e.currentTarget.firstChild as HTMLElement;
-            if (icon) { icon.style.background = 'rgba(128,128,128,0.13)'; }
-            const svg = icon?.firstChild as any;
-            if (svg) { svg.style.color = 'var(--wiki-text2)'; svg.style.filter = 'drop-shadow(0 2px 4px rgba(128,128,128,0.25))'; }
-          }}
-          onMouseLeave={e => {
-            const icon = e.currentTarget.firstChild as HTMLElement;
-            if (icon) { icon.style.background = 'transparent'; }
-            const svg = icon?.firstChild as any;
-            if (svg) { svg.style.color = 'var(--wiki-text3)'; svg.style.filter = 'none'; }
-          }}
-        >
-          <div className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
-            style={{ width: '44px', height: '44px', background: 'transparent' }}>
-            <Layers size={26} style={{ color: 'var(--wiki-text3)', filter: 'none', transition: 'color 0.2s, filter 0.2s' }} />
-          </div>
-        </button>
+        {/* ── 最近任务 button (DockIcon replica) ── */}
+        <TaskIcon onClick={openTaskManager} />{''}
 
         {DOCK_ITEMS.map((item) => (
           <DockIcon
