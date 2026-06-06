@@ -63,6 +63,8 @@ function TaskIcon({ onClick }: { onClick: () => void }) {
           transition: 'color 0.2s, filter 0.2s',
         }} strokeWidth={hovered ? 2.4 : 1.6} />
       </div>
+      {/* Placeholder dot — keeps vertical alignment with DockIcons that have running indicators */}
+      <div style={{ width: '4px', height: '4px', marginTop: '3px', opacity: 0 }} />
       <span className="absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-all duration-150"
         style={{
           bottom: '100%', marginBottom: '10px',
