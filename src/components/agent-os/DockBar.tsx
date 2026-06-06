@@ -223,11 +223,26 @@ export default function DockBar({
         {/* ── 最近任务 button ── */}
         <button
           onClick={openTaskManager}
-          className="transition-all duration-200 hover:scale-110"
-          style={{ width: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          className="flex flex-col items-center justify-end relative focus:outline-none"
+          style={{ width: '48px', height: '56px', border: 'none', background: 'transparent', padding: 0 }}
           title={`最近任务 (${runningWindows.length})`}
+          onMouseEnter={e => {
+            const icon = e.currentTarget.firstChild as HTMLElement;
+            if (icon) { icon.style.background = 'rgba(128,128,128,0.13)'; }
+            const svg = icon?.firstChild as any;
+            if (svg) { svg.style.color = 'var(--wiki-text2)'; svg.style.filter = 'drop-shadow(0 2px 4px rgba(128,128,128,0.25))'; }
+          }}
+          onMouseLeave={e => {
+            const icon = e.currentTarget.firstChild as HTMLElement;
+            if (icon) { icon.style.background = 'transparent'; }
+            const svg = icon?.firstChild as any;
+            if (svg) { svg.style.color = 'var(--wiki-text3)'; svg.style.filter = 'none'; }
+          }}
         >
-          <Layers size={26} style={{ color: 'var(--wiki-text3)' }} />
+          <div className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
+            style={{ width: '44px', height: '44px', background: 'transparent' }}>
+            <Layers size={26} style={{ color: 'var(--wiki-text3)', filter: 'none', transition: 'color 0.2s, filter 0.2s' }} />
+          </div>
         </button>
 
         {DOCK_ITEMS.map((item) => (
