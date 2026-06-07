@@ -573,16 +573,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                     style={{ color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: isActive ? 'var(--wiki-surface2)' : 'transparent', border: isActive ? '1px solid var(--wiki-border)' : '1px solid transparent' }}
                     title={m}>
                     <span className="text-xs flex-1 truncate">{m}</span>
-                    {mdl && (
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                        <button onClick={e => { e.stopPropagation(); setModuleEdit({ id: mdl.id, name: mdl.name }); }}
-                          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-wiki-surface2"
-                          style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
-                        <button onClick={e => { e.stopPropagation(); handleDeleteModule(mdl.id, mdl.name); }}
-                          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-red-50"
-                          style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -659,7 +649,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                   ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
                   : stat.color }} />
                 <span className="text-xs font-medium">{stat.label}</span>
-                <span className="text-xs font-bold">{stat.count}</span>
               </div>
             ))}
           </div>
