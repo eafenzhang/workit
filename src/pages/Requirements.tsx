@@ -522,15 +522,13 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
       <div data-cmp="Requirements" className="flex h-full overflow-hidden">
         {/* Module sidebar — entire page left, Knowledge-style */}
         <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
-          style={{ width: moduleSidebarOpen ? '180px' : '32px', borderRight: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
-          <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
-            className="flex items-center gap-1.5 py-2 px-1.5 text-xs text-wiki-text3 hover:text-wiki-text2 border-b flex-shrink-0"
-            style={{ borderColor: 'var(--wiki-border)' }}
-            title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
-            {moduleSidebarOpen ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
-            {moduleSidebarOpen && <span className="font-medium uppercase tracking-wider text-[10px]">模块</span>}
-          </button>
+          style={{ width: moduleSidebarOpen ? '180px' : '0px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none', background: 'var(--wiki-surface)' }}>
           {moduleSidebarOpen && (
+            <>
+            <div className="flex items-center justify-between py-2 px-2 border-b flex-shrink-0"
+              style={{ borderColor: 'var(--wiki-border)' }}>
+              <span className="font-medium uppercase tracking-wider text-[10px] text-wiki-text3">模块</span>
+            </div>
             <div className="flex-1 overflow-y-auto scrollbar-thin p-2 flex flex-col gap-0.5 min-h-0">
               <div onClick={() => setFilterCategory('全部')}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
@@ -558,6 +556,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                 );
               })}
             </div>
+          </>
           )}
           {moduleSidebarOpen && (
             <div className="flex items-center gap-1 p-2 border-t flex-shrink-0" style={{ borderColor: 'var(--wiki-border)' }}>
@@ -582,7 +581,14 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
         {/* Main content area */}
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="flex items-center justify-between mb-4 px-8 pt-8 flex-shrink-0">
-            <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪采集条目</p></div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
+                className="p-1 rounded-md hover:bg-wiki-surface2 transition-colors flex-shrink-0"
+                title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
+                {moduleSidebarOpen ? <ChevronLeftIcon size={14} /> : <ChevronRightIcon size={14} />}
+              </button>
+              <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪采集条目</p></div>
+            </div>
             <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><PlusIcon size={16} /><span>新建条目</span></button>
           </div>
           <div className="flex items-center gap-3 mb-4 px-8 flex-shrink-0">
@@ -737,6 +743,22 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                 </button>
               );
             })}
+            {/* Right: next-step action button */}
+            {(() => {
+              const so = ['待评估','设计中','实现中','测试中','已完成'];
+              const ci = so.indexOf(detailReq.status);
+              if (ci < so.length - 1) {
+                const nextStep = so[ci + 1];
+                return (
+                  <button onClick={() => { setRemarkModal({ step: nextStep, reqId: detailReq.id }); setRemarkText(''); }}
+                    className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-xs font-medium transition-colors hover:opacity-80"
+                    style={{ background: statusConfig[nextStep]?.bg, color: statusConfig[nextStep]?.color }}>
+                    流转到 {nextStep}
+                  </button>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
         {/* Workflow history — expandable */}

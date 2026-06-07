@@ -283,7 +283,7 @@ export default function DockBar({
       {/* ── 最近任务 - fullscreen semi-transparent overlay ── */}
       {taskManagerOpen && (
         <div
-          className="fixed inset-0 z-[10000] flex flex-col"
+          className="fixed inset-0 z-[99999] flex flex-col"
           style={{
             background: 'rgba(0,0,0,0.62)',
             backdropFilter: 'blur(16px) saturate(120%)',
