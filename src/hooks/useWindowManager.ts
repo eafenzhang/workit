@@ -161,10 +161,13 @@ export function useWindowManager(
     if (drag) {
       const deltaX = e.clientX - drag.startMouseX;
       const deltaY = e.clientY - drag.startMouseY;
+      // Clamp to keep title bar always accessible (min 120px X / 40px Y visible)
+      const maxX = Math.max(0, window.innerWidth - 120);
+      const maxY = Math.max(0, window.innerHeight - 40);
       setTempDragRect({
         windowId: drag.windowId,
-        x: drag.startWindowX + deltaX,
-        y: drag.startWindowY + deltaY,
+        x: Math.max(0, Math.min(drag.startWindowX + deltaX, maxX)),
+        y: Math.max(0, Math.min(drag.startWindowY + deltaY, maxY)),
       });
       return;
     }

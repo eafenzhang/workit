@@ -6,32 +6,32 @@ import DockIcon from './DockIcon';
 // ── Filled icons with brand colors ──
 
 import {
-  Bot,
-  Sparkles,
-  Database,
-  Lightbulb,
-  Package,
-  Cpu,
-  MessageSquare,
-  Settings,
-  User,
-  Globe,
-  Layers,
+  BotMessageSquareIcon,
+  SparklesIcon,
+  DatabaseIcon,
+  LightbulbIcon,
+  PackageIcon,
+  CpuIcon,
+  MessageSquareIcon,
+  SettingsIcon,
+  UserIcon,
+  GlobeIcon,
+  LayersIcon,
 } from 'lucide-react';
 
 // ── Dock items with filled icons and brand colors ──
 
 const DOCK_ITEMS: (DockItem & { color: string })[] = [
-  { id: 'home', label: '首页', icon: Bot, type: 'home', color: '#6366f1' },
-  { id: 'requirements', label: '采集库', icon: Sparkles, type: 'requirements', color: '#f59e0b' },
-  { id: 'knowledge', label: '知识库', icon: Database, type: 'knowledge', color: '#10b981' },
-  { id: 'insights', label: '洞察分析', icon: Lightbulb, type: 'insights', color: '#8b5cf6' },
-  { id: 'mcp', label: '应用生态', icon: Package, type: 'mcp', color: '#06b6d4' },
-  { id: 'model', label: '模型配置', icon: Cpu, type: 'model', color: '#ef4444' },
-  { id: 'browser', label: '浏览器', icon: Globe, type: 'browser', color: '#3b82f6' },
-  { id: 'messages', label: '消息中心', icon: MessageSquare, type: 'messages', color: '#14b8a6' },
-  { id: 'settings', label: '系统设置', icon: Settings, type: 'settings', color: '#64748b' },
-  { id: 'profile', label: '用户Agent', icon: User, type: 'profile', color: '#ec4899' },
+  { id: 'home', label: '首页', icon: BotMessageSquareIcon, type: 'home', color: '#6366f1' },
+  { id: 'requirements', label: '采集库', icon: SparklesIcon, type: 'requirements', color: '#f59e0b' },
+  { id: 'knowledge', label: '知识库', icon: DatabaseIcon, type: 'knowledge', color: '#10b981' },
+  { id: 'insights', label: '洞察分析', icon: LightbulbIcon, type: 'insights', color: '#8b5cf6' },
+  { id: 'mcp', label: '应用生态', icon: PackageIcon, type: 'mcp', color: '#06b6d4' },
+  { id: 'model', label: '模型配置', icon: CpuIcon, type: 'model', color: '#ef4444' },
+  { id: 'browser', label: '浏览器', icon: GlobeIcon, type: 'browser', color: '#3b82f6' },
+  { id: 'messages', label: '消息中心', icon: MessageSquareIcon, type: 'messages', color: '#14b8a6' },
+  { id: 'settings', label: '系统设置', icon: SettingsIcon, type: 'settings', color: '#64748b' },
+  { id: 'profile', label: '用户Agent', icon: UserIcon, type: 'profile', color: '#ec4899' },
 ];
 
 type DockState = 'show' | 'hide' | 'float';
@@ -57,7 +57,7 @@ function TaskIcon({ onClick }: { onClick: () => void }) {
           transform: hovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
           boxShadow: hovered ? `0 8px 16px ${color}33` : 'none',
         }}>
-        <Layers size={26} style={{
+        <LayersIcon size={26} style={{
           color: hovered ? color : 'var(--wiki-text3)',
           filter: hovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
           transition: 'color 0.2s, filter 0.2s',
@@ -306,14 +306,14 @@ export default function DockBar({
           >
             {runningWindows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
-                <Layers size={48} style={{ color: 'rgba(255,255,255,0.2)' }} />
+                <LayersIcon size={48} style={{ color: 'rgba(255,255,255,0.2)' }} />
                 <span className="mt-4 text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>无运行中应用</span>
               </div>
             ) : (
               <div className="w-full max-w-[840px] mx-auto grid gap-4" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                 {runningWindows.map(w => {
                   const item = DOCK_ITEMS.find(d => d.type === w.type);
-                  const Icon = item?.icon || Globe;
+                  const Icon = item?.icon || GlobeIcon;
                   return (
                     <button
                       key={w.id}
@@ -395,7 +395,7 @@ export default function DockBar({
               style={{ borderBottom: '1px solid var(--wiki-border)' }}
             >
               <div className="flex items-center gap-2">
-                <Globe size={15} style={{ color: 'var(--wiki-text2)' }} />
+                <GlobeIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
                 <span className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>
                   浏览器窗口 ({browserWindows.length})
                 </span>
@@ -412,7 +412,7 @@ export default function DockBar({
             <div className="flex-1 overflow-y-auto">
               {browserWindows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-2">
-                  <Globe size={28} style={{ color: 'var(--wiki-text3)', opacity: 0.4 }} />
+                  <GlobeIcon size={28} style={{ color: 'var(--wiki-text3)', opacity: 0.4 }} />
                   <span className="text-sm" style={{ color: 'var(--wiki-text3)' }}>无打开窗口</span>
                 </div>
               ) : (
@@ -428,7 +428,7 @@ export default function DockBar({
                       setBrowserModalOpen(false);
                     }}
                   >
-                    <Globe size={15} style={{ color: bw.webviewTier === 'warm' ? '#f59e0b' : 'var(--wiki-text3)', flexShrink: 0 }} />
+                    <GlobeIcon size={15} style={{ color: bw.webviewTier === 'warm' ? '#f59e0b' : 'var(--wiki-text3)', flexShrink: 0 }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs truncate flex items-center gap-1" style={{ color: 'var(--wiki-text)' }}>
                         {bw.title || bw.initialUrl || '新标签页'}

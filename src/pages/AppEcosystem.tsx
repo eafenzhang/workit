@@ -1,71 +1,76 @@
-import { useState } from 'react';
-import { ServerIcon, TerminalIcon, ZapIcon, WrenchIcon, PuzzleIcon } from 'lucide-react';
+import { useState, useCallback, type ReactNode } from 'react';
+import { ServerIcon, TerminalIcon, ZapIcon, WrenchIcon } from 'lucide-react';
 import MCPTab from '../components/MCPTab';
 import CliToolsTab from '../components/CliToolsTab';
 import SkillsTab from '../components/SkillsTab';
 import PluginsTab from '../components/PluginsTab';
+import UnifiedSidebar, { SidebarItem } from '../components/UnifiedSidebar';
+import PageHeader from '../components/PageHeader';
+import EmptyState from '../components/EmptyState';
 
 const TABS = [
-  { id: 'mcp',     label: 'MCP工具',   icon: ServerIcon,   color: 'var(--wiki-accent)' },
-  { id: 'cli',     label: 'CLI工具',   icon: TerminalIcon, color: 'var(--wiki-accent)' },
-  { id: 'skills',  label: 'Skill技能', icon: ZapIcon,      color: 'var(--wiki-accent)' },
-  { id: 'plugins', label: 'Claude插件', icon: WrenchIcon,   color: 'var(--wiki-accent)' },
+  { id: 'mcp',     label: 'MCP工具',   icon: ServerIcon,   desc: '配置和管理MCP服务器' },
+  { id: 'cli',     label: 'CLI工具',   icon: TerminalIcon, desc: '命令行工具管理' },
+  { id: 'skills',  label: 'Skill技能', icon: ZapIcon,      desc: '管理Agent技能' },
+  { id: 'plugins', label: 'Claude插件', icon: WrenchIcon,   desc: '插件扩展管理' },
 ] as const;
 
 export default function AppEcosystem() {
   const [activeTab, setActiveTab] = useState<string>('mcp');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [tabActions, setTabActions] = useState<ReactNode>(null);
+
+  const activeTabInfo = TABS.find(t => t.id === activeTab);
+
+  const handleRenderActions = useCallback((actions: ReactNode) => {
+    setTabActions(actions);
+  }, []);
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'mcp':     return <MCPTab key={`mcp-${refreshKey}`} hideToolbar onRenderActions={handleRenderActions} />;
+      case 'cli':     return <CliToolsTab key={`cli-${refreshKey}`} hideToolbar />;
+      case 'skills':  return <SkillsTab key={`skills-${refreshKey}`} hideToolbar />;
+      case 'plugins': return <PluginsTab key={`plugins-${refreshKey}`} hideToolbar />;
+      default:        return <EmptyState icon={WrenchIcon} title="选择工具" description="从左侧选择一个工具类别" />;
+    }
+  };
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Sidebar — improved styling */}
-      <div className="w-52 flex flex-col flex-shrink-0" style={{ borderRight: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
-        <div className="flex items-center gap-2.5 px-5 pt-5 pb-2.5">
-          <PuzzleIcon size={17} style={{ color: 'var(--wiki-accent)' }} />
-          <span className="text-sm font-semibold text-wiki-text">应用生态</span>
-        </div>
-        <nav className="flex flex-col gap-0.5 px-2.5 pt-1 pb-4 flex-1">
-          {TABS.map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors w-full"
-                style={{
-                  background: active ? 'var(--wiki-surface2)' : 'transparent',
-                  color: active ? 'var(--wiki-text)' : 'var(--wiki-text2)',
-                }}>
-                <Icon
-                  size={16}
-                  style={{
-                    color: active ? tab.color : 'var(--wiki-text3)',
-                    flexShrink: 0,
-                  }}
-                />
-                <span className="text-sm font-medium">{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* Sidebar — matching Knowledge pattern */}
+      <UnifiedSidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(false)}
+        title="应用生态"
+      >
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <SidebarItem
+              key={tab.id}
+              label={tab.label}
+              active={active}
+              onClick={() => setActiveTab(tab.id)}
+              icon={<Icon size={14} style={{ color: active ? 'var(--wiki-accent)' : 'var(--wiki-text3)' }} />}
+            />
+          );
+        })}
+      </UnifiedSidebar>
 
-      {/* Main content — no extra header, each tab has its own title+toolbar */}
+      {/* Main content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          <div style={{ display: activeTab === 'mcp' ? 'block' : 'none' }}>
-            <MCPTab key={`mcp-${refreshKey}`} hideToolbar={false} />
-          </div>
-          <div style={{ display: activeTab === 'cli' ? 'block' : 'none' }}>
-            <CliToolsTab key={`cli-${refreshKey}`} hideToolbar={false} />
-          </div>
-          <div style={{ display: activeTab === 'skills' ? 'block' : 'none' }}>
-            <SkillsTab key={`skills-${refreshKey}`} hideToolbar={false} />
-          </div>
-          <div style={{ display: activeTab === 'plugins' ? 'block' : 'none' }}>
-            <PluginsTab key={`plugins-${refreshKey}`} hideToolbar={false} />
-          </div>
+        <PageHeader
+          title={activeTabInfo?.label || '应用生态'}
+          description={activeTabInfo?.desc || '管理MCP工具、CLI命令、Skill技能和插件'}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          actions={tabActions}
+        />
+        <div className="flex-1 overflow-y-auto px-8 pb-4 scrollbar-thin">
+          {renderContent()}
         </div>
       </div>
     </div>

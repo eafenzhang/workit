@@ -1,5 +1,5 @@
 import { apiFetch, API } from '../api';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import {
   ServerIcon, TrashIcon, XIcon, CheckCircleIcon, PlugIcon, UploadIcon, EditIcon,
   PlayIcon, ChevronDownIcon, ChevronUpIcon, RefreshCwIcon, WrenchIcon,
@@ -42,7 +42,7 @@ interface McpToolInfo {
   inputSchema?: Record<string, any>;
 }
 
-export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
+export default function MCPTab({ hideToolbar, onRenderActions }: { hideToolbar?: boolean; onRenderActions?: (actions: React.ReactNode) => void }) {
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -69,6 +69,24 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
   useEffect(() => {
     fetchServers();
   }, []);
+
+  // Expose action buttons to parent
+  useEffect(() => {
+    onRenderActions?.(
+      <>
+        <button onClick={() => setShowImport(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
+          <UploadIcon size={14} />导入 JSON
+        </button>
+        <button onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          <ServerIcon size={14} />添加 MCP 服务器
+        </button>
+      </>
+    );
+  }, [onRenderActions]);
 
   const fetchServers = () => {
     apiFetch(API.mcp)
@@ -172,10 +190,9 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
 
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-8 py-3">
-        <h2 className="text-xl font-semibold text-wiki-text">MCP 工具</h2>
-        <div className="flex items-center gap-2">
+      {/* Toolbar — buttons only (title handled by PageHeader) */}
+      {!hideToolbar && (
+      <div className="flex items-center justify-end gap-2 px-8 py-3">
         <button onClick={() => setShowImport(true)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium"
           style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
@@ -186,12 +203,12 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
           style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <ServerIcon size={14} />添加 MCP 服务器
         </button>
-        </div>
       </div>
+      )}
 
       {/* Empty state */}
       {servers.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 mx-8 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <ServerIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 MCP 服务</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加 MCP 服务器后，AI 可以直接调用外部工具和服务</p>
@@ -211,7 +228,7 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
       )}
 
       {/* Server list */}
-      <div className="flex flex-col gap-4 px-8 pb-8">
+      <div className="flex flex-col gap-4 pb-4">
         {servers.map((server) => {
           const status = mcpStatus[String(server.id)];
           const currentStatus: McpStatus = status?.status || 'disconnected';

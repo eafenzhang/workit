@@ -294,8 +294,11 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
   }, []);
 
   const moveWindow = useCallback((id: string, x: number, y: number) => {
-    // Clamp Y to not go above the menu bar (32px)
-    dispatch({ type: 'MOVE_WINDOW', payload: { id, x: Math.max(x, 0), y: Math.max(y, 32) } });
+    // Clamp X to keep title bar always accessible (min 120px visible)
+    const maxX = Math.max(0, window.innerWidth - 120);
+    // Clamp Y: menu bar (32px) to bottom (keep title bar ~40px visible)
+    const maxY = Math.max(32, window.innerHeight - 40);
+    dispatch({ type: 'MOVE_WINDOW', payload: { id, x: Math.min(Math.max(x, 0), maxX), y: Math.min(Math.max(y, 32), maxY) } });
   }, []);
 
   const resizeWindow = useCallback(

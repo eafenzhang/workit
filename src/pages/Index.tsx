@@ -145,10 +145,16 @@ export default function Index() {
     // Browser component handles title independently via AgentOSContext
   }, []);
 
-  // Sidebar menu click → open tab/window
+  // Sidebar menu click → focus existing tab or open new one
   const handleMenuClick = useCallback((menuType: string, menuTitle: string) => {
+    // Check if a tab/window of this type already exists
+    const existing = tabs.find(t => t.type === menuType);
+    if (existing) {
+      focusWindow(existing.id);
+      return;
+    }
     openTab(menuType, menuTitle);
-  }, [openTab]);
+  }, [openTab, tabs, focusWindow]);
 
   const onCloseSelf = useCallback(() => closeTab(activeTabId), [closeTab, activeTabId]);
   const onToggleSidebar = useCallback(() => setSidebarCollapsed(prev => !prev), []);

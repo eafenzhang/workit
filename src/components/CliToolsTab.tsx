@@ -164,9 +164,8 @@ export default function CliToolsTab({ hideToolbar }: { hideToolbar?: boolean }) 
   // ── RENDER ──
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between gap-2 px-8 py-3">
-        <h2 className="text-xl font-semibold text-wiki-text">CLI 工具</h2>
-        <div className="flex items-center gap-2">
+      {!hideToolbar && (
+      <div className="flex items-center justify-end gap-2 px-8 py-3">
         <button onClick={checkAllInstallStatus}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
           style={{ color: 'var(--wiki-text3)' }}>
@@ -182,18 +181,18 @@ export default function CliToolsTab({ hideToolbar }: { hideToolbar?: boolean }) 
           style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <PackagePlusIcon size={14} />添加默认工具集
         </button>
-        </div>
       </div>
+      )}
 
       {items.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 mx-8 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <TerminalIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 CLI 工具</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加 CLI 工具后，AI 可以直接调用命令行执行任务</p>
         </div>
       )}
 
-      <div className="flex flex-col gap-3 px-8 pb-8">
+      <div className="flex flex-col gap-3 pb-4">
         {items.map(item => {
           const cmd = item.config?.command || item.name;
           const installed = installStatus[item.name];

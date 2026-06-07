@@ -95,9 +95,8 @@ export default function PluginsTab({ hideToolbar }: { hideToolbar?: boolean }) {
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between gap-2 px-8 py-3">
-        <h2 className="text-xl font-semibold text-wiki-text">Claude 插件</h2>
-        <div className="flex items-center gap-2">
+      {!hideToolbar && (
+      <div className="flex items-center justify-end gap-2 px-8 py-3">
         <button onClick={() => { setAddForm({ name: '', description: '', configJson: '{}' }); setShowAddForm(true); }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
           style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
@@ -108,18 +107,18 @@ export default function PluginsTab({ hideToolbar }: { hideToolbar?: boolean }) {
           style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
           <PackagePlusIcon size={14} />添加默认插件集
         </button>
-        </div>
       </div>
+      )}
 
       {items.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 mx-8 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
           <WrenchIcon size={48} style={{ color: 'var(--wiki-text3)' }} />
           <p className="mt-4 text-sm" style={{ color: 'var(--wiki-text2)' }}>暂无 Claude 插件</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--wiki-text3)' }}>添加插件后，AI 可以通过系统提示自动调用相关功能</p>
         </div>
       )}
 
-      <div className="flex flex-col gap-3 px-8 pb-8">
+      <div className="flex flex-col gap-3 pb-4">
         {items.map(item => {
           const isEditing = editingId === item.id;
           return (

@@ -1,12 +1,18 @@
 import { apiFetch } from '../api';
 import { useEffect, useState, useRef, useMemo, memo, useCallback } from 'react';
-import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, AlertCircleIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, FileTextIcon, FileIcon, ArchiveIcon, CodeIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon, FilterIcon, SparklesIcon, CheckCircleIcon, AlertCircleIcon, UserIcon, CalendarIcon, XIcon, EditIcon, TrashIcon, ImageIcon, ChevronDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, FileTextIcon, FileIcon, ArchiveIcon, CodeIcon, GridIcon, ListIcon, EyeIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import type { ContentBlock } from '../types/content';
 import ContentBlockRenderer from '../components/ContentBlockRenderer';
 import { rebuildBlocksFromLegacy } from '../utils/contentBlocks';
 import { DOC_EXTS, ARCHIVE_EXTS, CODE_EXTS, getFileExt, getFileCategory, formatFileSize } from '../components/FileChip';
+import UnifiedSidebar, { SidebarItem } from '../components/UnifiedSidebar';
+import PageHeader from '../components/PageHeader';
+import SearchBar, { FilterPills, type FilterPill } from '../components/SearchBar';
+import DetailPanel from '../components/DetailPanel';
+import EmptyState from '../components/EmptyState';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 function getFileNameFromUrl(url: string): string {
   try {
@@ -122,23 +128,20 @@ const ReqListItem = memo(function ReqListItem({
       </div>
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-wiki-text truncate flex-1">{req.title}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-wiki-text truncate">{req.title}</span>
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded flex-shrink-0"
+            style={{ background: statusCfg.bg, color: statusCfg.color }}>
+            {req.status}
+          </span>
         </div>
-        <div className="flex items-center gap-3 mt-1">
-          <span className="text-xs text-wiki-text3 line-clamp-1 flex-1">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</span>
-          <div className="flex items-center gap-2 text-xs text-wiki-text3 flex-shrink-0">
-            <span className="flex items-center gap-0.5"><UserIcon size={10} />{req.creator}</span>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-xs text-wiki-text3 truncate flex-1">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</span>
+          <div className="flex items-center gap-2 text-xs text-wiki-text3 flex-shrink-0 ml-3">
             <span className="flex items-center gap-0.5"><CalendarIcon size={10} />{formatDate(req.createdAt)}</span>
-            <span>{req.module}</span>
           </div>
         </div>
       </div>
-      {/* Right: status text badge */}
-      <span className="text-[10px] font-medium px-2 py-0.5 rounded flex-shrink-0"
-        style={{ background: statusCfg.bg, color: statusCfg.color }}>
-        {req.status}
-      </span>
     </div>
   );
 });
@@ -213,6 +216,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [localReqId, setLocalReqId] = useState<number | null>(null);
   // Status counts from API (unfiltered, for the status bar)
   const [allStatusCounts, setAllStatusCounts] = useState<Record<string, number>>({ '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 });
+  const [moduleCounts, setModuleCounts] = useState<Record<string, number>>({});
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
   const [form, setForm] = useState({ title: '', desc: '', module: '用户端', priority: '无', remark: '' });
   const [images, setImages] = useState<string[]>([]);
@@ -225,7 +229,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [previewIdx, setPreviewIdx] = useState(0);
   // Dynamic modules from API
   const [moduleList, setModuleList] = useState<{ id: number; name: string }[]>([]);
-  const [moduleEdit, setModuleEdit] = useState<{ id?: number; name: string } | null>(null);
+  const [showModuleModal, setShowModuleModal] = useState<{ id?: number; name: string } | null>(null);
+  const [moduleDeleteTarget, setModuleDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const modules = useMemo(() => moduleList.map(m => m.name), [moduleList]);
   const previewImages = useRef<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,6 +242,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   // Effective view: local state overrides initialTab prop (for internal edit→detail switching)
   const viewType = localView ?? (initialTab?.type || 'requirements');
   const detailReqId = localReqId ?? initialTab?.reqId;
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Keyboard navigation for image preview lightbox
   useEffect(() => {
@@ -271,6 +278,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
       setTotalCount(data.total);
       setCurrentPage(pageNum);
       if (data.counts) setAllStatusCounts(data.counts);
+      if (data.moduleCounts) setModuleCounts(data.moduleCounts);
     } else if (Array.isArray(data)) {
       // Fallback for old API (array) format
       setRequirements(data);
@@ -305,34 +313,32 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   }, []);
 
   const handleAddModule = async () => {
-    const name = prompt('输入新模块名称:');
-    if (!name || !name.trim()) return;
-    try {
-      await apiFetch('/api/requirement_modules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
-      fetchModules();
-      toast.success('模块已添加');
-    } catch { toast.error('添加失败'); }
+    setShowModuleModal({ name: '' });
   };
 
-  const handleEditModule = async () => {
-    if (!moduleEdit) return;
-    const name = prompt('修改模块名称:', moduleEdit.name);
-    if (!name || !name.trim()) return;
+  const handleSaveModule = async () => {
+    if (!showModuleModal || !showModuleModal.name.trim()) return;
     try {
-      await apiFetch(`/api/requirement_modules/${moduleEdit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
+      if (showModuleModal.id) {
+        await apiFetch(`/api/requirement_modules/${showModuleModal.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: showModuleModal.name.trim() }) });
+        toast.success('模块已更新');
+      } else {
+        await apiFetch('/api/requirement_modules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: showModuleModal.name.trim() }) });
+        toast.success('模块已添加');
+      }
       fetchModules();
-      setModuleEdit(null);
-      toast.success('模块已更新');
-    } catch { toast.error('更新失败'); }
+      setShowModuleModal(null);
+    } catch { toast.error('操作失败'); }
   };
 
-  const handleDeleteModule = async (id: number, name: string) => {
-    if (!confirm(`确定删除模块「${name}」？`)) return;
+  const handleDeleteModuleConfirm = async () => {
+    if (!moduleDeleteTarget) return;
     try {
-      await apiFetch(`/api/requirement_modules/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/requirement_modules/${moduleDeleteTarget.id}`, { method: 'DELETE' });
       fetchModules();
       toast.success('模块已删除');
     } catch { toast.error('删除失败'); }
+    setModuleDeleteTarget(null);
   };
 
   const detailReq = detailReqId ? requirements.find(r => r.id === detailReqId) : null;
@@ -461,10 +467,15 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   }, [editingReq, form, images, currentPage, fetchPage]);
 
   const handleDelete = (id: number) => {
-    if (!confirm('确定删除？')) return;
-    apiFetch(`/api/requirements/${id}`, { method: 'DELETE' }).then(() => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (confirmDeleteId === null) return;
+    apiFetch(`/api/requirements/${confirmDeleteId}`, { method: 'DELETE' }).then(() => {
       onCloseSelf?.();
       fetchPage(1); toast.success('已删除');
+      setConfirmDeleteId(null);
     });
   };
 
@@ -518,150 +529,172 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
 
   // ---- List View ----
   if (viewType === 'requirements' || viewType === 'requirements-list') {
+    const statusPills: FilterPill[] = statusStats.map(s => ({
+      key: s.status,
+      label: s.label,
+      color: s.color,
+      count: s.count,
+    }));
+
     return (
       <div data-cmp="Requirements" className="flex h-full overflow-hidden">
-        {/* Module sidebar — Knowledge layout style */}
-        <div className="flex flex-col flex-shrink-0 overflow-hidden"
-          style={{ width: moduleSidebarOpen ? '18%' : '0px', minWidth: moduleSidebarOpen ? '180px' : '0px', maxWidth: '220px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : '1px solid transparent', background: 'var(--wiki-surface)', transition: 'width 200ms ease, min-width 200ms ease' }}>
-          <div className="flex flex-col h-full" style={{ opacity: moduleSidebarOpen ? 1 : 0, transition: 'opacity 150ms ease' }}>
-          {moduleSidebarOpen && (
+        {/* Module sidebar — UnifiedSidebar */}
+        <UnifiedSidebar open={moduleSidebarOpen} onToggle={() => setModuleSidebarOpen(false)} title="模块分类"
+          actions={
             <>
-            <div className="flex items-center justify-between p-5 pb-0">
-              <span className="text-xs font-medium text-wiki-text3 uppercase tracking-wider">模块分类</span>
-              <div className="flex items-center gap-1">
-                <button onClick={handleAddModule}
-                  className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
-                  <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
-                </button>
-                {filterCategory !== '全部' && moduleList.find(ml => ml.name === filterCategory) && (
-                  <>
-                    <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) setModuleEdit({ id: m.id, name: m.name }); }}
-                      className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="编辑模块">
-                      <EditIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
-                    </button>
-                    <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) handleDeleteModule(m.id, m.name); }}
-                      className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="删除模块">
-                      <TrashIcon size={11} style={{ color: 'var(--wiki-danger)' }} />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            {moduleEdit && (
-              <div className="flex items-center gap-1 mx-5 mt-2">
-                <input autoFocus className="text-[10px] px-1.5 py-1 rounded outline-none flex-1 min-w-0"
-                  style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-                  value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
-                  onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
-                <button onClick={handleEditModule} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
-                <button onClick={() => setModuleEdit(null)} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-              </div>
-            )}
-            <div className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto scrollbar-thin p-5 pt-3">
-              <div onClick={() => setFilterCategory('全部')}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer text-left transition-all duration-200 hover:bg-wiki-surface2"
-                style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent', border: filterCategory === '全部' ? '1px solid var(--wiki-border)' : '1px solid transparent' }}>
-                <span className="text-xs flex-1">全部</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-lg" style={{ background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'var(--wiki-border)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
-              </div>
-              {modules.map(m => {
-                const mdl = moduleList.find(ml => ml.name === m);
-                const isActive = filterCategory === m;
-                return (
-                  <div key={m} onClick={() => setFilterCategory(isActive ? '全部' : m)}
-                    className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer text-left transition-all duration-200 hover:bg-wiki-surface2 truncate"
-                    style={{ color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: isActive ? 'var(--wiki-surface2)' : 'transparent', border: isActive ? '1px solid var(--wiki-border)' : '1px solid transparent' }}
-                    title={m}>
-                    <span className="text-xs flex-1 truncate">{m}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-          )}
-          </div>
-        </div>
+              <button onClick={handleAddModule}
+                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
+                <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
+              </button>
+              <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) setShowModuleModal({ id: m.id, name: m.name }); }}
+                disabled={filterCategory === '全部'}
+                className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-wiki-surface2" title="编辑模块">
+                <EditIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+              </button>
+              <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) setModuleDeleteTarget({ id: m.id, name: m.name }); }}
+                disabled={filterCategory === '全部'}
+                className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-wiki-surface2" title="删除模块">
+                <TrashIcon size={11} style={{ color: 'var(--wiki-danger)' }} />
+              </button>
+            </>
+          }>
+          {/* Module list — using SidebarItem like Knowledge */}
+          <SidebarItem
+            label="全部"
+            active={filterCategory === '全部'}
+            count={totalCount}
+            onClick={() => setFilterCategory('全部')}
+          />
+          {modules.map(m => {
+            const isActive = filterCategory === m;
+            return (
+              <SidebarItem
+                key={m}
+                label={m}
+                active={isActive}
+                count={moduleCounts[m]}
+                onClick={() => setFilterCategory(isActive ? '全部' : m)}
+              />
+            );
+          })}
+        </UnifiedSidebar>
 
         {/* Main content area */}
         <div className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex items-center justify-between mb-4 px-8 pt-8 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <button onClick={() => setModuleSidebarOpen(!moduleSidebarOpen)}
-                className="p-1 rounded-md hover:bg-wiki-surface2 transition-colors flex-shrink-0"
-                title={moduleSidebarOpen ? '收起模块' : '展开模块'}>
-                {moduleSidebarOpen ? <ChevronLeftIcon size={14} /> : <ChevronRightIcon size={14} />}
+          <PageHeader
+            title="采集库"
+            description="管理和跟踪采集条目"
+            sidebarOpen={moduleSidebarOpen}
+            onToggleSidebar={() => setModuleSidebarOpen(!moduleSidebarOpen)}
+            actions={
+              <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+                <PlusIcon size={16} /><span>新建条目</span>
               </button>
-              <div><h1 className="text-xl font-semibold text-wiki-text">采集库</h1><p className="text-wiki-text2 text-sm mt-1">管理和跟踪采集条目</p></div>
-            </div>
-            <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}><PlusIcon size={16} /><span>新建条目</span></button>
-          </div>
-          <div className="flex items-center gap-3 mb-4 px-8 flex-shrink-0">
-            <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-              <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
-              <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
-              {searchInput && <button onClick={() => { setSearchInput(''); setSearch(''); }} className="text-wiki-text3 hover:text-wiki-text transition-colors"><XIcon size={14} /></button>}
-            </div>
-            <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-              style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)`, color: `var(--wiki-text2)` }}>
-              <FilterIcon size={14} /><span>筛选</span>
-              <ChevronDownIcon size={12} style={{ transform: showFilter ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
-            </button>
-          </div>
+            }
+          />
+
+          <SearchBar
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="搜索..."
+            filterOpen={showFilter}
+            onToggleFilter={() => setShowFilter(!showFilter)}
+            extra={
+              <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+                style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
+                {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
+                <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
+              </button>
+            }
+          />
+
           {showFilter && (
-            <div className="mx-8 mb-4 p-4 rounded-lg flex-shrink-0" style={{ background: `var(--wiki-surface)`, border: `1px solid var(--wiki-border)` }}>
+            <div className="mx-8 mb-4 p-4 rounded-lg flex-shrink-0" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
               <div className="flex flex-wrap gap-4">
                 <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">优先级</label>
-                  <select className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+                  <select className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
                     <option value="全部">全部</option>{priorities.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">负责人</label>
-                  <input className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none w-28" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }} placeholder="搜索..." value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} />
+                  <input className="px-3 py-2 rounded-md text-xs text-wiki-text outline-none w-28" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }} placeholder="搜索..." value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">开始日期</label>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                     <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
                     <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">截止日期</label>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: `var(--wiki-surface2)`, border: `1px solid var(--wiki-border)` }}>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                     <CalendarIcon size={14} style={{ color: 'var(--wiki-text3)' }} />
                     <input type="date" className="bg-transparent text-xs text-wiki-text outline-none flex-1" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                   </div>
                 </div>
-                <div className="flex items-end"><button onClick={() => { setFilterCategory('全部'); setFilterPriority('全部'); setFilterAssignee('全部'); setDateFrom(''); setDateTo(''); }} className="px-3 py-2 rounded-md text-xs" style={{ color: `var(--wiki-text2)` }}>重置筛选</button></div>
+                <div className="flex items-end"><button onClick={() => { setFilterCategory('全部'); setFilterPriority('全部'); setFilterAssignee('全部'); setDateFrom(''); setDateTo(''); }} className="px-3 py-2 rounded-md text-xs" style={{ color: 'var(--wiki-text2)' }}>重置筛选</button></div>
               </div>
             </div>
           )}
-          <div className="flex gap-3 mb-4 px-8 flex-shrink-0">
-            {statusStats.map((stat) => (
-              <div key={stat.label} onClick={() => setFilterStatus(stat.status === filterStatus ? '全部' : stat.status)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-                style={{
-                  background: filterStatus === stat.status ? stat.color : 'var(--wiki-surface)',
-                  color: filterStatus === stat.status
-                    ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
-                    : 'var(--wiki-text3)',
-                  border: filterStatus === stat.status ? 'none' : '1px solid var(--wiki-border)',
-                }}>
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: filterStatus === stat.status
-                  ? stat.status === '全部' ? 'var(--wiki-bg)' : '#fff'
-                  : stat.color }} />
-                <span className="text-xs font-medium">{stat.label}</span>
-              </div>
-            ))}
-          </div>
-          {/* List */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {requirements.map((req) => (
-            <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
-              onPriorityChange={(reqId, p) => {
-                apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
-                  setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, priority: p } : r));
-                });
-              }} />
-          ))}
+
+          <FilterPills items={statusPills} activeKey={filterStatus} onChange={setFilterStatus} />
+
+          {/* List — with grid/list toggle like Knowledge */}
+          <div className="overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2.5'}>
+              {requirements.length === 0 ? (
+                <EmptyState icon={FileTextIcon} title="暂无条目" description="点击「新建条目」开始采集" />
+              ) : (
+                requirements.map((req) => {
+                  const statusCfg = statusConfig[req.status] || statusConfig['待评估'];
+                  const priorityCfg = priorityConfig[req.priority] || priorityConfig['中'];
+                  if (viewMode === 'grid') {
+                    return (
+                      <div key={req.id} onClick={() => openDetail(req)}
+                        className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200"
+                        style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={req.priority}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => {
+                                const p = e.target.value;
+                                apiFetch(`/api/requirements/${req.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
+                                  setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, priority: p } : r));
+                                });
+                              }}
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none"
+                              style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none' }}>
+                              {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          </div>
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded"
+                            style={{ background: statusCfg.bg, color: statusCfg.color }}>
+                            {req.status}
+                          </span>
+                        </div>
+                        <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{req.title}</div>
+                        <div className="text-xs text-wiki-text3 mb-3 line-clamp-2">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</div>
+                        <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{req.module}</span>
+                          <span className="flex items-center gap-1 text-xs text-wiki-text3 ml-auto"><UserIcon size={10} />{req.creator}</span>
+                          <span className="text-xs text-wiki-text3">{formatDate(req.createdAt)}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
+                      onPriorityChange={(reqId, p) => {
+                        apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
+                          setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, priority: p } : r));
+                        });
+                      }} />
+                  );
+                })
+              )}
+            </div>
           </div>
           {totalCount > pageSize && (
             <div className="flex items-center justify-center gap-3 px-6 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
@@ -674,43 +707,69 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           )}
         </div>
+
+        {/* Module Edit Modal — matching Knowledge's category modal style */}
+        {showModuleModal !== null && (
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'var(--wiki-overlay-heavy)', backdropFilter: 'blur(4px)' }}>
+            <div className="rounded-lg p-6" style={{ width: 'min(420px, 95vw)', background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-base font-semibold text-wiki-text">{showModuleModal.id ? '编辑模块' : '新增模块'}</span>
+                <button onClick={() => setShowModuleModal(null)}><XIcon size={18} style={{ color: 'var(--wiki-text3)' }} /></button>
+              </div>
+              <div>
+                <label className="text-xs text-wiki-text3 mb-1.5 block">模块名称</label>
+                <input
+                  autoFocus
+                  value={showModuleModal.name}
+                  onChange={(e) => setShowModuleModal(prev => ({ ...prev!, name: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveModule(); if (e.key === 'Escape') setShowModuleModal(null); }}
+                  className="w-full px-3 py-2 rounded-lg text-xs focus:outline-none text-wiki-text outline-none"
+                  style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}
+                  placeholder="输入模块名称..."
+                />
+              </div>
+              <div className="flex gap-3 mt-6 justify-end">
+                <button onClick={() => setShowModuleModal(null)} className="px-4 py-2 rounded-lg text-xs focus:outline-none" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+                <button onClick={handleSaveModule} className="px-4 py-2 rounded-lg text-xs focus:outline-none font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Module Delete Confirm */}
+        <ConfirmDialog
+          open={moduleDeleteTarget !== null}
+          title="确认删除"
+          message={`确定要删除模块「${moduleDeleteTarget?.name}」？`}
+          onConfirm={handleDeleteModuleConfirm}
+          onCancel={() => setModuleDeleteTarget(null)}
+        />
+
+        {/* Confirm Delete Dialog */}
+        <ConfirmDialog
+          open={confirmDeleteId !== null}
+          title="确认删除"
+          message="确定要删除此条目？此操作不可撤销。"
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       </div>
     );
   }
 
-  // ---- Detail View ----
+  // ---- Detail View (full page) ----
   if (viewType === 'requirements-detail' && detailReq) {
     return (
       <div data-cmp="RequirementsDetail" className="flex flex-col h-full">
         <div className="flex items-center gap-2 px-8 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-          {/* Back button — icon only, before title */}
           <button onClick={() => { setLocalView(null); setLocalReqId(null); }} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="返回列表">
             <ChevronLeftIcon size={18} style={{ color: 'var(--wiki-text2)' }} />
           </button>
-          <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-wiki-text truncate">{detailReq.title}</div>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
-              {/* Next-status transition button */}
-              {(() => {
-                const so = ['待评估','设计中','实现中','测试中','已完成'];
-                const ci = so.indexOf(detailReq.status);
-                if (ci < so.length - 1) {
-                  const nextStep = so[ci + 1];
-                  return (
-                    <button onClick={() => { setRemarkModal({ step: nextStep, reqId: detailReq.id }); setRemarkText(''); }}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors hover:opacity-80"
-                      style={{ background: statusConfig[nextStep]?.bg, color: statusConfig[nextStep]?.color }}>
-                      → {nextStep}
-                    </button>
-                  );
-                }
-                return null;
-              })()}
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: priorityConfig[detailReq.priority]?.bg, color: priorityConfig[detailReq.priority]?.color }}>{detailReq.priority}</span>
-            </div>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <span className="text-xs px-2 py-0.5 rounded flex-shrink-0" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)' }}>{detailReq.module}</span>
+            <span className="text-xs px-2 py-0.5 rounded flex-shrink-0" style={{ background: priorityConfig[detailReq.priority]?.bg, color: priorityConfig[detailReq.priority]?.color }}>{detailReq.priority}</span>
+            <span className="text-base font-bold text-wiki-text truncate">{detailReq.title}</span>
           </div>
-          {/* Action buttons — icon only */}
           <button onClick={() => handleAnalyze(detailReq)} disabled={analyzing} className="p-1.5 rounded-md hover:bg-wiki-surface2 flex-shrink-0" title="AI分析" style={{ color: analyzing ? 'var(--wiki-text2)' : '#6366f1' }}>
             <SparklesIcon size={15} />
           </button>
@@ -721,7 +780,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             <TrashIcon size={15} style={{ color: '#ef4444' }} />
           </button>
         </div>
-        {/* Workflow status bar — compact step indicators */}
+
+        {/* Workflow status bar */}
         <div className="px-8 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-wiki-text3 flex-shrink-0 mr-1">流转:</span>
@@ -746,7 +806,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                 </button>
               );
             })}
-            {/* Right: next-step action button */}
             {(() => {
               const so = ['待评估','设计中','实现中','测试中','已完成'];
               const ci = so.indexOf(detailReq.status);
@@ -756,7 +815,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                   <button onClick={() => { setRemarkModal({ step: nextStep, reqId: detailReq.id }); setRemarkText(''); }}
                     className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-xs font-medium transition-colors hover:opacity-80"
                     style={{ background: statusConfig[nextStep]?.bg, color: statusConfig[nextStep]?.color }}>
-                    流转到 {nextStep}
+                    <ChevronRightIcon size={13} />流转
                   </button>
                 );
               }
@@ -764,17 +823,19 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             })()}
           </div>
         </div>
-        {/* Workflow history — expandable */}
+
+        {/* Workflow history */}
         {(detailReq.workflowHistory?.length ?? 0) > 0 && (
           <WorkflowHistory history={detailReq.workflowHistory!} currentStatus={detailReq.status} />
         )}
+
         <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-thin">
           <div className="flex flex-col gap-4">
             {(detailReq.aiSummary || (detailReq.aiTags?.length > 0)) && (
               <div className="p-5 rounded-lg" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
                 <div className="flex items-center gap-2 mb-3"><SparklesIcon size={14} style={{ color: '#6366f1' }} /><span className="text-xs font-bold" style={{ color: '#6366f1' }}>AI 分析结果</span></div>
                 {detailReq.aiSummary && <div className="text-sm leading-relaxed mb-3 font-medium" style={{ color: 'var(--wiki-text)' }}>{detailReq.aiSummary}</div>}
-                {(detailReq.aiTags?.length > 0) && <div className="flex flex-wrap gap-1.5 mt-2">{(detailReq.aiTags || []).map(tag => (<span key={tag} className="text-xs px-2.5 py-1 rounded-md font-medium" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>#{tag}</span>))}</div>}
+                {(detailReq.aiTags?.length > 0) && <div className="flex flex-wrap gap-1.5 mt-2">{(detailReq.aiTags || []).map((tag: string) => (<span key={tag} className="text-xs px-2.5 py-1 rounded-md font-medium" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>#{tag}</span>))}</div>}
               </div>
             )}
             <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
@@ -787,6 +848,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           </div>
         </div>
+
         {previewImage && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setPreviewImage(null)}>
           <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">{previewIdx + 1} / {previewImages.current.length}</div>
           <button onClick={e => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl">×</button>
@@ -794,7 +856,8 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
           {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
           <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
         </div>)}
-        {/* Status transition remark modal — inside detail view */}
+
+        {/* Status transition remark modal */}
         {remarkModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }} onClick={() => setRemarkModal(null)}>
             <div className="w-[380px] rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} onClick={e => e.stopPropagation()}>
@@ -813,7 +876,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     );
   }
 
-  // ---- Create/Edit Form ----
+  // ---- Create/Edit Form (full page) ----
   return (
     <div data-cmp="RequirementsForm" className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-8 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
@@ -845,27 +908,6 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
         {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
         <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
       </div>)}
-
-      {/* ── Status transition remark modal ── */}
-      {remarkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }} onClick={() => setRemarkModal(null)}>
-          <div className="w-[380px] rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-wiki-text mb-3">流转到「{remarkModal.step}」</h3>
-            <textarea
-              value={remarkText}
-              onChange={e => setRemarkText(e.target.value)}
-              placeholder="输入备注（可选）..."
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-none"
-              style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-            />
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => setRemarkModal(null)} className="flex-1 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-              <button onClick={executeTransition} className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>确认流转</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

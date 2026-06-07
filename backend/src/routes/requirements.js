@@ -38,7 +38,7 @@ app.get('/', (req, res) => {
     results = results.filter(r => r[6] === status);
   }
   if (category && category !== '全部') {
-    results = results.filter(r => r[3] === category);
+    results = results.filter(r => r[4] === category);
   }
   if (priority && priority !== '全部') {
     results = results.filter(r => r[5] === priority);
@@ -66,6 +66,13 @@ app.get('/', (req, res) => {
     if (counts[s] !== undefined) counts[s] = c;
   }
 
+  // Compute module counts for the sidebar (always from ALL records)
+  const moduleCountsRaw = db.exec("SELECT module, COUNT(*) FROM requirements GROUP BY module")[0]?.values || [];
+  const moduleCounts: Record<string, number> = {};
+  for (const [m, c] of moduleCountsRaw) {
+    moduleCounts[m || '用户端'] = c;
+  }
+
   res.json({
     items: paged.map(r => ({
       id: r[0], title: r[1], desc: r[2], category: r[3],
@@ -79,6 +86,7 @@ app.get('/', (req, res) => {
     })),
     total,
     counts,
+    moduleCounts,
     page,
     pageSize: ps,
   });
