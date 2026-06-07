@@ -520,61 +520,61 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   if (viewType === 'requirements' || viewType === 'requirements-list') {
     return (
       <div data-cmp="Requirements" className="flex h-full overflow-hidden">
-        {/* Module sidebar — entire page left, Knowledge-style */}
+        {/* Module sidebar — Knowledge layout style */}
         <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
-          style={{ width: moduleSidebarOpen ? '180px' : '0px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none', background: 'var(--wiki-surface)' }}>
+          style={{ width: moduleSidebarOpen ? '18%' : '0px', minWidth: moduleSidebarOpen ? '180px' : '0px', maxWidth: '220px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none', background: 'var(--wiki-surface)' }}>
           {moduleSidebarOpen && (
             <>
-            <div className="flex items-center justify-between py-2 px-2 border-b flex-shrink-0"
-              style={{ borderColor: 'var(--wiki-border)' }}>
-              <span className="font-medium uppercase tracking-wider text-[10px] text-wiki-text3">模块</span>
+            <div className="flex items-center justify-between p-5 pb-0">
+              <span className="text-xs font-medium text-wiki-text3 uppercase tracking-wider">模块分类</span>
+              <div className="flex items-center gap-1">
+                <button onClick={handleAddModule}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
+                  <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto scrollbar-thin p-2 flex flex-col gap-0.5 min-h-0">
+            {moduleEdit && (
+              <div className="flex items-center gap-1 mx-5 mt-2">
+                <input autoFocus className="text-[10px] px-1.5 py-1 rounded outline-none flex-1 min-w-0"
+                  style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
+                  value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
+                  onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
+                <button onClick={handleEditModule} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
+                <button onClick={() => setModuleEdit(null)} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+              </div>
+            )}
+            <div className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto scrollbar-thin p-5 pt-3">
               <div onClick={() => setFilterCategory('全部')}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
-                style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent' }}>
-                <span className="flex-1">全部</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: filterCategory === '全部' ? 'var(--wiki-border)' : 'var(--wiki-surface2)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer text-left transition-all duration-200 hover:bg-wiki-surface2"
+                style={{ color: filterCategory === '全部' ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'transparent', border: filterCategory === '全部' ? '1px solid var(--wiki-border)' : '1px solid transparent' }}>
+                <span className="text-xs flex-1">全部</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-lg" style={{ background: filterCategory === '全部' ? 'var(--wiki-surface2)' : 'var(--wiki-border)', color: filterCategory === '全部' ? 'var(--wiki-text2)' : 'var(--wiki-text3)' }}>{totalCount}</span>
               </div>
               {modules.map(m => {
                 const mdl = moduleList.find(ml => ml.name === m);
+                const isActive = filterCategory === m;
                 return (
-                  <div key={m} onClick={() => setFilterCategory(m === filterCategory ? '全部' : m)}
-                    className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors truncate"
-                    style={{ color: filterCategory === m ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: filterCategory === m ? 'var(--wiki-surface2)' : 'transparent' }}
+                  <div key={m} onClick={() => setFilterCategory(isActive ? '全部' : m)}
+                    className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer text-left transition-all duration-200 hover:bg-wiki-surface2 truncate"
+                    style={{ color: isActive ? 'var(--wiki-text)' : 'var(--wiki-text2)', background: isActive ? 'var(--wiki-surface2)' : 'transparent', border: isActive ? '1px solid var(--wiki-border)' : '1px solid transparent' }}
                     title={m}>
-                    <span className="flex-1 truncate">{m}</span>
+                    <span className="text-xs flex-1 truncate">{m}</span>
                     {mdl && (
-                      <>
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
                         <button onClick={e => { e.stopPropagation(); setModuleEdit({ id: mdl.id, name: mdl.name }); }}
-                          className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-wiki-text" style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-wiki-surface2"
+                          style={{ color: 'var(--wiki-text3)' }} title="编辑">✎</button>
                         <button onClick={e => { e.stopPropagation(); handleDeleteModule(mdl.id, mdl.name); }}
-                          className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] hover:text-red-500" style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
-                      </>
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-red-50"
+                          style={{ color: 'var(--wiki-text3)' }} title="删除">×</button>
+                      </div>
                     )}
                   </div>
                 );
               })}
             </div>
           </>
-          )}
-          {moduleSidebarOpen && (
-            <div className="flex items-center gap-1 p-2 border-t flex-shrink-0" style={{ borderColor: 'var(--wiki-border)' }}>
-              <button onClick={handleAddModule}
-                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
-                <PlusIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
-              </button>
-              {moduleEdit && (
-                <div className="flex items-center gap-1 flex-1 min-w-0">
-                  <input autoFocus className="text-[10px] px-1.5 py-0.5 rounded outline-none flex-1 min-w-0"
-                    style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
-                    value={moduleEdit.name} onChange={e => setModuleEdit({ ...moduleEdit, name: e.target.value })}
-                    onKeyDown={e => { if (e.key === 'Enter') handleEditModule(); if (e.key === 'Escape') setModuleEdit(null); }} />
-                  <button onClick={handleEditModule} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>保存</button>
-                  <button onClick={() => setModuleEdit(null)} className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
-                </div>
-              )}
-            </div>
           )}
         </div>
 
