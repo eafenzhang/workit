@@ -580,8 +580,8 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 p-6 overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex items-center justify-between mb-4 px-8 pt-8 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-1 rounded-md hover:bg-wiki-surface2 transition-colors flex-shrink-0"
@@ -590,63 +590,52 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
             </button>
             <div>
               <h1 className="text-xl font-semibold text-wiki-text">知识库</h1>
-              <p className="text-sm text-wiki-text2 mt-0.5">管理文档、笔记和参考资料</p>
+              <p className="text-wiki-text2 text-sm mt-1">管理文档、笔记和参考资料</p>
             </div>
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
               <UploadIcon size={14} />上传文档
             </button>
-            <button onClick={() => { if (onOpenSubTab) onOpenSubTab('新建文档','knowledge-create'); else setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false }); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}>
+            <button onClick={() => { if (onOpenSubTab) onOpenSubTab('新建文档','knowledge-create'); else setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false }); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}>
               <PlusIcon size={14} />新建文档
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-4 px-8 flex-shrink-0">
           <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <SearchIcon size={15} style={{ color: 'var(--wiki-text3)' }} />
             <input className="bg-transparent flex-1 text-xs outline-none text-wiki-text placeholder:text-wiki-text3" placeholder="搜索文档、标签..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-            <button onClick={() => setViewMode('grid')} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'grid' ? 'var(--wiki-surface2)' : 'transparent' }}>
-              <GridIcon size={14} style={{ color: viewMode === 'grid' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-            </button>
-            <button onClick={() => setViewMode('list')} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: viewMode === 'list' ? 'var(--wiki-surface2)' : 'transparent' }}>
-              <ListIcon size={14} style={{ color: viewMode === 'list' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-            </button>
-          </div>
+          <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+            style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
+            {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
+            <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
+          </button>
         </div>
-
-        {/* Featured */}
-        {featuredDocs.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <StarIcon size={13} style={{ color: 'var(--wiki-warning)' }} />
-              <span className="text-xs font-medium text-wiki-text3 uppercase tracking-wider">精选推荐</span>
-            </div>
-            <div className="flex gap-3">
-              {featuredDocs.map((doc) => {
-                const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
-                return (
-                  <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="flex-1 p-4 rounded-lg cursor-pointer hover:opacity-90 hover:bg-wiki-surface2 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
-                      <span className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
-                    </div>
-                    <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
-                    <div className="flex items-center gap-3 mt-2"><span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span><span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span></div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
+        {/* Category pills — same style as Requirements status filter */}
+        <div className="flex gap-3 mb-4 px-8 flex-shrink-0 flex-wrap">
+          {[{ id: 'all', name: '全部', color: 'var(--wiki-text)', count: totalCount }, ...categoriesList.slice(1)].map((cat: any) => {
+            const isActive = activeCategory === cat.id;
+            return (
+              <div key={cat.id} onClick={() => setActiveCategory(cat.id)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+                style={{
+                  background: isActive ? (cat.color || 'var(--wiki-text)') : 'var(--wiki-surface)',
+                  color: isActive ? (cat.id === 'all' ? 'var(--wiki-bg)' : '#fff') : 'var(--wiki-text3)',
+                  border: isActive ? 'none' : '1px solid var(--wiki-border)',
+                }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: isActive ? (cat.id === 'all' ? 'var(--wiki-bg)' : '#fff') : (cat.color || 'var(--wiki-text3)') }} />
+                <span className="text-xs font-medium">{cat.name}</span>
+              </div>
+            );
+          })}
+        </div>
         {/* Document Grid / List */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-wiki-text3">共 {documents.length} 篇文档</span>
-        </div>
-        <div className={`overflow-y-auto scrollbar-thin ${viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2'}`}>
-          {documents.length === 0 ? (
+        <div className="overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2'}>
+            {documents.length === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center py-16 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: 'var(--wiki-surface2)' }}>
                 <FileTextIcon size={32} style={{ color: 'var(--wiki-text3)' }} />
