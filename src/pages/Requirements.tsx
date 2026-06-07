@@ -521,8 +521,9 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     return (
       <div data-cmp="Requirements" className="flex h-full overflow-hidden">
         {/* Module sidebar — Knowledge layout style */}
-        <div className="flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200"
-          style={{ width: moduleSidebarOpen ? '18%' : '0px', minWidth: moduleSidebarOpen ? '180px' : '0px', maxWidth: '220px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : 'none', background: 'var(--wiki-surface)' }}>
+        <div className="flex flex-col flex-shrink-0 overflow-hidden"
+          style={{ width: moduleSidebarOpen ? '18%' : '0px', minWidth: moduleSidebarOpen ? '180px' : '0px', maxWidth: '220px', borderRight: moduleSidebarOpen ? '1px solid var(--wiki-border)' : '1px solid transparent', background: 'var(--wiki-surface)', transition: 'width 200ms ease, min-width 200ms ease' }}>
+          <div className="flex flex-col h-full" style={{ opacity: moduleSidebarOpen ? 1 : 0, transition: 'opacity 150ms ease' }}>
           {moduleSidebarOpen && (
             <>
             <div className="flex items-center justify-between p-5 pb-0">
@@ -532,6 +533,18 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                   className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
                   <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
                 </button>
+                {filterCategory !== '全部' && moduleList.find(ml => ml.name === filterCategory) && (
+                  <>
+                    <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) setModuleEdit({ id: m.id, name: m.name }); }}
+                      className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="编辑模块">
+                      <EditIcon size={11} style={{ color: 'var(--wiki-text3)' }} />
+                    </button>
+                    <button onClick={() => { const m = moduleList.find(ml => ml.name === filterCategory); if (m) handleDeleteModule(m.id, m.name); }}
+                      className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="删除模块">
+                      <TrashIcon size={11} style={{ color: 'var(--wiki-danger)' }} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             {moduleEdit && (
@@ -576,6 +589,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
             </div>
           </>
           )}
+          </div>
         </div>
 
         {/* Main content area */}
@@ -791,6 +805,21 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
           {previewImages.current.length > 1 && <button onClick={e => { e.stopPropagation(); setPreviewIdx(i => { const n = i < previewImages.current.length - 1 ? i + 1 : i; setPreviewImage(previewImages.current[n]); return n; }); }} className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"><ChevronRightIcon size={24} /></button>}
           <img src={previewImage} className="max-w-[85vw] max-h-[85vh] rounded-md object-contain" onClick={e => e.stopPropagation()} />
         </div>)}
+        {/* Status transition remark modal — inside detail view */}
+        {remarkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }} onClick={() => setRemarkModal(null)}>
+            <div className="w-[380px] rounded-xl p-5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }} onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-semibold text-wiki-text mb-3">流转到「{remarkModal.step}」</h3>
+              <textarea value={remarkText} onChange={e => setRemarkText(e.target.value)} placeholder="输入备注（可选）..." rows={3}
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-none"
+                style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => setRemarkModal(null)} className="flex-1 py-2 rounded-lg text-xs" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>取消</button>
+                <button onClick={executeTransition} className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>确认流转</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

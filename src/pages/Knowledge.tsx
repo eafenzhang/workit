@@ -1,6 +1,6 @@
 import { apiFetch, API } from '../api';
 import { useEffect, useState, useRef } from 'react';
-import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, StarIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, CodeIcon, ImageIcon, GlobeIcon, MonitorIcon, FileIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, StarIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, CodeIcon, ImageIcon, GlobeIcon, MonitorIcon, FileIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import KnowledgeEditor from '../components/KnowledgeEditor';
 import DOMPurify from 'dompurify';
@@ -219,6 +219,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [showCategoryEdit, setShowCategoryEdit] = useState<Partial<Category> | null>(null);
   const [docChangeKey, setDocChangeKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // collapsible sidebar
   // P1-05: Editor is now lazy-loaded via KnowledgeEditor component — no useEditor at top level
 
   useEffect(() => {
@@ -514,8 +515,10 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left Sidebar */}
-      <div className="flex flex-col p-5 overflow-hidden" style={{ width: '18%', minWidth: '180px', maxWidth: '220px', borderRight: '1px solid var(--wiki-border)', background: 'var(--wiki-surface)' }}>
+      {/* Left Sidebar — collapsible */}
+      <div className="flex flex-col overflow-hidden flex-shrink-0"
+        style={{ width: sidebarOpen ? '18%' : '0px', minWidth: sidebarOpen ? '180px' : '0px', maxWidth: '220px', borderRight: sidebarOpen ? '1px solid var(--wiki-border)' : '1px solid transparent', background: 'var(--wiki-surface)', transition: 'width 200ms ease, min-width 200ms ease' }}>
+        <div className="flex flex-col h-full p-5" style={{ opacity: sidebarOpen ? 1 : 0, transition: 'opacity 150ms ease' }}>
         <div className="flex items-center justify-between mb-5">
           <span className="text-xs font-medium text-wiki-text3 uppercase tracking-wider">分类目录</span>
           <div className="flex items-center gap-1">
@@ -573,15 +576,22 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
             </div>
           </div>
         </div>
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-xl font-semibold text-wiki-text">知识库</h1>
-            <p className="text-sm text-wiki-text2 mt-0.5">管理文档、笔记和参考资料</p>
-          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1 rounded-md hover:bg-wiki-surface2 transition-colors flex-shrink-0"
+              title={sidebarOpen ? '收起侧栏' : '展开侧栏'}>
+              {sidebarOpen ? <ChevronLeftIcon size={14} style={{ color: 'var(--wiki-text2)' }} /> : <ChevronRightIcon size={14} style={{ color: 'var(--wiki-text2)' }} />}
+            </button>
+            <div>
+              <h1 className="text-xl font-semibold text-wiki-text">知识库</h1>
+              <p className="text-sm text-wiki-text2 mt-0.5">管理文档、笔记和参考资料</p>
+            </div>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
               <UploadIcon size={14} />上传文档
@@ -774,6 +784,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
