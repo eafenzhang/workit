@@ -75,31 +75,7 @@ function StreamingCard({ text, speed = 25 }: { text: string; speed?: number }) {
 
   return (
     <div className="relative">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          code({ className, children, ...props }: any) {
-            const isInline = !className;
-            if (isInline) {
-              return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
-            }
-            return (
-              <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                <code className={className} {...props}>{children}</code>
-              </pre>
-            );
-          },
-          p({ children }: any) {
-            return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
-          },
-          ul({ children }: any) {
-            return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
-          },
-          ol({ children }: any) {
-            return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
-          },
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
         {displayed}
       </ReactMarkdown>
       {!isComplete && (
@@ -110,34 +86,46 @@ function StreamingCard({ text, speed = 25 }: { text: string; speed?: number }) {
   );
 }
 
+// Shared markdown component styles (table support + wider spacing)
+const MD_COMPONENTS = {
+  code({ className, children, ...props }: any) {
+    const isInline = !className;
+    if (isInline) {
+      return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
+    }
+    return (
+      <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <code className={className} {...props}>{children}</code>
+      </pre>
+    );
+  },
+  p({ children }: any) {
+    return <p style={{ marginBottom: '1em', lineHeight: 2.0 }}>{children}</p>;
+  },
+  ul({ children }: any) {
+    return <ul style={{ paddingLeft: '1.5em', marginBottom: '1em', lineHeight: 2.0 }}>{children}</ul>;
+  },
+  ol({ children }: any) {
+    return <ol style={{ paddingLeft: '1.5em', marginBottom: '1em', lineHeight: 2.0 }}>{children}</ol>;
+  },
+  table({ children }: any) {
+    return <table className="w-full my-2 border-collapse text-sm" style={{ border: '1px solid var(--wiki-border)' }}>{children}</table>;
+  },
+  th({ children }: any) {
+    return <th className="px-3 py-2 text-xs font-semibold text-left" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}>{children}</th>;
+  },
+  td({ children }: any) {
+    return <td className="px-3 py-2 text-xs" style={{ border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>{children}</td>;
+  },
+  blockquote({ children }: any) {
+    return <blockquote className="border-l-2 pl-3 my-2 text-sm italic" style={{ borderColor: 'var(--wiki-accent)', color: 'var(--wiki-text2)' }}>{children}</blockquote>;
+  },
+};
+
 // ── Markdown renderer (without streaming) ──
 function MarkdownContent({ text }: { text: string }) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ className, children, ...props }: any) {
-          const isInline = !className;
-          if (isInline) {
-            return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
-          }
-          return (
-            <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-              <code className={className} {...props}>{children}</code>
-            </pre>
-          );
-        },
-        p({ children }: any) {
-          return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
-        },
-        ul({ children }: any) {
-          return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
-        },
-        ol({ children }: any) {
-          return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
-        },
-      }}
-    >
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
       {text}
     </ReactMarkdown>
   );
@@ -620,14 +608,6 @@ function Home({ onOpenTab }: HomeProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Agent personality badge */}
-          {userProfile?.role && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}>
-              <BrainIcon size={12} style={{ color: '#6366f1' }} />
-              <span style={{ color: '#6366f1', fontWeight: 500 }}>{userProfile.role}</span>
-            </div>
-          )}
           <button
             onClick={handleNewChat}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
@@ -644,7 +624,7 @@ function Home({ onOpenTab }: HomeProps) {
               <ClockIcon size={13} />历史对话
             </button>
             {showHistory && (
-              <div className="absolute top-full mt-2 right-0 w-80 max-h-80 overflow-y-auto rounded-xl shadow-xl z-30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <div className="absolute top-full mt-2 right-0 w-80 max-h-80 overflow-y-auto scrollbar-thin rounded-xl shadow-xl z-30" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                 <div className="sticky top-0 px-4 py-2.5 text-xs font-semibold" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
                   历史对话 ({conversations.length})
                 </div>
@@ -699,9 +679,7 @@ function Home({ onOpenTab }: HomeProps) {
               onSend={handleSend}
               selectedProvider={selectedProvider}
               selectedModel={selectedModel}
-              toolsEnabled={toolsEnabled}
               onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-              onToolsToggle={() => setToolsEnabled(!toolsEnabled)}
             />
           </div>
         ) : (
@@ -761,9 +739,7 @@ function Home({ onOpenTab }: HomeProps) {
             disabled={sending}
             selectedProvider={selectedProvider}
             selectedModel={selectedModel}
-            toolsEnabled={toolsEnabled}
             onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-            onMcpToggle={() => setToolsEnabled(!toolsEnabled)}
           />
           </div>
         </div>
