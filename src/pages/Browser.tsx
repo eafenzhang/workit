@@ -483,35 +483,38 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
       `}</style>
       {browserLoading && <div className="browser-progress" />}
 
-      {/* Webview / Placeholder */}
+      {/* New tab page — shown when no URL (separate from webview container) */}
+      {(!activeTab?.url || activeTab.url === 'about:blank') && tier !== 'cold' && (
+        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-bg)' }}>
+          <div className="text-center">
+            <div className="text-4xl mb-4 opacity-30" style={{ color: 'var(--wiki-text)' }}>Workit</div>
+            <div className="text-sm text-wiki-text2 mb-2">内置浏览器</div>
+            <div className="text-xs text-wiki-text3">
+              在地址栏输入网址或搜索内容开始浏览
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cold tier placeholder */}
+      {tier === 'cold' && (
+        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
+          <div className="text-center px-6">
+            <div className="text-xs text-wiki-text3 mb-1">浏览器已休眠</div>
+            <div className="text-[11px] text-wiki-text3 opacity-60 truncate max-w-[300px]">
+              {snapshot?.title || '无标题'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Webview container — DOM-managed, no React children */}
       <div
         ref={wvContainerRef}
         className="flex-1 flex flex-col overflow-hidden"
-        style={{ display: 'flex' }}
+        style={{ display: (!activeTab?.url || activeTab.url === 'about:blank' || tier === 'cold') ? 'none' : 'flex' }}
         onContextMenu={handleContextMenu}
-      >
-        {tier === 'cold' ? (
-          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
-            <div className="text-center px-6">
-              <div className="text-xs text-wiki-text3 mb-1">浏览器已休眠</div>
-              <div className="text-[11px] text-wiki-text3 opacity-60 truncate max-w-[300px]">
-                {snapshot?.title || '无标题'}
-              </div>
-            </div>
-          </div>
-        ) : (!activeTab?.url || activeTab.url === 'about:blank') ? (
-          /* New tab page — shown when no URL is loaded */
-          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-bg)' }}>
-            <div className="text-center">
-              <div className="text-4xl mb-4 opacity-30" style={{ color: 'var(--wiki-text)' }}>Workit</div>
-              <div className="text-sm text-wiki-text2 mb-6">内置浏览器</div>
-              <div className="text-xs text-wiki-text3">
-                在地址栏输入网址或搜索内容开始浏览
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      />
 
       {/* Context menu with fade animation */}
       {ctxMenu && (
