@@ -45,16 +45,27 @@ export default function Settings() {
     // Subscribe to unified update events
     if (api?.onUpdateEvent) {
       const u = api.onUpdateEvent((type: string, data: any) => {
-        // Normalize both new (update:xxx) and legacy (update-xxx) event types
         const pct = typeof data === 'number' ? data : data?.percent ?? data?.progress ?? 0;
         const ver = typeof data === 'string' ? data : data?.version || '';
         switch (type) {
           case 'checking': sync({ status: 'checking', error: '' }); break;
-          case 'available': sync({ status: 'downloading', version: ver, progress: 0 }); break;
+          case 'available':
+            _updVersion = ver;
+            setLatestVersion(ver);
+            setUpdateStatus('downloading');
+            setDownloadProgress(0);
+            break;
           case 'not-available': sync({ status: 'idle', error: '已是最新版本' }); setTimeout(() => sync({ error: '' }), 3000); break;
           case 'progress':
-          case 'download-progress': sync({ progress: pct }); if (pct >= 100) sync({ status: 'ready' }); break;
-          case 'downloaded': sync({ status: 'ready', version: ver }); break;
+          case 'download-progress':
+            _updProgress = pct;
+            setDownloadProgress(pct);
+            setUpdateStatus('downloading');
+            break;
+          case 'downloaded':
+            _updStatus = 'ready'; setUpdateStatus('ready');
+            _updVersion = ver || _updVersion; setLatestVersion(ver || _updVersion);
+            break;
           case 'error': sync({ status: 'error', error: data?.message || '更新失败' }); break;
         }
       });
@@ -66,23 +77,18 @@ export default function Settings() {
   const checkForUpdate = async () => {
     if (!api) return;
     sync({ status: 'checking', error: '' });
-    const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
     try {
-      const result = await Promise.race([api.checkForUpdate(), timeout(30000)]);
+      const result = await api.checkForUpdate();
       if (result?.error) { sync({ status: 'error', error: result.error }); return; }
       if (result?.available) {
+        // Updater auto-starts download via event — just update status
         sync({ status: 'downloading', version: result.version, progress: 0 });
-        const dlResult = await Promise.race([api.downloadUpdate(), timeout(30000)]);
-        if (dlResult?.error) sync({ status: 'error', error: '下载失败: ' + dlResult.error });
       } else {
-        sync({ status: 'idle', error: '已是最新版本' });
+        sync({ status: 'idle', error: result?.note || '已是最新版本' });
         setTimeout(() => sync({ error: '' }), 3000);
       }
     } catch (err: any) {
-      const msg = err?.message || '';
-      if (msg === 'timeout') sync({ status: 'error', error: '检查更新超时' });
-      else if (msg.includes('No handler')) sync({ status: 'idle', error: '更新服务未就绪（本地构建）' });
-      else sync({ status: 'error', error: '检查更新失败: ' + (msg || '未知错误') });
+      sync({ status: 'error', error: '检查更新失败: ' + (err?.message || '网络错误') });
     }
   };
 
