@@ -23,24 +23,14 @@ const upload = multer({ storage });
 
 const app = express.Router();
 
-// 辅助函数：执行带参数查询，返回行数组（每行为对象）
+// 辅助函数：执行带参数查询，返回行数组（better-sqlite3 .raw() 模式返回数组的数组）
 function queryAll(db, sql, params = []) {
-  const stmt = db.prepare(sql);
-  if (params.length > 0) stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) rows.push(stmt.get());
-  stmt.free();
-  return rows;
+  return db.prepare(sql).raw().all(...params);
 }
 
-// 辅助函数：执行单条查询
+// 辅助函数：执行单条查询（返回数组或 null）
 function queryOne(db, sql, params = []) {
-  const stmt = db.prepare(sql);
-  if (params.length > 0) stmt.bind(params);
-  let row = null;
-  if (stmt.step()) row = stmt.get();
-  stmt.free();
-  return row;
+  return db.prepare(sql).raw().get(...params) || null;
 }
 
 // 辅助函数：格式化行数据为对象
@@ -104,25 +94,21 @@ app.get('/', (req, res) => {
   const offset = (page - 1) * ps;
 
   // Count total matching rows
-  const countStmt = db.prepare('SELECT COUNT(*) FROM requirements' + whereSQL);
-  if (params.length > 0) countStmt.bind(params);
-  countStmt.step();
-  const total = countStmt.get()[0];
-  countStmt.free();
+  const total = db.prepare('SELECT COUNT(*) FROM requirements' + whereSQL).raw().get(...params)?.[0] || 0;
 
   // Fetch page with LIMIT/OFFSET
   const pagedParams = [...params, ps, offset];
   const results = queryAll(db, BASE_SELECT + whereSQL + ' ORDER BY created_at DESC LIMIT ? OFFSET ?', pagedParams);
 
   // Compute unfiltered status counts for the status bar (always from ALL records)
-  const allCounts = db.exec("SELECT status, COUNT(*) FROM requirements GROUP BY status")[0]?.values || [];
+  const allCounts = db.prepare('SELECT status, COUNT(*) FROM requirements GROUP BY status').raw().all();
   const counts = { '待评估': 0, '设计中': 0, '实现中': 0, '测试中': 0, '已完成': 0 };
   for (const [s, c] of allCounts) {
     if (counts[s] !== undefined) counts[s] = c;
   }
 
   // Compute module counts for the sidebar (always from ALL records)
-  const moduleCountsRaw = db.exec("SELECT module, COUNT(*) FROM requirements GROUP BY module")[0]?.values || [];
+  const moduleCountsRaw = db.prepare('SELECT module, COUNT(*) FROM requirements GROUP BY module').raw().all();
   const moduleCounts = {};
   for (const [m, c] of moduleCountsRaw) {
     moduleCounts[m || '用户端'] = c;
@@ -152,10 +138,8 @@ app.post('/', (req, res) => {
   const { title, desc = '', category = '产品', module = '用户端', priority = '中', assignee = '', creator = '', dueDate = '', tags = [], images = [] } = req.body;
   const stmt = db.prepare(`INSERT INTO requirements (title, description, category, module, priority, status, assignee, creator, due_date, tags, images)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  stmt.run([title, desc||'', category, module, priority, '待评估', assignee, creator, dueDate, JSON.stringify(tags), JSON.stringify(images)]);
-  stmt.free();
-  const idArr = db.exec("SELECT last_insert_rowid()");
-  const id = idArr[0]?.values[0][0] ?? 0;
+  stmt.run(title, desc||'', category, module, priority, '待评估', assignee, creator, dueDate, JSON.stringify(tags), JSON.stringify(images));
+  const id = db.prepare('SELECT last_insert_rowid()').raw().get()?.[0] ?? 0;
 
   // 保存到文件
   saveDbDirect();
@@ -197,19 +181,22 @@ app.put('/:id', (req, res) => {
     workflow_handler = ?, workflow_history = ?,
     updated_at = datetime('now', 'localtime')
     WHERE id = ?`);
-  stmt.run([title||'', desc||'', category||'', module||'用户端', priority||'', status||'',
+  db.prepare(`UPDATE requirements SET
+    title = ?, description = ?, category = ?, module = ?, priority = ?, status = ?,
+    assignee = ?, creator = ?, due_date = ?, tags = ?, images = ?,
+    workflow_handler = ?, workflow_history = ?,
+    updated_at = datetime('now', 'localtime')
+    WHERE id = ?`).run(
+    title||'', desc||'', category||'', module||'用户端', priority||'', status||'',
     assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]),
-    workflow_handler||'', JSON.stringify(workflowHistory), id]);
-  stmt.free();
+    workflow_handler||'', JSON.stringify(workflowHistory), id);
   res.json({ success: true });
 });
 
 // 删除
 app.delete('/:id', (req, res) => {
   const db = getDb();
-  const stmt = db.prepare('DELETE FROM requirements WHERE id = ?');
-  stmt.run([parseInt(req.params.id)]);
-  stmt.free();
+  db.prepare('DELETE FROM requirements WHERE id = ?').run(parseInt(req.params.id));
   res.json({ success: true });
 });
 
@@ -223,7 +210,7 @@ app.post('/:id/analyze', async (req, res) => {
 
   // 从本地数据库读取模型（优先启用+默认的，其次仅启用的，最后任意）
   let modelName = '', provider = '', baseUrl = '', apiKey = '', modelId = '';
-  const allRows = db.exec("SELECT name, provider, base_url, api_key, model_id, enabled, is_default FROM models")[0]?.values || [];
+  const allRows = db.prepare('SELECT name, provider, base_url, api_key, model_id, enabled, is_default FROM models').raw().all();
   if (allRows.length === 0) {
     return res.status(400).json({ error: '无可用模型，请先在模型配置中添加模型' });
   }
@@ -380,18 +367,16 @@ app.post('/:id/analyze', async (req, res) => {
   }
 
   // 保存结果
-  const stmt = db.prepare(`UPDATE requirements SET ai_summary = ?, ai_tags = ?, image_descriptions = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`);
-  stmt.run([aiSummary, JSON.stringify(aiTags), JSON.stringify(imageDescriptions), id]);
-  stmt.free();
+  db.prepare(`UPDATE requirements SET ai_summary = ?, ai_tags = ?, image_descriptions = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`).run(
+    aiSummary, JSON.stringify(aiTags), JSON.stringify(imageDescriptions), id);
 
   // AI 分析完成后，自动在知识库创建文档
   if (aiSummary && id) {
     try {
       const docTitle = aiSummary.length > 50 ? aiSummary.substring(0, 50) : aiSummary;
-      const docStmt = db.prepare(`INSERT INTO documents (title, category, type, tags, content) VALUES (?, ?, ?, ?, ?)`);
       const docContent = `## ${title}\n\n${description}\n\n---\n**AI 摘要**: ${aiSummary}\n**模块**: ${row[3] || '用户端'}\n**优先级**: ${row[5] || '中'}\n**状态**: ${row[6] || '待评估'}`;
-      docStmt.run([docTitle, '需求', 'MD', JSON.stringify(aiTags), docContent]);
-      docStmt.free();
+      db.prepare('INSERT INTO documents (title, category, type, tags, content) VALUES (?, ?, ?, ?, ?)').run(
+        docTitle, '需求', 'MD', JSON.stringify(aiTags), docContent);
       console.log('[AI] Auto-created document for requirement:', id);
     } catch (e) {
       console.error('[AI] Auto-create document failed:', e.message);

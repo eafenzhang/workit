@@ -2,11 +2,11 @@
 const { app, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const Database = require('better-sqlite3');
 
 // Module-level state
 let _logPath = '';
 let _dbPath = '';
-let _saveTimer = null;
 
 // P0-01: Whitelist for dynamic table names used in SQL
 const ALLOWED_TABLES = ['requirements', 'documents', 'mcp_servers', 'models', 'knowledge_categories', 'skills', 'claude_code_plugins', 'cli_tools', 'requirement_modules'];
@@ -50,9 +50,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => { log('UNHANDLED REJECTION', err); });
 
 // ========== Database ==========
-async function initDatabase(userDataPath) {
-  const sqlJsInit = require('sql.js');
-  const SQL = await sqlJsInit();
+function initDatabase(userDataPath) {
   const dbPath = path.join(userDataPath || app.getPath('userData'), 'workit-data.db');
   _dbPath = dbPath;
   const dbBackupPath = path.join(userDataPath || app.getPath('userData'), 'workit-data.db.bak');
@@ -69,19 +67,17 @@ async function initDatabase(userDataPath) {
       } catch (backupErr) {
         log('initDatabase: backup creation failed (non-fatal)', backupErr);
       }
-      const fileData = fs.readFileSync(dbPath);
-      db = new SQL.Database(fileData);
-      // Quick integrity check: try a simple query
-      db.exec('SELECT 1');
+      db = new Database(dbPath);
+      // Quick integrity check
+      db.pragma('integrity_check');
     } else if (fs.existsSync(dbBackupPath)) {
       // Restore from backup if main DB is missing (e.g. after reinstall)
       log('initDatabase: main DB missing, restoring from backup');
       fs.copyFileSync(dbBackupPath, dbPath);
-      const fileData = fs.readFileSync(dbPath);
-      db = new SQL.Database(fileData);
-      db.exec('SELECT 1');
+      db = new Database(dbPath);
+      db.pragma('integrity_check');
     } else {
-      db = new SQL.Database();
+      db = new Database(dbPath);
     }
   } catch (dbErr) {
     log('initDatabase: corruption detected or read error', dbErr);
@@ -90,9 +86,8 @@ async function initDatabase(userDataPath) {
       try {
         log('initDatabase: attempting restore from backup');
         fs.copyFileSync(dbBackupPath, dbPath);
-        const fileData = fs.readFileSync(dbPath);
-        db = new SQL.Database(fileData);
-        db.exec('SELECT 1');
+        db = new Database(dbPath);
+        db.pragma('integrity_check');
         log('initDatabase: restored from backup successfully');
       } catch (restoreErr) {
         log('initDatabase: restore from backup also failed, creating fresh DB', restoreErr);
@@ -100,18 +95,23 @@ async function initDatabase(userDataPath) {
           const corruptPath = dbPath + '.corrupt.' + Date.now();
           if (fs.existsSync(dbPath)) fs.renameSync(dbPath, corruptPath);
         } catch {}
-        db = new SQL.Database();
+        db = new Database(dbPath);
       }
     } else {
       try {
-        const backupPath = dbPath + '.corrupt.' + Date.now();
-        if (fs.existsSync(dbPath)) fs.renameSync(dbPath, backupPath);
+        const corruptPath = dbPath + '.corrupt.' + Date.now();
+        if (fs.existsSync(dbPath)) fs.renameSync(dbPath, corruptPath);
       } catch (backupErr) {
         log('initDatabase: backup failed', backupErr);
       }
-      db = new SQL.Database();
+      db = new Database(dbPath);
     }
   }
+
+  // Enable WAL mode for concurrent reads + instant durability
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('foreign_keys = ON');
 
   db.run(`CREATE TABLE IF NOT EXISTS requirements (
     id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT DEFAULT '',
@@ -171,12 +171,11 @@ async function initDatabase(userDataPath) {
     created_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
   // Seed default modules if table is empty
-  const modCount = db.exec("SELECT COUNT(*) FROM requirement_modules")[0]?.values[0][0] || 0;
+  const modCount = db.prepare('SELECT COUNT(*) FROM requirement_modules').raw().get()?.[0] || 0;
   if (modCount === 0) {
     const defaults = ['系统后台', '机构后台', '品牌门店', '收银终端', '用户端', '开放平台'];
     const stmt = db.prepare('INSERT INTO requirement_modules (name, sort_order) VALUES (?, ?)');
-    defaults.forEach((name, i) => stmt.run([name, i]));
-    stmt.free();
+    defaults.forEach((name, i) => stmt.run(name, i));
   }
   db.run(`CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, provider TEXT NOT NULL,
@@ -193,9 +192,9 @@ async function initDatabase(userDataPath) {
   // Determine current schema version
   let currentVersion = 0;
   try {
-    const verRow = db.exec("SELECT MAX(version) FROM schema_version");
-    if (verRow.length > 0 && verRow[0].values.length > 0 && verRow[0].values[0][0] !== null) {
-      currentVersion = verRow[0].values[0][0];
+    const verRow = db.prepare('SELECT MAX(version) FROM schema_version').raw().get();
+    if (verRow && verRow[0] !== null) {
+      currentVersion = verRow[0];
     }
   } catch { currentVersion = 0; }
 
@@ -207,8 +206,7 @@ async function initDatabase(userDataPath) {
       created_at TEXT DEFAULT (datetime('now','localtime'))
     )`);
     // Seed default categories if table is empty
-    const existingCats = db.exec("SELECT COUNT(*) FROM knowledge_categories");
-    const catCount = (existingCats.length > 0 && existingCats[0].values.length > 0) ? existingCats[0].values[0][0] : 0;
+    const catCount = db.prepare('SELECT COUNT(*) FROM knowledge_categories').raw().get()?.[0] || 0;
     if (catCount === 0) {
       db.run("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('指南')");
       db.run("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('参考')");
@@ -282,39 +280,21 @@ async function initDatabase(userDataPath) {
   return db;
 }
 
-// P1-01: Debounced save (200ms) + atomic write (tmp + rename)
-function debouncedSaveDb(db) {
-  if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => saveDb(db), 200);
-}
+// better-sqlite3 writes directly to disk via WAL — no manual save needed
+function saveDb(db) { /* no-op: WAL auto-persists */ }
 
-function saveDb(db) {
-  if (!db) return;
-  try {
-    const tmpPath = _dbPath + '.tmp';
-    const data = db.export();
-    fs.writeFileSync(tmpPath, data);
-    fs.renameSync(tmpPath, _dbPath);
-  } catch (e) {
-    log('saveDb FAILED (disk write error — data still in memory)', e);
-  }
-}
-
-// P1-02: Null checks for query/run
 function query(db, sql, params = []) {
   if (!db) { log('query called but db is null'); return []; }
-  const stmt = db.prepare(sql);
-  if (params.length > 0) stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) rows.push(stmt.get());
-  stmt.free();
-  return rows;
+  try {
+    return db.prepare(sql).raw().all(...params);
+  } catch (e) { log('query error: ' + sql.substring(0, 80), e); return []; }
 }
 
 function run(db, sql, params = []) {
   if (!db) { log('run called but db is null'); return; }
-  db.run(sql, params);
-  debouncedSaveDb(db); // P1-01: debounced instead of sync save
+  try {
+    db.prepare(sql).run(...params);
+  } catch (e) { log('run error: ' + sql.substring(0, 80), e); }
 }
 
 // P0-03: Encrypt API key before storage
