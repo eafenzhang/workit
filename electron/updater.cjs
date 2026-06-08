@@ -85,18 +85,29 @@ function setupAutoUpdater() {
 
     // ── IPC handlers ──
     ipcMain.handle('check-for-update', async () => {
-      try {
-        const r = await autoUpdater.checkForUpdates();
-        const current = app.getVersion();
-        if (r?.updateInfo?.version) {
-          const v = r.updateInfo.version;
-          return { available: v !== current, version: v, current };
+      // Retry up to 2 times for transient network errors (504, timeout, etc.)
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const r = await autoUpdater.checkForUpdates();
+          const current = app.getVersion();
+          if (r?.updateInfo?.version) {
+            const v = r.updateInfo.version;
+            return { available: v !== current, version: v, current };
+          }
+          return { available: false, current };
+        } catch (e) {
+          const msg = e.message || '';
+          const isTransient = msg.includes('504') || msg.includes('timeout') || msg.includes('ETIMEDOUT') || msg.includes('ECONNRESET');
+          if (isTransient && attempt < 2) {
+            log('Updater: transient error on attempt ' + attempt + ', retrying: ' + msg);
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+          }
+          log('Updater check error: ' + msg);
+          return { available: false, error: msg || 'Unknown error', current: app.getVersion() };
         }
-        return { available: false, current };
-      } catch (e) {
-        log('Updater check error: ' + (e.message || e));
-        return { available: false, error: e.message || 'Unknown error', current: app.getVersion() };
       }
+      return { available: false, error: '检查超时', current: app.getVersion() };
     });
 
     ipcMain.handle('download-update', async () => {
@@ -106,17 +117,29 @@ function setupAutoUpdater() {
 
     ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
 
-    // ── Startup: delayed auto-check + download ──
-    setTimeout(() => {
-      log('Updater: startup check');
-      autoUpdater.checkForUpdates().catch(e => log('Updater: startup check failed', e));
-    }, 15000); // 15s delay to let app fully load
+    // ── Retry helper for update checks ──
+    const checkWithRetry = (label, maxRetries = 3) => {
+      let attempts = 0;
+      const tryCheck = () => {
+        attempts++;
+        log('Updater: ' + label + ' (attempt ' + attempts + '/' + maxRetries + ')');
+        autoUpdater.checkForUpdates().catch(e => {
+          log('Updater: ' + label + ' failed (attempt ' + attempts + '): ' + (e.message || e));
+          if (attempts < maxRetries) {
+            const delay = attempts * 30000; // 30s, 60s, 90s backoff
+            log('Updater: retrying in ' + (delay/1000) + 's');
+            setTimeout(tryCheck, delay);
+          }
+        });
+      };
+      tryCheck();
+    };
+
+    // ── Startup: delayed auto-check + download (with retry) ──
+    setTimeout(() => checkWithRetry('startup check'), 15000);
 
     // ── Periodic check every 4 hours ──
-    _checkTimer = setInterval(() => {
-      log('Updater: periodic check');
-      autoUpdater.checkForUpdates().catch(e => log('Updater: periodic check failed', e));
-    }, CHECK_INTERVAL_MS);
+    _checkTimer = setInterval(() => checkWithRetry('periodic check'), CHECK_INTERVAL_MS);
 
     log('AutoUpdater: initialized');
   } catch (e) { log('AutoUpdater init failed', e); }
