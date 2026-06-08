@@ -23,41 +23,96 @@ const upload = multer({ storage });
 
 const app = express.Router();
 
-// 列表 - 支持多维度筛选 + 分页
+// 辅助函数：执行带参数查询，返回行数组（每行为对象）
+function queryAll(db, sql, params = []) {
+  const stmt = db.prepare(sql);
+  if (params.length > 0) stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.get());
+  stmt.free();
+  return rows;
+}
+
+// 辅助函数：执行单条查询
+function queryOne(db, sql, params = []) {
+  const stmt = db.prepare(sql);
+  if (params.length > 0) stmt.bind(params);
+  let row = null;
+  if (stmt.step()) row = stmt.get();
+  stmt.free();
+  return row;
+}
+
+// 辅助函数：格式化行数据为对象
+function formatReqRow(r) {
+  return {
+    id: r[0], title: r[1], desc: r[2], category: r[3],
+    module: r[4]||'用户端', priority: r[5], status: r[6], assignee: r[7],
+    creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
+    images: JSON.parse(r[11]||'[]'),
+    aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
+    imageDescriptions: JSON.parse(r[14]||'[]'),
+    workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
+    createdAt: r[17], updatedAt: r[18],
+  };
+}
+
+// 列表 - 支持多维度筛选 + 分页（使用参数化 SQL）
 app.get('/', (req, res) => {
   const db = getDb();
-  let results = db.exec("SELECT id, title, description, category, module, priority, status, assignee, creator, due_date, tags, images, ai_summary, ai_tags, image_descriptions, workflow_handler, workflow_history, created_at, updated_at FROM requirements ORDER BY created_at DESC")[0]?.values || [];
-
   const { search, status, category, priority, assignee, dateFrom, dateTo, _page, _pageSize } = req.query;
 
+  const BASE_SELECT = 'SELECT id, title, description, category, module, priority, status, assignee, creator, due_date, tags, images, ai_summary, ai_tags, image_descriptions, workflow_handler, workflow_history, created_at, updated_at FROM requirements';
+
+  // 构建参数化 WHERE 子句
+  const whereClauses = [];
+  const params = [];
+
   if (search) {
-    const s = search.toLowerCase();
-    results = results.filter(r => (r[1]||'').toLowerCase().includes(s) || (r[2]||'').toLowerCase().includes(s));
+    const s = '%' + String(search).toLowerCase() + '%';
+    whereClauses.push('(LOWER(title) LIKE ? OR LOWER(description) LIKE ?)');
+    params.push(s, s);
   }
   if (status && status !== '全部') {
-    results = results.filter(r => r[6] === status);
+    whereClauses.push('status = ?');
+    params.push(status);
   }
   if (category && category !== '全部') {
-    results = results.filter(r => r[4] === category);
+    whereClauses.push('category = ?');
+    params.push(category);
   }
   if (priority && priority !== '全部') {
-    results = results.filter(r => r[5] === priority);
+    whereClauses.push('priority = ?');
+    params.push(priority);
   }
   if (assignee && assignee !== '全部') {
-    results = results.filter(r => r[7] === assignee);
+    whereClauses.push('assignee = ?');
+    params.push(assignee);
   }
   if (dateFrom) {
-    results = results.filter(r => (r[17]||'') >= dateFrom);
+    whereClauses.push('created_at >= ?');
+    params.push(dateFrom);
   }
   if (dateTo) {
-    results = results.filter(r => (r[17]||'') <= dateTo);
+    whereClauses.push('created_at <= ?');
+    params.push(dateTo);
   }
 
-  const total = results.length;
+  const whereSQL = whereClauses.length > 0 ? ' WHERE ' + whereClauses.join(' AND ') : '';
   const page = parseInt(_page) || 1;
   const ps = parseInt(_pageSize) || 10;
-  const start = (page - 1) * ps;
-  const paged = results.slice(start, start + ps);
+  const offset = (page - 1) * ps;
+
+  // Count total matching rows
+  const countStmt = db.prepare('SELECT COUNT(*) FROM requirements' + whereSQL);
+  if (params.length > 0) countStmt.bind(params);
+  countStmt.step();
+  const total = countStmt.get()[0];
+  countStmt.free();
+
+  // Fetch page with LIMIT/OFFSET
+  const pagedParams = [...params, ps, offset];
+  const results = queryAll(db, BASE_SELECT + whereSQL + ' ORDER BY created_at DESC LIMIT ? OFFSET ?', pagedParams);
 
   // Compute unfiltered status counts for the status bar (always from ALL records)
   const allCounts = db.exec("SELECT status, COUNT(*) FROM requirements GROUP BY status")[0]?.values || [];
@@ -68,22 +123,13 @@ app.get('/', (req, res) => {
 
   // Compute module counts for the sidebar (always from ALL records)
   const moduleCountsRaw = db.exec("SELECT module, COUNT(*) FROM requirements GROUP BY module")[0]?.values || [];
-  const moduleCounts: Record<string, number> = {};
+  const moduleCounts = {};
   for (const [m, c] of moduleCountsRaw) {
     moduleCounts[m || '用户端'] = c;
   }
 
   res.json({
-    items: paged.map(r => ({
-      id: r[0], title: r[1], desc: r[2], category: r[3],
-      module: r[4]||'用户端', priority: r[5], status: r[6], assignee: r[7],
-      creator: r[8], dueDate: r[9], tags: JSON.parse(r[10]||'[]'),
-      images: JSON.parse(r[11]||'[]'),
-      aiSummary: r[12]||'', aiTags: JSON.parse(r[13]||'[]'),
-      imageDescriptions: JSON.parse(r[14]||'[]'),
-      workflowHandler: r[15]||'', workflowHistory: JSON.parse(r[16]||'[]'),
-      createdAt: r[17], updatedAt: r[18],
-    })),
+    items: results.map(formatReqRow),
     total,
     counts,
     moduleCounts,
@@ -95,18 +141,9 @@ app.get('/', (req, res) => {
 // 详情
 app.get('/:id', (req, res) => {
   const db = getDb();
-  const row = db.exec(`SELECT id, title, description, category, module, priority, status, assignee, creator, due_date, tags, images, ai_summary, ai_tags, image_descriptions, workflow_handler, workflow_history, created_at, updated_at FROM requirements WHERE id = ${req.params.id}`)[0]?.values[0];
+  const row = queryOne(db, 'SELECT id, title, description, category, module, priority, status, assignee, creator, due_date, tags, images, ai_summary, ai_tags, image_descriptions, workflow_handler, workflow_history, created_at, updated_at FROM requirements WHERE id = ?', [parseInt(req.params.id)]);
   if (!row) return res.status(404).json({ error: 'Not found' });
-  res.json({
-    id: row[0], title: row[1], desc: row[2], category: row[3],
-    module: row[4]||'用户端', priority: row[5], status: row[6], assignee: row[7],
-    creator: row[8], dueDate: row[9], tags: JSON.parse(row[10]||'[]'),
-    images: JSON.parse(row[11]||'[]'),
-    aiSummary: row[12]||'', aiTags: JSON.parse(row[13]||'[]'),
-    imageDescriptions: JSON.parse(row[14]||'[]'),
-    workflowHandler: row[15]||'', workflowHistory: JSON.parse(row[16]||'[]'),
-    createdAt: row[17], updatedAt: row[18],
-  });
+  res.json(formatReqRow(row));
 });
 
 // 新建
@@ -139,9 +176,10 @@ app.post('/', (req, res) => {
 app.put('/:id', (req, res) => {
   const db = getDb();
   const { title, desc, category, module, priority, status, assignee, creator, dueDate, tags, images, workflow_handler } = req.body;
+  const id = parseInt(req.params.id);
 
   // 如果状态变更，记录流转历史
-  const oldRow = db.exec(`SELECT status, workflow_history FROM requirements WHERE id = ${req.params.id}`)[0]?.values[0];
+  const oldRow = queryOne(db, 'SELECT status, workflow_history FROM requirements WHERE id = ?', [id]);
   let workflowHistory = [];
   try { workflowHistory = JSON.parse(oldRow?.[1] || '[]'); } catch {}
   if (oldRow && oldRow[0] !== status) {
@@ -161,21 +199,24 @@ app.put('/:id', (req, res) => {
     WHERE id = ?`);
   stmt.run([title||'', desc||'', category||'', module||'用户端', priority||'', status||'',
     assignee||'', creator||'', dueDate||'', JSON.stringify(tags||[]), JSON.stringify(images||[]),
-    workflow_handler||'', JSON.stringify(workflowHistory), req.params.id]);
+    workflow_handler||'', JSON.stringify(workflowHistory), id]);
   stmt.free();
   res.json({ success: true });
 });
 
 // 删除
 app.delete('/:id', (req, res) => {
-  getDb().run(`DELETE FROM requirements WHERE id = ${req.params.id}`);
+  const db = getDb();
+  const stmt = db.prepare('DELETE FROM requirements WHERE id = ?');
+  stmt.run([parseInt(req.params.id)]);
+  stmt.free();
   res.json({ success: true });
 });
 
 // AI 分析
 app.post('/:id/analyze', async (req, res) => {
   const db = getDb();
-  const row = db.exec(`SELECT id, title, description, tags, images FROM requirements WHERE id = ${req.params.id}`)[0]?.values[0];
+  const row = queryOne(db, 'SELECT id, title, description, tags, images FROM requirements WHERE id = ?', [parseInt(req.params.id)]);
   if (!row) return res.status(404).json({ error: 'Not found' });
 
   const [id, title, description, tags, images] = [row[0], row[1], row[2]||'', JSON.parse(row[3]||'[]'), JSON.parse(row[4]||'[]')];

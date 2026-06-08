@@ -470,12 +470,18 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     setConfirmDeleteId(id);
   };
 
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const confirmDelete = () => {
     if (confirmDeleteId === null) return;
+    setDeleteLoading(true);
     apiFetch(`/api/requirements/${confirmDeleteId}`, { method: 'DELETE' }).then(() => {
       onCloseSelf?.();
       fetchPage(1); toast.success('已删除');
       setConfirmDeleteId(null);
+    }).catch(() => {
+      toast.error('删除失败，请重试');
+    }).finally(() => {
+      setDeleteLoading(false);
     });
   };
 

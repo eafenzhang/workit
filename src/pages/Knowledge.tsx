@@ -406,12 +406,18 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
       });
   };
 
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<{ id: string; name: string } | null>(null);
+
   const handleDeleteCategory = () => {
     if (activeCategory === 'all') return;
     const cat = categoriesList.find(c => c.id === activeCategory);
     if (!cat) return;
-    if (!confirm(`确定删除分类"${cat.name}"？`)) return;
-    apiFetch(`${API.knowledgeCategories}/${cat._dbId}`, { method: 'DELETE' })
+    setConfirmDeleteCategory({ id: cat._dbId || '', name: cat.name });
+  };
+
+  const confirmDeleteCategoryAction = () => {
+    if (!confirmDeleteCategory) return;
+    apiFetch(`${API.knowledgeCategories}/${confirmDeleteCategory.id}`, { method: 'DELETE' })
       .then(r => r.json())
       .then((data: any) => {
         if (data.error) { toast.error(data.error); return; }
@@ -419,7 +425,8 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
         setActiveCategory('all');
         fetchCategories();
       })
-      .catch(() => toast.error(MESSAGES.deleteFailed));
+      .catch(() => toast.error(MESSAGES.deleteFailed))
+      .finally(() => setConfirmDeleteCategory(null));
   };
 
   const handleSaveCategory = () => {
@@ -771,6 +778,14 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
         message="确定要删除此文档？此操作不可撤销。"
         onConfirm={confirmDelete}
         onCancel={() => setConfirmDeleteId(null)}
+      />
+      {/* Confirm Delete Category Dialog */}
+      <ConfirmDialog
+        open={confirmDeleteCategory !== null}
+        title="确认删除"
+        message={`确定要删除分类「${confirmDeleteCategory?.name}」？`}
+        onConfirm={confirmDeleteCategoryAction}
+        onCancel={() => setConfirmDeleteCategory(null)}
       />
     </div>
   );
