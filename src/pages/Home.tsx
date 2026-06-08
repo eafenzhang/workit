@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon, BotIcon } from 'lucide-react';
+import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon, BotIcon, ZapIcon, TerminalIcon, PuzzleIcon, BrainIcon, SettingsIcon } from 'lucide-react';
 import HomeInput, { type HomeSendPayload } from '../components/HomeInput';
 import PortalDropdown from '../components/PortalDropdown';
 import AIFeedback from '../components/AIFeedback';
@@ -39,23 +39,20 @@ function formatTime(date: Date): string { return `${String(date.getHours()).padS
 interface Conversation { id: string; title: string; messages: HomeMessage[]; createdAt: string; }
 const CONV_KS = 'home_conversations';
 
-// ── Typewriter streaming text component ──
-function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) {
+// ── Streaming card with Markdown rendering ──
+function StreamingCard({ text, speed = 25 }: { text: string; speed?: number }) {
   const [displayed, setDisplayed] = useState('');
-  const fullTextRef = useRef(text);
+  const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
-    fullTextRef.current = text;
-    if (!text) { setDisplayed(''); return; }
+    if (!text) { setDisplayed(''); setIsComplete(false); return; }
 
     setDisplayed('');
+    setIsComplete(false);
     let idx = 0;
     const chars = [...text];
     const timer = setInterval(() => {
-      if (idx >= chars.length) {
-        clearInterval(timer);
-        return;
-      }
+      if (idx >= chars.length) { clearInterval(timer); setIsComplete(true); return; }
       setDisplayed(chars.slice(0, idx + 1).join(''));
       idx++;
     }, Math.max(speed, 5));
@@ -63,36 +60,53 @@ function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) 
     return () => clearInterval(timer);
   }, [text, speed]);
 
-  if (!displayed) return <span className="text-wiki-text3 text-sm italic">AI 思考中...</span>;
+  if (!displayed) {
+    return (
+      <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--wiki-text3)' }}>
+        <span className="flex gap-1">
+          <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--wiki-text3)', animationDelay: '0ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--wiki-text3)', animationDelay: '150ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--wiki-text3)', animationDelay: '300ms' }} />
+        </span>
+        <span className="italic">AI 思考中...</span>
+      </div>
+    );
+  }
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ className, children, ...props }: any) {
-          const isInline = !className;
-          if (isInline) {
-            return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
-          }
-          return (
-            <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-              <code className={className} {...props}>{children}</code>
-            </pre>
-          );
-        },
-        p({ children }: any) {
-          return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
-        },
-        ul({ children }: any) {
-          return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
-        },
-        ol({ children }: any) {
-          return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
-        },
-      }}
-    >
-      {displayed}
-    </ReactMarkdown>
+    <div className="relative">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ className, children, ...props }: any) {
+            const isInline = !className;
+            if (isInline) {
+              return <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-info)' }} {...props}>{children}</code>;
+            }
+            return (
+              <pre className="overflow-x-auto rounded-lg p-3 my-2 text-xs" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <code className={className} {...props}>{children}</code>
+              </pre>
+            );
+          },
+          p({ children }: any) {
+            return <p style={{ marginBottom: '0.5em', lineHeight: 1.6 }}>{children}</p>;
+          },
+          ul({ children }: any) {
+            return <ul style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ul>;
+          },
+          ol({ children }: any) {
+            return <ol style={{ paddingLeft: '1.5em', marginBottom: '0.5em' }}>{children}</ol>;
+          },
+        }}
+      >
+        {displayed}
+      </ReactMarkdown>
+      {!isComplete && (
+        <span className="inline-block w-1.5 h-4 ml-0.5 align-text-bottom animate-pulse"
+          style={{ background: 'var(--wiki-text)' }} />
+      )}
+    </div>
   );
 }
 
@@ -198,37 +212,38 @@ function saveConversations(convs: Conversation[]): void {
 
 interface HomeProps { onOpenTab?: (type: string, title: string, extra?: Record<string, any>) => void; }
 
-/** Tool call bubble with collapsible result */
+/** Tool call bubble with collapsible result and tool icon */
 function ToolCallBubble({ msg }: { msg: HomeMessage }) {
   const [expanded, setExpanded] = useState(false);
+  const toolName = msg._meta?.toolName || '';
+  const isMCP = toolName.includes('__') && !toolName.startsWith('cli__');
+  const isCLI = toolName.startsWith('cli__');
+  const ToolIcon = isCLI ? TerminalIcon : isMCP ? PuzzleIcon : WrenchIcon;
+  const iconColor = isMCP ? '#6366f1' : isCLI ? '#10b981' : 'var(--wiki-text3)';
+  const displayName = isCLI ? toolName.slice(5) : toolName;
+
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%]">
-        <div className="px-3 py-2 rounded-lg text-xs flex items-center gap-2"
-          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
-          <WrenchIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
-          <span className="font-mono text-xs" style={{ color: 'var(--wiki-text)' }}>
-            调用工具: {msg._meta?.toolName}
-          </span>
+        <div className="px-3 py-2 rounded-lg text-xs flex items-center gap-2 cursor-pointer"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
+          onClick={() => setExpanded(!expanded)}>
+          <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+            style={{ background: iconColor + '20' }}>
+            <ToolIcon size={11} style={{ color: iconColor }} />
+          </div>
+          <span className="font-mono text-xs" style={{ color: 'var(--wiki-text)' }}>{displayName}</span>
+          {msg._meta?.args && <span className="text-[10px] text-wiki-text3 truncate max-w-[120px]">{JSON.stringify(msg._meta.args).substring(0, 40)}</span>}
+          <span className="ml-auto">{expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}</span>
         </div>
-        <div className="mt-1">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded transition-colors"
-            style={{ color: 'var(--wiki-text3)' }}
-          >
-            {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}
-            {expanded ? '收起结果' : '查看结果'}
-          </button>
-          {expanded && msg._meta?.result && (
-            <pre className="mt-1 p-2 rounded text-xs max-h-40 overflow-y-auto"
-              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', whiteSpace: 'pre-wrap', border: '1px solid var(--wiki-border)' }}>
-              {msg._meta.result.length > 2000
-                ? msg._meta.result.substring(0, 2000) + '\n\n[结果已截断，完整长度: ' + msg._meta.result.length + ' 字符]'
-                : msg._meta.result}
-            </pre>
-          )}
-        </div>
+        {expanded && msg._meta?.result && (
+          <pre className="mt-1 p-2 rounded text-xs max-h-48 overflow-y-auto scrollbar-thin"
+            style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', whiteSpace: 'pre-wrap', border: '1px solid var(--wiki-border)', borderRadius: '8px' }}>
+            {msg._meta.result.length > 2000
+              ? msg._meta.result.substring(0, 2000) + '\n\n[结果已截断，完整长度: ' + msg._meta.result.length + ' 字符]'
+              : msg._meta.result}
+          </pre>
+        )}
       </div>
     </div>
   );
@@ -240,10 +255,25 @@ function Home({ onOpenTab }: HomeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sending, setSending] = useState(false);
 
-  // Provider / Model / MCP state (lifted from HomeInput)
+  // Provider / Model / MCP state
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const [toolsEnabled, setToolsEnabled] = useState(false);
+  const [showToolPanel, setShowToolPanel] = useState(false);
+  // Tool category toggles
+  const [toolCategories, setToolCategories] = useState({ mcp: true, cli: true, skills: true, plugins: true });
+  const [toolCounts, setToolCounts] = useState({ mcp: 0, cli: 0, skills: 0, plugins: 0 });
+
+  // Load tool counts on mount
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (api?.mcpGetTools) { api.mcpGetTools().then((r: any) => setToolCounts(prev => ({ ...prev, mcp: r?.tools?.length || 0 }))).catch(() => {}); }
+    if (api?.dbQuery) {
+      api.dbQuery('GET', 'cli_tools').then((r: any) => { if (Array.isArray(r)) setToolCounts(prev => ({ ...prev, cli: r.filter((t:any)=>t.enabled).length })); }).catch(() => {});
+      api.dbQuery('GET', 'skills').then((r: any) => { if (Array.isArray(r)) setToolCounts(prev => ({ ...prev, skills: r.filter((t:any)=>t.enabled).length })); }).catch(() => {});
+      api.dbQuery('GET', 'claude_code_plugins').then((r: any) => { if (Array.isArray(r)) setToolCounts(prev => ({ ...prev, plugins: r.filter((t:any)=>t.enabled).length })); }).catch(() => {});
+    }
+  }, []);
 
   // Conversation management
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
@@ -318,15 +348,31 @@ function Home({ onOpenTab }: HomeProps) {
   const buildSystemPrompt = useCallback(() => {
     const p = userProfile;
     if (!p || !p.role) return '';
-    const parts = [`你是 ${p.nickname || 'Workit'}，你的身份角色是「${p.role}」。`];
-    if (p.personality) parts.push(`专业背景：${p.personality}`);
-    if (p.memory) parts.push(`[[用户画像记忆]] ${p.memory}`);
-    if (memorySummary) parts.push(`[[长期记忆]] ${memorySummary}`);
-    if (p.skills) parts.push(`技能：${p.skills}`);
-    parts.push(`对话要求：请严格以「${p.role}」角色的专业视角回答问题，使用中文，保持专业但友好的语气。`);
-    parts.push('当用户咨询与你角色无关的问题时，也应从你角色的专业角度给出建议。');
+    const nickname = p.nickname || 'Workit';
+    const parts = [
+      `# 身份`,
+      `你是「${nickname}」，一名专业的${p.role}。`,
+      `你在科技公司工作，专注于需求管理、技术交付和团队协作。`,
+    ];
+    if (p.personality) parts.push(`\n# 人格特质\n${p.personality}`);
+    if (p.memory_skills || p.skills) parts.push(`\n# 核心技能\n${p.memory_skills || p.skills}`);
+    if (p.memory) parts.push(`\n# 用户画像记忆\n${p.memory}`);
+    if (memorySummary) parts.push(`\n# 长期记忆\n${memorySummary}`);
+    parts.push(`\n# 对话规则`);
+    parts.push(`- 以${p.role}的专业视角思考和回答所有问题`);
+    parts.push(`- 结合你的「人格特质」和「核心技能」来处理任务`);
+    parts.push(`- 参考「用户画像记忆」和「长期记忆」来个性化回复`);
+    parts.push(`- 使用中文，保持专业但友好的语气`);
+    if (toolsEnabled) {
+      const activeTools: string[] = [];
+      if (toolCategories.mcp) activeTools.push('MCP工具');
+      if (toolCategories.cli) activeTools.push('CLI命令');
+      if (toolCategories.skills) activeTools.push('Skills技能');
+      if (toolCategories.plugins) activeTools.push('Plugins插件');
+      if (activeTools.length > 0) parts.push(`- 已启用的工具：${activeTools.join('、')}，在适当的时候主动调用`);
+    }
     return parts.join('\n');
-  }, [userProfile, memorySummary]);
+  }, [userProfile, memorySummary, toolsEnabled, toolCategories]);
 
   const handleSend = useCallback(async (payload: HomeSendPayload) => {
     const now = new Date();
@@ -513,9 +559,75 @@ function Home({ onOpenTab }: HomeProps) {
               ))}
             </div>
           </PortalDropdown>
+
+          {/* Tools toggle button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowToolPanel(!showToolPanel)}
+              className={`flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors ${toolsEnabled ? 'ring-1' : ''}`}
+              style={{
+                background: toolsEnabled ? 'rgba(99,102,241,0.12)' : 'var(--wiki-surface2)',
+                color: toolsEnabled ? '#6366f1' : 'var(--wiki-text2)',
+                border: toolsEnabled ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--wiki-border)',
+              }}
+              title="工具开关"
+            >
+              <WrenchIcon size={13} />
+              <span>工具{toolsEnabled ? ` (${Object.values(toolCategories).filter(Boolean).length})` : ''}</span>
+            </button>
+            {showToolPanel && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowToolPanel(false)} />
+                <div className="absolute top-full mt-1 left-0 w-56 rounded-lg shadow-xl z-30 p-2"
+                  style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                  <div className="text-[10px] px-2 py-1 font-semibold text-wiki-text3 uppercase tracking-wider">工具类别</div>
+                  {[
+                    { key: 'mcp', label: 'MCP工具', icon: PuzzleIcon, count: toolCounts.mcp },
+                    { key: 'cli', label: 'CLI命令', icon: TerminalIcon, count: toolCounts.cli },
+                    { key: 'skills', label: 'Skills技能', icon: ZapIcon, count: toolCounts.skills },
+                    { key: 'plugins', label: 'Plugins插件', icon: SettingsIcon, count: toolCounts.plugins },
+                  ].map(tc => {
+                    const Icon = tc.icon;
+                    const enabled = (toolCategories as any)[tc.key];
+                    return (
+                      <div key={tc.key} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-wiki-surface2 cursor-pointer"
+                        onClick={() => {
+                          const next = { ...toolCategories, [tc.key]: !enabled };
+                          setToolCategories(next);
+                          // Enable toolsEnabled if any category is on
+                          if (Object.values(next).some(Boolean) && !toolsEnabled) setToolsEnabled(true);
+                          if (!Object.values(next).some(Boolean) && toolsEnabled) setToolsEnabled(false);
+                        }}>
+                        <div className="flex items-center gap-2">
+                          <Icon size={11} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+                          <span className="text-xs" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
+                          {tc.count > 0 && <span className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>{tc.count}</span>}
+                        </div>
+                        <div
+                          className="relative w-8 h-4 rounded-full transition-colors cursor-pointer"
+                          style={{ background: enabled ? '#6366f1' : 'var(--wiki-border)' }}
+                        >
+                          <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all"
+                            style={{ left: enabled ? '18px' : '2px', transition: 'left 0.15s' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Agent personality badge */}
+          {userProfile?.role && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}>
+              <BrainIcon size={12} style={{ color: '#6366f1' }} />
+              <span style={{ color: '#6366f1', fontWeight: 500 }}>{userProfile.role}</span>
+            </div>
+          )}
           <button
             onClick={handleNewChat}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
