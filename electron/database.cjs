@@ -287,6 +287,25 @@ function initDatabase(userDataPath) {
     log('initDatabase: migration v4 complete (workflows + workflow_executions)');
   }
 
+  // ── v5: ai_feedback table ──
+  if (currentVersion < 5) {
+    db.exec(`CREATE TABLE IF NOT EXISTS ai_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id TEXT DEFAULT '',
+      conversation_id TEXT DEFAULT '',
+      type TEXT NOT NULL,
+      rating INTEGER DEFAULT 0,
+      comment TEXT DEFAULT '',
+      context TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_feedback_type ON ai_feedback(type)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_feedback_created ON ai_feedback(created_at)');
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (5)");
+    currentVersion = 5;
+    log('initDatabase: migration v5 complete (ai_feedback)');
+  }
+
   // Migrate old status
   db.exec("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
 
@@ -411,6 +430,18 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcp
       model = { baseUrl: rows[0][0], apiKey: apiKey, modelId: rows[0][2], endpoint: rows[0][3] || '' };
       isAnthropic = (rows[0][0] || '').includes('anthropic');
     }
+  }
+  // Use adaptive model router if no explicit model specified
+  if (!model && messages.length > 0) {
+    try {
+      const { routeModel } = require('./model-router.cjs');
+      const routed = routeModel(db, messages, null);
+      if (routed.model) {
+        model = routed.model;
+        isAnthropic = (model.baseUrl || '').includes('anthropic') || (model.endpoint || '').includes('messages');
+        log('chatWithAI: routed to ' + model.modelId + ' (task=' + routed.taskType + ')');
+      }
+    } catch (e) { log('chatWithAI: router failed, using default', e); }
   }
   if (!model) model = getDefaultModel(db);
   if (model) {
@@ -930,6 +961,23 @@ function safeJson(str) {
   try { return JSON.parse(str || '{}'); } catch { return {}; }
 }
 
+// ── AI Feedback CRUD ──
+function submitFeedback(db, { messageId, conversationId, type, rating, comment, context }) {
+  const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  run(db, 'INSERT INTO ai_feedback (id, message_id, conversation_id, type, rating, comment, context) VALUES (?,?,?,?,?,?,?)',
+    [id, messageId || '', conversationId || '', type, rating || 0, comment || '', context || '']);
+  return { success: true, id };
+}
+
+function getFeedbackStats(db, { days = 30 } = {}) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const total = query(db, "SELECT COUNT(*) FROM ai_feedback WHERE created_at >= ?", [since])[0]?.[0] || 0;
+  const thumbsUp = query(db, "SELECT COUNT(*) FROM ai_feedback WHERE type='thumbs_up' AND created_at >= ?", [since])[0]?.[0] || 0;
+  const thumbsDown = query(db, "SELECT COUNT(*) FROM ai_feedback WHERE type='thumbs_down' AND created_at >= ?", [since])[0]?.[0] || 0;
+  const avgRating = query(db, "SELECT AVG(rating) FROM ai_feedback WHERE rating > 0 AND created_at >= ?", [since])[0]?.[0] || 0;
+  return { total, thumbsUp, thumbsDown, avgRating: Math.round(avgRating * 10) / 10, days };
+}
+
 // ── Workflow CRUD ──
 function listWorkflows(db) {
   const rows = query(db, 'SELECT id, name, description, steps, triggers, enabled, created_at, updated_at FROM workflows ORDER BY created_at DESC');
@@ -1053,4 +1101,6 @@ module.exports = {
   deleteWorkflow,
   listWorkflowExecutions,
   saveExecution,
+  submitFeedback,
+  getFeedbackStats,
 };

@@ -128,6 +128,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   workflowDelete: (id) => ipcRenderer.invoke('workflow:delete', id),
   workflowExecute: (workflowId, inputs) => ipcRenderer.invoke('workflow:execute', { workflowId, inputs }),
   workflowExecutions: (workflowId) => ipcRenderer.invoke('workflow:executions', workflowId),
+  // ── AI Feedback ──
+  feedbackSubmit: (data) => ipcRenderer.invoke('feedback:submit', data),
+  feedbackStats: (opts) => ipcRenderer.invoke('feedback:stats', opts),
   // ── Browser webview new-window ── (Electron 22+ setWindowOpenHandler IPC relay)
   onBrowserNewWindow: (cb) => {
     const handler = (_event, url) => cb(url);

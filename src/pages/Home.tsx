@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { XIcon, Loader2Icon, PlusIcon, ClockIcon, ChevronDownIcon, MessageCircleIcon, Trash2Icon, WrenchIcon, ChevronUpIcon, BotIcon } from 'lucide-react';
 import HomeInput, { type HomeSendPayload } from '../components/HomeInput';
 import PortalDropdown from '../components/PortalDropdown';
+import AIFeedback from '../components/AIFeedback';
 import { toast } from 'sonner';
 import { apiFetch, API } from '../api';
 import { getGreeting, getTodayDate, generateMessageId, WELCOME_MESSAGES } from '../data/homeDefaults';
@@ -623,6 +624,7 @@ function Home({ onOpenTab }: HomeProps) {
                     </div>
                     <div className="text-xs mt-1 flex items-center gap-2 justify-end" style={{ color: 'var(--wiki-text3)' }}>
                       <span>{msg.time}</span>
+                      {!isUser && <AIFeedback messageId={msg.id} conversationId={activeConvId} context={msg.content?.substring(0, 500)} />}
                     </div>
                   </div>
                 </div>
