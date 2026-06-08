@@ -53,6 +53,14 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      - name: Embed icon
+        shell: bash
+        run: |
+          npm install -g rcedit
+          VERSION=$(node -p "require('./package.json').version")
+          rcedit "release/win-unpacked/Workit.exe" --set-icon "build/icon.ico"
+          echo "Icon embedded into Workit.exe"
+
       - name: Release
         uses: softprops/action-gh-release@v2.6.2
         if: success()
