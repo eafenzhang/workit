@@ -38,7 +38,7 @@ jobs:
 
       - name: Auto-bump version
         shell: bash
-        run: node -e "const p=require('./package.json');p.version='1.0.'+process.env.GITHUB_RUN_NUMBER;require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+        run: node -e "const p=require('./package.json');const parts=p.version.split('.');parts[2]=String(Number(parts[2])+1);p.version=parts.join('.');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
       - name: Get version
         id: version
