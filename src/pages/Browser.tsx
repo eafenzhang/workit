@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowLeftIcon, ArrowRightIcon, RotateCwIcon, ExternalLinkIcon, StarIcon, ClockIcon, XIcon, PlusIcon } from 'lucide-react';
 import { useAgentOS } from '../context/AgentOSContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 declare global { namespace JSX { interface IntrinsicElements { webview: any; } } }
 
@@ -52,9 +53,9 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     return win?.activeBrowserTabId || tabs[0]?.id || '';
   });
 
-  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-  const url = activeTab?.url || '';
-  const [inputUrl, setInputUrl] = useState(activeTab?.url || '');
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0] || { id: '', url: '', title: '新标签页' };
+  const url = activeTab.url || '';
+  const [inputUrl, setInputUrl] = useState(activeTab.url || '');
 
   // Sync inputUrl when switching tabs
   useEffect(() => { setInputUrl(activeTab?.url || ''); }, [activeTabId]);
@@ -223,31 +224,36 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
 
   // Create / recreate webview only on tab switch (not on tier change)
   useEffect(() => {
-    const container = wvContainerRef.current;
-    if (!container) return;
+    try {
+      const container = wvContainerRef.current;
+      if (!container) return;
 
-    const removeWebview = () => {
-      if (webviewRef.current) {
-        try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
-        webviewRef.current = null;
-      }
-    };
-    removeWebview();
+      const removeWebview = () => {
+        if (webviewRef.current) {
+          try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
+          webviewRef.current = null;
+        }
+      };
+      removeWebview();
 
-    if (tier === 'cold') return;
+      if (tier === 'cold') return;
 
-    const wv = document.createElement('webview') as any;
-    wv.className = 'flex-1 w-full border-0';
-    wv.style.cssText = 'height:100%;display:flex;';
-    wv.setAttribute('allowpopups', '');
-    wv.setAttribute('partition', `persist:browser:${windowId || 'default'}`);
-    wv.setAttribute('src', activeTabRef.current?.url || 'about:blank');
-    attachWebviewEvents(wv);
+      const wv = document.createElement('webview') as any;
+      if (!wv) return;
+      wv.className = 'flex-1 w-full border-0';
+      wv.style.cssText = 'height:100%;display:flex;';
+      wv.setAttribute('allowpopups', '');
+      wv.setAttribute('partition', `persist:browser:${windowId || 'default'}`);
+      wv.setAttribute('src', (activeTabRef.current?.url || activeTab?.url || 'about:blank'));
+      attachWebviewEvents(wv);
 
-    container.appendChild(wv);
-    webviewRef.current = wv;
+      container.appendChild(wv);
+      webviewRef.current = wv;
 
-    return () => { removeWebview(); };
+      return () => { removeWebview(); };
+    } catch (e) {
+      console.error('[Browser] webview creation failed:', e);
+    }
   }, [activeTabId, recreateKey]);
 
   // Tier-based visibility: only hide/show, never destroy
@@ -348,6 +354,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
   const isBookmarked = bookmarks.some(b => b.url === activeTabRef.current?.url);
 
   return (
+    <ErrorBoundary label="浏览器">
     <div className="flex flex-col h-full relative">
       {/* ── URL bar ── */}
       <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
@@ -542,5 +549,6 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }
