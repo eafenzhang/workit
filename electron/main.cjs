@@ -13,6 +13,9 @@ const { createWindow } = require('./window.cjs');
 const { setupAutoUpdater } = require('./updater.cjs');
 const { McpClientManager, setStatusPushFn } = require('./mcp-manager.cjs');
 const { startMemoryConsolidator } = require('./memory-consolidator.cjs');
+const { startSkillGenerator } = require('./skill-generator.cjs');
+const { startWorkflowOptimizer } = require('./workflow-optimizer.cjs');
+const { startKnowledgeGraph } = require('./knowledge-graph.cjs');
 
 let mainWindow;
 let db;
@@ -43,6 +46,9 @@ app.whenReady().then(async () => {
     setupIPC(mainWindow, db);
     setupAutoUpdater();
     startMemoryConsolidator(db);
+    startSkillGenerator(db);
+    startWorkflowOptimizer(db);
+    startKnowledgeGraph(db);
 
     // Auto-connect to all enabled MCP servers on startup
     const enabledServers = query(db, 'SELECT * FROM mcp_servers WHERE enabled = 1');
