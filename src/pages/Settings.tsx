@@ -42,16 +42,22 @@ export default function Settings() {
       if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
     }).catch(() => {});
     const unsubs: (() => void)[] = [];
-    if (api?.onUpdateAvailable) {
-      const u = api.onUpdateAvailable((v: string) => sync({ status: 'available', version: v }));
-      if (u) unsubs.push(u);
-    }
-    if (api?.onUpdateProgress) {
-      const u = api.onUpdateProgress((p: number) => { sync({ progress: p }); if (p >= 100) sync({ status: 'ready' }); });
-      if (u) unsubs.push(u);
-    }
-    if (api?.onUpdateDownloaded) {
-      const u = api.onUpdateDownloaded(() => sync({ status: 'ready' }));
+    // Subscribe to unified update events
+    if (api?.onUpdateEvent) {
+      const u = api.onUpdateEvent((type: string, data: any) => {
+        switch (type) {
+          case 'checking': sync({ status: 'checking', error: '' }); break;
+          case 'available': sync({ status: 'downloading', version: data?.version, progress: 0 }); break;
+          case 'not-available': sync({ status: 'idle', error: '已是最新版本' }); setTimeout(() => sync({ error: '' }), 3000); break;
+          case 'progress': sync({ progress: data?.percent ?? data }); break;
+          case 'downloaded': sync({ status: 'ready', version: data?.version }); break;
+          case 'error': sync({ status: 'error', error: data?.message || '更新失败' }); break;
+          // Legacy events
+          case 'available': break;
+          case 'download-progress': sync({ progress: typeof data === 'number' ? data : data?.percent }); break;
+          case 'downloaded': sync({ status: 'ready' }); break;
+        }
+      });
       if (u) unsubs.push(u);
     }
     return () => unsubs.forEach(fn => fn());
@@ -202,10 +208,10 @@ export default function Settings() {
             )}
             {updateStatus === 'downloading' && (
               <div className="flex flex-col gap-2">
-                <div className="text-xs text-wiki-text">正在下载 v{latestVersion}...</div>
+                <div className="text-xs text-wiki-text">正在下载 v{latestVersion} {downloadProgress > 0 ? `- ${downloadProgress}%` : ''}</div>
                 <div className="flex items-center gap-3">
                   <div className="w-44 h-2 rounded-full overflow-hidden" style={{ background: 'var(--wiki-surface2)' }}>
-                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${downloadProgress}%`, background: 'var(--wiki-text)' }} />
+                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.max(downloadProgress, 2)}%`, background: 'var(--wiki-text)' }} />
                   </div>
                   <span className="text-xs text-wiki-text3">{downloadProgress}%</span>
                 </div>
@@ -215,10 +221,10 @@ export default function Settings() {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
                   style={{ background: 'var(--wiki-success-bg)', color: 'var(--wiki-success)' }}>
-                  <CheckIcon size={12} />已下载
+                  <CheckIcon size={12} />v{latestVersion} 已下载
                 </div>
                 <button onClick={() => api?.installUpdate()} className="px-4 py-2 rounded-lg text-xs font-medium"
-                  style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>立即安装</button>
+                  style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>安装并重启</button>
               </div>
             )}
             {updateStatus === 'error' && (

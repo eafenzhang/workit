@@ -32,21 +32,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  // P1-06: Update event listeners return unsubscribe functions
+  // Unified update event subscriber — returns unsubscribe function
+  onUpdateEvent: (cb) => {
+    const channels = ['update:checking','update:available','update:not-available','update:progress','update:downloaded','update:error',
+      'update-available','update-download-progress','update-downloaded']; // legacy channels
+    channels.forEach(ch => {
+      const handler = (_e, data) => cb(ch.replace('update:','').replace('update-',''), data);
+      ipcRenderer.on(ch, handler);
+    });
+    // Return combined unsubscribe
+    return () => channels.forEach(ch => ipcRenderer.removeAllListeners(ch));
+  },
+  // Legacy event listeners (backward compat)
   onUpdateAvailable: (cb) => {
-    const handler = (_, v) => cb(v);
+    const handler = (_, v) => cb(typeof v === 'object' ? v.version : v);
+    ipcRenderer.on('update:available', handler);
     ipcRenderer.on('update-available', handler);
-    return () => ipcRenderer.removeListener('update-available', handler);
+    return () => { ipcRenderer.removeListener('update:available', handler); ipcRenderer.removeListener('update-available', handler); };
   },
   onUpdateProgress: (cb) => {
-    const handler = (_, p) => cb(p);
+    const handler = (_, p) => cb(typeof p === 'object' ? p.percent : p);
+    ipcRenderer.on('update:progress', handler);
     ipcRenderer.on('update-download-progress', handler);
-    return () => ipcRenderer.removeListener('update-download-progress', handler);
+    return () => { ipcRenderer.removeListener('update:progress', handler); ipcRenderer.removeListener('update-download-progress', handler); };
   },
   onUpdateDownloaded: (cb) => {
-    const handler = () => cb();
+    const handler = (_, data) => cb(data?.version);
+    ipcRenderer.on('update:downloaded', handler);
     ipcRenderer.on('update-downloaded', handler);
-    return () => ipcRenderer.removeListener('update-downloaded', handler);
+    return () => { ipcRenderer.removeListener('update:downloaded', handler); ipcRenderer.removeListener('update-downloaded', handler); };
   },
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
