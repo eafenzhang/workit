@@ -113,7 +113,7 @@ function initDatabase(userDataPath) {
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
 
-  db.run(`CREATE TABLE IF NOT EXISTS requirements (
+  db.exec(`CREATE TABLE IF NOT EXISTS requirements (
     id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT DEFAULT '',
     category TEXT DEFAULT '产品', module TEXT DEFAULT '用户端', priority TEXT DEFAULT '中',
     status TEXT DEFAULT '待评估', assignee TEXT DEFAULT '', creator TEXT DEFAULT '',
@@ -122,19 +122,19 @@ function initDatabase(userDataPath) {
     workflow_handler TEXT DEFAULT '', workflow_history TEXT DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now','localtime')), updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS documents (
+  db.exec(`CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT DEFAULT 'guide',
     type TEXT DEFAULT 'MD', size TEXT DEFAULT '', views INTEGER DEFAULT 0, stars INTEGER DEFAULT 0,
     date TEXT DEFAULT '', tags TEXT DEFAULT '[]', featured INTEGER DEFAULT 0,
     file_path TEXT DEFAULT '', content TEXT DEFAULT '', image_descriptions TEXT DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now','localtime')), updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS mcp_servers (
+  db.exec(`CREATE TABLE IF NOT EXISTS mcp_servers (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL,
     command TEXT NOT NULL, args TEXT DEFAULT '[]', env TEXT DEFAULT '{}', enabled INTEGER DEFAULT 0,
     config TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS skills (
+  db.exec(`CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -144,7 +144,7 @@ function initDatabase(userDataPath) {
     created_at TEXT DEFAULT (datetime('now','localtime')),
     updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS claude_code_plugins (
+  db.exec(`CREATE TABLE IF NOT EXISTS claude_code_plugins (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -154,7 +154,7 @@ function initDatabase(userDataPath) {
     created_at TEXT DEFAULT (datetime('now','localtime')),
     updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS cli_tools (
+  db.exec(`CREATE TABLE IF NOT EXISTS cli_tools (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -164,7 +164,7 @@ function initDatabase(userDataPath) {
     created_at TEXT DEFAULT (datetime('now','localtime')),
     updated_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS requirement_modules (
+  db.exec(`CREATE TABLE IF NOT EXISTS requirement_modules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     sort_order INTEGER DEFAULT 0,
@@ -177,7 +177,7 @@ function initDatabase(userDataPath) {
     const stmt = db.prepare('INSERT INTO requirement_modules (name, sort_order) VALUES (?, ?)');
     defaults.forEach((name, i) => stmt.run(name, i));
   }
-  db.run(`CREATE TABLE IF NOT EXISTS models (
+  db.exec(`CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, provider TEXT NOT NULL,
     base_url TEXT DEFAULT '', api_key TEXT DEFAULT '', model_id TEXT NOT NULL,
     enabled INTEGER DEFAULT 0, is_default INTEGER DEFAULT 0, config TEXT DEFAULT '{}',
@@ -185,7 +185,7 @@ function initDatabase(userDataPath) {
   )`);
 
   // P2-12: Schema version tracking for versioned migrations
-  db.run(`CREATE TABLE IF NOT EXISTS schema_version (
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY, applied_at TEXT DEFAULT (datetime('now','localtime'))
   )`);
 
@@ -201,26 +201,26 @@ function initDatabase(userDataPath) {
   // P1-14: Migration v1 — knowledge_categories table
   if (currentVersion < 1) {
     log('initDatabase: running migration v1 (knowledge_categories)');
-    db.run(`CREATE TABLE IF NOT EXISTS knowledge_categories (
+    db.exec(`CREATE TABLE IF NOT EXISTS knowledge_categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE,
       created_at TEXT DEFAULT (datetime('now','localtime'))
     )`);
     // Seed default categories if table is empty
     const catCount = db.prepare('SELECT COUNT(*) FROM knowledge_categories').raw().get()?.[0] || 0;
     if (catCount === 0) {
-      db.run("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('指南')");
-      db.run("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('参考')");
-      db.run("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('笔记')");
+      db.exec("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('指南')");
+      db.exec("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('参考')");
+      db.exec("INSERT OR IGNORE INTO knowledge_categories (name) VALUES ('笔记')");
       log('initDatabase: seeded default knowledge categories');
     }
-    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (1)");
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (1)");
     currentVersion = 1;
   }
 
   // Migration v2 — agent_memories table for AI long-term memory
   if (currentVersion < 2) {
     log('initDatabase: running migration v2 (agent_memories)');
-    db.run(`CREATE TABLE IF NOT EXISTS agent_memories (
+    db.exec(`CREATE TABLE IF NOT EXISTS agent_memories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       key TEXT NOT NULL UNIQUE,
       value TEXT NOT NULL DEFAULT '',
@@ -228,14 +228,14 @@ function initDatabase(userDataPath) {
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime'))
     )`);
-    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (2)");
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (2)");
     currentVersion = 2;
   }
 
   // ── v3: content_blocks column + models.endpoint column ──
   if (currentVersion < 3) {
     try {
-      db.run("ALTER TABLE requirements ADD COLUMN content_blocks TEXT DEFAULT '[]'");
+      db.exec("ALTER TABLE requirements ADD COLUMN content_blocks TEXT DEFAULT '[]'");
       log('initDatabase: v3 migration: content_blocks column added');
     } catch (e) {
       // Column may already exist from pre-versioned migration
@@ -244,21 +244,21 @@ function initDatabase(userDataPath) {
       }
     }
     try {
-      db.run("ALTER TABLE models ADD COLUMN endpoint TEXT DEFAULT '/chat/completions'");
+      db.exec("ALTER TABLE models ADD COLUMN endpoint TEXT DEFAULT '/chat/completions'");
       log('initDatabase: v3 migration: endpoint column added to models');
     } catch (e) {
       if (!String(e.message || '').includes('duplicate column')) {
         console.error('[db] v3 migration: failed to add endpoint:', e.message);
       }
     }
-    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (3)");
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (3)");
     currentVersion = 3;
     log('initDatabase: migration v3 complete (content_blocks + endpoint)');
   }
 
   // ── v4: workflows + workflow_executions tables ──
   if (currentVersion < 4) {
-    db.run(`CREATE TABLE IF NOT EXISTS workflows (
+    db.exec(`CREATE TABLE IF NOT EXISTS workflows (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
@@ -268,7 +268,7 @@ function initDatabase(userDataPath) {
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime'))
     )`);
-    db.run(`CREATE TABLE IF NOT EXISTS workflow_executions (
+    db.exec(`CREATE TABLE IF NOT EXISTS workflow_executions (
       id TEXT PRIMARY KEY,
       workflow_id TEXT NOT NULL,
       status TEXT DEFAULT 'pending',
@@ -280,31 +280,31 @@ function initDatabase(userDataPath) {
       error TEXT,
       created_at TEXT DEFAULT (datetime('now','localtime'))
     )`);
-    db.run('CREATE INDEX IF NOT EXISTS idx_wf_exec_workflow ON workflow_executions(workflow_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_wf_exec_created ON workflow_executions(created_at)');
-    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (4)");
+    db.exec('CREATE INDEX IF NOT EXISTS idx_wf_exec_workflow ON workflow_executions(workflow_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_wf_exec_created ON workflow_executions(created_at)');
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (4)");
     currentVersion = 4;
     log('initDatabase: migration v4 complete (workflows + workflow_executions)');
   }
 
   // Migrate old status
-  db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
+  db.exec("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
 
   // Performance: add index for list query ORDER BY created_at DESC
-  db.run('CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at)');
 
   // P0-03: Indexes for requirements status/category filtering
-  db.run('CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_requirements_category ON requirements(category)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_category ON requirements(category)');
 
   // P0-04: Indexes for documents type/featured filtering
-  db.run('CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_documents_featured ON documents(featured)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_documents_featured ON documents(featured)');
 
   // Fix minimax base URL if it was set to the wrong value
-  db.run("UPDATE models SET base_url = 'https://api.minimax.chat/v1' WHERE base_url = 'https://api.minimaxi.com/anthropic'");
+  db.exec("UPDATE models SET base_url = 'https://api.minimax.chat/v1' WHERE base_url = 'https://api.minimaxi.com/anthropic'");
   // Fix deepseek base URL — v4 models require /v1 prefix
-  db.run("UPDATE models SET base_url = 'https://api.deepseek.com/v1' WHERE base_url = 'https://api.deepseek.com' AND provider = 'deepseek'");
+  db.exec("UPDATE models SET base_url = 'https://api.deepseek.com/v1' WHERE base_url = 'https://api.deepseek.com' AND provider = 'deepseek'");
 
   saveDb(db);
   log('initDatabase: success, path=' + dbPath);
