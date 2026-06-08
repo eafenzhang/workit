@@ -222,6 +222,9 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     return () => { unsub?.(); };
   }, [openNewTab]);
 
+  // Webview recreation trigger — MUST be declared before the effect below
+  const [recreateKey, setRecreateKey] = useState(0);
+
   // Create / recreate webview only on tab switch (not on tier change)
   useEffect(() => {
     try {
@@ -299,7 +302,6 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
   }, [initialUrl]);
 
   // Keep webview alive when window hidden; recreate if previously destroyed
-  const [recreateKey, setRecreateKey] = useState(0);
   useEffect(() => {
     if (visible === false) {
       if (webviewRef.current) {
