@@ -508,16 +508,59 @@ function Home({ onOpenTab }: HomeProps) {
 
   return (
     <div data-cmp="Home" className="flex flex-col h-full">
-      {/* Top bar — minimal: new chat left, history right */}
+      {/* Top bar: new chat left, tools center, history right */}
       <div className="flex items-center justify-between px-6 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-        <button
-          onClick={handleNewChat}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}
-        >
-          <PlusIcon size={13} />新对话
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleNewChat}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+            style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+            <PlusIcon size={13} />新对话
+          </button>
+
+          {/* Tools button */}
           <div className="relative">
+            <button onClick={() => setShowToolPanel(!showToolPanel)}
+              className={`flex items-center gap-1 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors ${toolsEnabled ? 'ring-1' : ''}`}
+              style={{ background: toolsEnabled ? 'rgba(99,102,241,0.12)' : 'var(--wiki-surface2)', color: toolsEnabled ? '#6366f1' : 'var(--wiki-text2)', border: toolsEnabled ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--wiki-border)' }}>
+              <WrenchIcon size={13} />
+              <span>工具</span>
+            </button>
+            {showToolPanel && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowToolPanel(false)} />
+                <div className="absolute top-full mt-1 left-0 w-48 rounded-lg shadow-xl z-30 p-1.5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                  {[{ key: 'mcp', label: 'MCP工具', icon: PuzzleIcon, count: toolCounts.mcp },
+                    { key: 'cli', label: 'CLI命令', icon: TerminalIcon, count: toolCounts.cli },
+                    { key: 'skills', label: 'Skills', icon: ZapIcon, count: toolCounts.skills },
+                    { key: 'plugins', label: 'Plugins', icon: SettingsIcon, count: toolCounts.plugins },
+                  ].map(tc => {
+                    const Icon = tc.icon; const enabled = (toolCategories as any)[tc.key];
+                    return (
+                      <div key={tc.key} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-wiki-surface2 cursor-pointer"
+                        onClick={() => {
+                          const next = { ...toolCategories, [tc.key]: !enabled };
+                          setToolCategories(next);
+                          if (Object.values(next).some(Boolean) && !toolsEnabled) setToolsEnabled(true);
+                          if (!Object.values(next).some(Boolean) && toolsEnabled) setToolsEnabled(false);
+                        }}>
+                        <div className="flex items-center gap-1.5">
+                          <Icon size={11} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+                          <span className="text-xs" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
+                          {tc.count>0&&<span className="text-[10px] px-1 py-0.5 rounded" style={{background:'var(--wiki-surface2)',color:'var(--wiki-text3)'}}>{tc.count}</span>}
+                        </div>
+                        <div className="relative w-8 h-4 rounded-full cursor-pointer" style={{background:enabled?'#6366f1':'var(--wiki-border)'}}>
+                          <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all" style={{left:enabled?'18px':'2px',transition:'left 0.15s'}} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="relative">
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
@@ -661,48 +704,6 @@ function Home({ onOpenTab }: HomeProps) {
                 ))}
               </div>
             </PortalDropdown>
-
-            {/* Tools popup */}
-            <div className="relative">
-              <button onClick={() => setShowToolPanel(!showToolPanel)}
-                className={`flex items-center gap-1 text-xs rounded-lg px-2 py-1 cursor-pointer transition-colors ${toolsEnabled ? 'ring-1' : ''}`}
-                style={{ background: toolsEnabled ? 'rgba(99,102,241,0.12)' : 'var(--wiki-surface2)', color: toolsEnabled ? '#6366f1' : 'var(--wiki-text2)', border: toolsEnabled ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--wiki-border)' }}>
-                <WrenchIcon size={12} />
-                <span>工具{toolsEnabled ? ` ${Object.values(toolCategories).filter(Boolean).length}` : ''}</span>
-              </button>
-              {showToolPanel && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setShowToolPanel(false)} />
-                  <div className="absolute bottom-full mb-1 left-0 w-48 rounded-lg shadow-xl z-30 p-1.5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                    {[{ key: 'mcp', label: 'MCP工具', icon: PuzzleIcon, count: toolCounts.mcp },
-                      { key: 'cli', label: 'CLI命令', icon: TerminalIcon, count: toolCounts.cli },
-                      { key: 'skills', label: 'Skills', icon: ZapIcon, count: toolCounts.skills },
-                      { key: 'plugins', label: 'Plugins', icon: SettingsIcon, count: toolCounts.plugins },
-                    ].map(tc => {
-                      const Icon = tc.icon; const enabled = (toolCategories as any)[tc.key];
-                      return (
-                        <div key={tc.key} className="flex items-center justify-between px-2 py-1 rounded hover:bg-wiki-surface2 cursor-pointer"
-                          onClick={() => {
-                            const next = { ...toolCategories, [tc.key]: !enabled };
-                            setToolCategories(next);
-                            if (Object.values(next).some(Boolean) && !toolsEnabled) setToolsEnabled(true);
-                            if (!Object.values(next).some(Boolean) && toolsEnabled) setToolsEnabled(false);
-                          }}>
-                          <div className="flex items-center gap-1.5">
-                            <Icon size={10} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-                            <span className="text-[11px]" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
-                            {tc.count>0&&<span className="text-[9px] px-1 rounded" style={{background:'var(--wiki-surface2)',color:'var(--wiki-text3)'}}>{tc.count}</span>}
-                          </div>
-                          <div className="relative w-7 h-3.5 rounded-full cursor-pointer" style={{background:enabled?'#6366f1':'var(--wiki-border)'}}>
-                            <span className="absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-all" style={{left:enabled?'15px':'2px',transition:'left 0.15s'}} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
 
             {/* File upload */}
             <label className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 cursor-pointer transition-colors hover:bg-wiki-surface2"
