@@ -131,6 +131,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── AI Feedback ──
   feedbackSubmit: (data) => ipcRenderer.invoke('feedback:submit', data),
   feedbackStats: (opts) => ipcRenderer.invoke('feedback:stats', opts),
+  // ── Profile persistence ──
+  profileGet: () => ipcRenderer.invoke('profile:get'),
+  profileSave: (profile) => ipcRenderer.invoke('profile:save', profile),
   // ── Browser webview new-window ── (Electron 22+ setWindowOpenHandler IPC relay)
   onBrowserNewWindow: (cb) => {
     const handler = (_event, url) => cb(url);

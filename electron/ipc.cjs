@@ -31,6 +31,8 @@ const {
   listWorkflowExecutions,
   submitFeedback,
   getFeedbackStats,
+  getUserProfile,
+  saveUserProfile,
 } = require('./database.cjs');
 const { executeWorkflow } = require('./workflow-engine.cjs');
 const { getMainWindow, getQCWindow } = require('./window.cjs');
@@ -133,6 +135,15 @@ function setupIPC(mainWindow, db) {
 
   ipcMain.handle('memory:summary', async () => {
     try { return getMemorySummary(db); } catch (e) { return { error: e.message }; }
+  });
+
+  // ── Profile IPC handlers ──
+  ipcMain.handle('profile:get', async () => {
+    try { return getUserProfile(db) || {}; } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('profile:save', async (_, profile) => {
+    try { return saveUserProfile(db, profile); } catch (e) { return { error: e.message }; }
   });
 
   // ── Feedback IPC handlers ──

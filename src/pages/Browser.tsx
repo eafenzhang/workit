@@ -45,7 +45,9 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     const win = state.windows.find(w => w.id === windowId);
     if (win?.browserTabs && win.browserTabs.length > 0) return win.browserTabs;
     const firstId = generateTabId();
-    return [{ id: firstId, url: initialUrl || '', title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
+    // Default to a search-friendly new tab page instead of blank
+    const defaultUrl = initialUrl || 'https://www.google.com';
+    return [{ id: firstId, url: defaultUrl, title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
   });
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     const win = state.windows.find(w => w.id === windowId);
@@ -241,7 +243,8 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.style.cssText = 'height:100%;display:flex;';
     wv.setAttribute('allowpopups', '');
     wv.setAttribute('partition', `persist:browser:${windowId || 'default'}`);
-    wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
+    const wvUrl = activeTabRef.current?.url || initialUrl || 'https://www.google.com';
+    wv.setAttribute('src', wvUrl);
     attachWebviewEvents(wv);
 
     container.appendChild(wv);

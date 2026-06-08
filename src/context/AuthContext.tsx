@@ -39,42 +39,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load profile from new storage key first
-    const profile = getProfile();
-    if (profile?.nickname) {
-      setUserProfile(profile);
-      setUser(toLegacyUser(profile));
-    } else {
-      // Fallback: read legacy 'user' key
+    // Load profile from database first (survives updates), fallback to localStorage
+    const api = (window as any).electronAPI;
+    const loadFromDb = async () => {
       try {
-        const stored = localStorage.getItem('user');
-        if (stored) {
-          const legacyUser = JSON.parse(stored) as User;
-          setUser(legacyUser);
+        if (api?.profileGet) {
+          const dbProfile = await api.profileGet();
+          if (dbProfile?.nickname) {
+            setUserProfile(dbProfile);
+            setUser(toLegacyUser(dbProfile));
+            setIsLoading(false);
+            return;
+          }
         }
-      } catch {
-        try { localStorage.removeItem('user'); } catch {}
+      } catch {}
+      // Fallback: localStorage
+      const profile = getProfile();
+      if (profile?.nickname) {
+        setUserProfile(profile);
+        setUser(toLegacyUser(profile));
+        // Migrate to DB
+        if (api?.profileSave) { try { await api.profileSave(profile); } catch {} }
+      } else {
+        try {
+          const stored = localStorage.getItem('user');
+          if (stored) {
+            const legacyUser = JSON.parse(stored) as User;
+            setUser(legacyUser);
+          }
+        } catch { try { localStorage.removeItem('user'); } catch {} }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+    loadFromDb();
   }, []);
 
-  /** Save profile: persist to localStorage + update both states + sync legacy user */
+  /** Save profile: persist to DB + localStorage fallback */
   const saveProfile = useCallback((profile: UserProfile) => {
     const updated = { ...profile, updatedAt: new Date().toISOString() };
-    persistProfile(updated);
+    persistProfile(updated); // Keep localStorage as fallback
     setUserProfile(updated);
     const legacyUser = toLegacyUser(updated);
     setUser(legacyUser);
     try { localStorage.setItem('user', JSON.stringify(legacyUser)); } catch {}
+    // Persist to DB
+    const api = (window as any).electronAPI;
+    if (api?.profileSave) { api.profileSave(updated).catch(() => {}); }
   }, []);
 
-  /** Reset: clear localStorage + clear all states */
+  /** Reset: clear both DB + localStorage */
   const resetProfile = useCallback(() => {
     clearProfile();
     try { localStorage.removeItem('user'); } catch {}
     setUserProfile(null);
     setUser(null);
+    const api = (window as any).electronAPI;
+    if (api?.profileSave) { api.profileSave({ nickname: '', role: '', avatar: '', personality: '', memory_skills: '', avatarColor: '#6366f1' }).catch(() => {}); }
   }, []);
 
   const value = useMemo(

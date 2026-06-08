@@ -287,6 +287,28 @@ function initDatabase(userDataPath) {
     log('initDatabase: migration v4 complete (workflows + workflow_executions)');
   }
 
+  // ── v6: user_profile table ──
+  if (currentVersion < 6) {
+    db.exec(`CREATE TABLE IF NOT EXISTS user_profile (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      nickname TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT '',
+      avatar TEXT DEFAULT '',
+      personality TEXT DEFAULT '',
+      memory_skills TEXT DEFAULT '',
+      avatar_color TEXT DEFAULT '#6366f1',
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    // Seed with default if empty
+    const hasProfile = db.prepare('SELECT COUNT(*) FROM user_profile').raw().get()?.[0] || 0;
+    if (hasProfile === 0) {
+      db.exec("INSERT INTO user_profile (id, nickname, role, personality, memory_skills) VALUES (1, '', '', '', '')");
+    }
+    db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (6)");
+    currentVersion = 6;
+    log('initDatabase: migration v6 complete (user_profile)');
+  }
+
   // ── v5: ai_feedback table ──
   if (currentVersion < 5) {
     db.exec(`CREATE TABLE IF NOT EXISTS ai_feedback (
@@ -961,6 +983,20 @@ function safeJson(str) {
   try { return JSON.parse(str || '{}'); } catch { return {}; }
 }
 
+// ── User Profile DB CRUD ──
+function getUserProfile(db) {
+  const r = query(db, 'SELECT nickname, role, avatar, personality, memory_skills, avatar_color, updated_at FROM user_profile WHERE id = 1')[0];
+  if (!r) return null;
+  return { nickname: r[0], role: r[1], avatar: r[2]||'', personality: r[3]||'', memory_skills: r[4]||'', avatarColor: r[5]||'#6366f1', updatedAt: r[6] };
+}
+
+function saveUserProfile(db, profile) {
+  const { nickname, role, avatar, personality, memory_skills, avatarColor } = profile || {};
+  run(db, "UPDATE user_profile SET nickname=?, role=?, avatar=?, personality=?, memory_skills=?, avatar_color=?, updated_at=datetime('now','localtime') WHERE id=1",
+    [nickname||'', role||'', avatar||'', personality||'', memory_skills||'', avatarColor||'#6366f1']);
+  return getUserProfile(db);
+}
+
 // ── AI Feedback CRUD ──
 function submitFeedback(db, { messageId, conversationId, type, rating, comment, context }) {
   const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -1103,4 +1139,6 @@ module.exports = {
   saveExecution,
   submitFeedback,
   getFeedbackStats,
+  getUserProfile,
+  saveUserProfile,
 };
