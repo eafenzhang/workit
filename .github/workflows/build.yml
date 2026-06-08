@@ -51,16 +51,14 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Clear winCodeSign cache
+        shell: bash
+        run: rm -rf ~/AppData/Local/electron-builder/Cache/winCodeSign 2>/dev/null; echo "Cache cleared"
+
       - name: Build installer
         run: npx electron-builder --win --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-
-      - name: Embed icon
-        shell: bash
-        run: |
-          npx -y rcedit "release/win-unpacked/Workit.exe" --set-icon "build/icon.ico"
-          echo "Icon embedded into Workit.exe"
 
       - name: Release
         uses: softprops/action-gh-release@v2.6.2
