@@ -37,6 +37,8 @@ const SettingsPage = React.lazy(() => import('../pages/Settings'));
 const ProfilePage = React.lazy(() => import('../pages/Profile'));
 const BrowserPage = React.lazy(() => import('../pages/Browser'));
 
+const WorkflowsPage = React.lazy(() => import('../pages/Workflows'));
+
 /** Maps window.type → lazy page component */
 export const PAGE_COMPONENT_MAP: WindowPageMap = {
   home: HomePage,
@@ -55,6 +57,7 @@ export const PAGE_COMPONENT_MAP: WindowPageMap = {
   messages: MessagesPage,
   settings: SettingsPage,
   profile: ProfilePage,
+  workflows: WorkflowsPage,
 };
 
 // ── Context type ─────────────────────────────────────────────────

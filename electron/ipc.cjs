@@ -24,7 +24,13 @@ const {
   deleteMemory,
   clearMemories,
   getMemorySummary,
+  listWorkflows,
+  getWorkflow,
+  saveWorkflow,
+  deleteWorkflow,
+  listWorkflowExecutions,
 } = require('./database.cjs');
+const { executeWorkflow } = require('./workflow-engine.cjs');
 const { getMainWindow, getQCWindow } = require('./window.cjs');
 const { McpClientManager } = require('./mcp-manager.cjs');
 
@@ -125,6 +131,31 @@ function setupIPC(mainWindow, db) {
 
   ipcMain.handle('memory:summary', async () => {
     try { return getMemorySummary(db); } catch (e) { return { error: e.message }; }
+  });
+
+  // ── Workflow IPC handlers ──
+  ipcMain.handle('workflow:list', async () => {
+    try { return listWorkflows(db); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('workflow:get', async (_, id) => {
+    try { return getWorkflow(db, id); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('workflow:save', async (_, wf) => {
+    try { return saveWorkflow(db, wf); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('workflow:delete', async (_, id) => {
+    try { return deleteWorkflow(db, id); } catch (e) { return { error: e.message }; }
+  });
+
+  ipcMain.handle('workflow:execute', async (_, { workflowId, inputs }) => {
+    try { return await executeWorkflow(db, workflowId, inputs); } catch (e) { return { success: false, error: e.message }; }
+  });
+
+  ipcMain.handle('workflow:executions', async (_, workflowId) => {
+    try { return listWorkflowExecutions(db, workflowId); } catch (e) { return { error: e.message }; }
   });
 
   // P0-07: Test model connection — look up decrypted API key by modelId from DB

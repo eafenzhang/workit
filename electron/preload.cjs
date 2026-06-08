@@ -102,6 +102,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpConnect: (serverId) => ipcRenderer.invoke('mcp:connect', serverId),
   /** Disconnect from a specific MCP server */
   mcpDisconnect: (serverId) => ipcRenderer.invoke('mcp:disconnect', serverId),
+  // ── Workflow ──
+  workflowList: () => ipcRenderer.invoke('workflow:list'),
+  workflowGet: (id) => ipcRenderer.invoke('workflow:get', id),
+  workflowSave: (wf) => ipcRenderer.invoke('workflow:save', wf),
+  workflowDelete: (id) => ipcRenderer.invoke('workflow:delete', id),
+  workflowExecute: (workflowId, inputs) => ipcRenderer.invoke('workflow:execute', { workflowId, inputs }),
+  workflowExecutions: (workflowId) => ipcRenderer.invoke('workflow:executions', workflowId),
   // ── Browser webview new-window ── (Electron 22+ setWindowOpenHandler IPC relay)
   onBrowserNewWindow: (cb) => {
     const handler = (_event, url) => cb(url);

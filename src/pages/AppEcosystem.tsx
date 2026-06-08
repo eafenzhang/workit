@@ -1,18 +1,20 @@
 import { useState, useCallback, type ReactNode } from 'react';
-import { ServerIcon, TerminalIcon, ZapIcon, WrenchIcon } from 'lucide-react';
+import { ServerIcon, TerminalIcon, ZapIcon, WrenchIcon, WorkflowIcon } from 'lucide-react';
 import MCPTab from '../components/MCPTab';
 import CliToolsTab from '../components/CliToolsTab';
 import SkillsTab from '../components/SkillsTab';
 import PluginsTab from '../components/PluginsTab';
+import Workflows from './Workflows';
 import DataPage from '../components/DataPage';
 import { SidebarItem } from '../components/UnifiedSidebar';
 import EmptyState from '../components/EmptyState';
 
 const TABS = [
-  { id: 'mcp',     label: 'MCP工具',   icon: ServerIcon,   desc: '配置和管理MCP服务器' },
-  { id: 'cli',     label: 'CLI工具',   icon: TerminalIcon, desc: '命令行工具管理' },
-  { id: 'skills',  label: 'Skill技能', icon: ZapIcon,      desc: '管理Agent技能' },
-  { id: 'plugins', label: 'Claude插件', icon: WrenchIcon,   desc: '插件扩展管理' },
+  { id: 'mcp',       label: 'MCP工具',   icon: ServerIcon,     desc: '配置和管理MCP服务器' },
+  { id: 'cli',       label: 'CLI工具',   icon: TerminalIcon,   desc: '命令行工具管理' },
+  { id: 'skills',    label: 'Skill技能', icon: ZapIcon,        desc: '管理Agent技能' },
+  { id: 'plugins',   label: 'Claude插件', icon: WrenchIcon,     desc: '插件扩展管理' },
+  { id: 'workflows', label: '工作流',    icon: WorkflowIcon,   desc: 'AI Agent 工作流引擎' },
 ] as const;
 
 export default function AppEcosystem() {
@@ -32,8 +34,9 @@ export default function AppEcosystem() {
       case 'mcp':     return <MCPTab key={`mcp-${refreshKey}`} hideToolbar onRenderActions={handleRenderActions} />;
       case 'cli':     return <CliToolsTab key={`cli-${refreshKey}`} hideToolbar />;
       case 'skills':  return <SkillsTab key={`skills-${refreshKey}`} hideToolbar />;
-      case 'plugins': return <PluginsTab key={`plugins-${refreshKey}`} hideToolbar />;
-      default:        return <EmptyState icon={WrenchIcon} title="选择工具" description="从左侧选择一个工具类别" />;
+      case 'plugins':   return <PluginsTab key={`plugins-${refreshKey}`} hideToolbar />;
+      case 'workflows': return <Workflows key={`workflows-${refreshKey}`} />;
+      default:          return <EmptyState icon={WrenchIcon} title="选择工具" description="从左侧选择一个工具类别" />;
     }
   };
 

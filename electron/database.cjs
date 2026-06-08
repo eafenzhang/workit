@@ -256,6 +256,37 @@ function initDatabase(userDataPath) {
     log('initDatabase: migration v3 complete (content_blocks + endpoint)');
   }
 
+  // ── v4: workflows + workflow_executions tables ──
+  if (currentVersion < 4) {
+    db.run(`CREATE TABLE IF NOT EXISTS workflows (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      steps TEXT NOT NULL DEFAULT '[]',
+      triggers TEXT NOT NULL DEFAULT '[]',
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS workflow_executions (
+      id TEXT PRIMARY KEY,
+      workflow_id TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      inputs TEXT DEFAULT '{}',
+      outputs TEXT DEFAULT '{}',
+      step_results TEXT DEFAULT '[]',
+      started_at TEXT,
+      finished_at TEXT,
+      error TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    db.run('CREATE INDEX IF NOT EXISTS idx_wf_exec_workflow ON workflow_executions(workflow_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_wf_exec_created ON workflow_executions(created_at)');
+    db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (4)");
+    currentVersion = 4;
+    log('initDatabase: migration v4 complete (workflows + workflow_executions)');
+  }
+
   // Migrate old status
   db.run("UPDATE requirements SET status = '待评估' WHERE status = '待评审'");
 
@@ -899,6 +930,65 @@ function safeJson(str) {
   try { return JSON.parse(str || '{}'); } catch { return {}; }
 }
 
+// ── Workflow CRUD ──
+function listWorkflows(db) {
+  const rows = query(db, 'SELECT id, name, description, steps, triggers, enabled, created_at, updated_at FROM workflows ORDER BY created_at DESC');
+  return rows.map(r => ({
+    id: r[0], name: r[1], description: r[2],
+    steps: safeJson(r[3]), triggers: safeJson(r[4]),
+    enabled: !!r[5], createdAt: r[6], updatedAt: r[7],
+  }));
+}
+
+function getWorkflow(db, id) {
+  const rows = query(db, 'SELECT id, name, description, steps, triggers, enabled, created_at, updated_at FROM workflows WHERE id = ?', [id]);
+  if (!rows.length) return null;
+  const r = rows[0];
+  return { id: r[0], name: r[1], description: r[2], steps: safeJson(r[3]), triggers: safeJson(r[4]), enabled: !!r[5], createdAt: r[6], updatedAt: r[7] };
+}
+
+function saveWorkflow(db, { id, name, description, steps, triggers, enabled }) {
+  const existing = query(db, 'SELECT id FROM workflows WHERE id = ?', [id]);
+  const stepsJson = JSON.stringify(steps || []);
+  const triggersJson = JSON.stringify(triggers || []);
+  if (existing.length > 0) {
+    run(db, "UPDATE workflows SET name=?, description=?, steps=?, triggers=?, enabled=?, updated_at=datetime('now','localtime') WHERE id=?",
+      [name || '', description || '', stepsJson, triggersJson, enabled ? 1 : 0, id]);
+  } else {
+    run(db, 'INSERT INTO workflows (id, name, description, steps, triggers, enabled) VALUES (?,?,?,?,?,?)',
+      [id, name || '', description || '', stepsJson, triggersJson, enabled ? 1 : 0]);
+  }
+  return { success: true, id };
+}
+
+function deleteWorkflow(db, id) {
+  run(db, 'DELETE FROM workflows WHERE id = ?', [id]);
+  return { success: true };
+}
+
+function listWorkflowExecutions(db, workflowId, limit = 20) {
+  const rows = query(db,
+    'SELECT id, workflow_id, status, inputs, outputs, step_results, started_at, finished_at, error, created_at FROM workflow_executions WHERE workflow_id = ? ORDER BY created_at DESC LIMIT ?',
+    [workflowId, limit]);
+  return rows.map(r => ({
+    id: r[0], workflowId: r[1], status: r[2],
+    inputs: safeJson(r[3]), outputs: safeJson(r[4]),
+    stepResults: safeJson(r[5]),
+    startedAt: r[6], finishedAt: r[7], error: r[8], createdAt: r[9],
+  }));
+}
+
+function saveExecution(db, { id, workflowId, status, inputs, outputs, stepResults, startedAt, finishedAt, error }) {
+  const existing = query(db, 'SELECT id FROM workflow_executions WHERE id = ?', [id]);
+  if (existing.length > 0) {
+    run(db, 'UPDATE workflow_executions SET status=?, outputs=?, step_results=?, finished_at=?, error=? WHERE id=?',
+      [status, JSON.stringify(outputs || {}), JSON.stringify(stepResults || []), finishedAt, error || null, id]);
+  } else {
+    run(db, 'INSERT INTO workflow_executions (id, workflow_id, status, inputs, outputs, step_results, started_at, finished_at, error) VALUES (?,?,?,?,?,?,?,?)',
+      [id, workflowId, status, JSON.stringify(inputs || {}), JSON.stringify(outputs || {}), JSON.stringify(stepResults || []), startedAt, finishedAt, error || null]);
+  }
+}
+
 // ── Agent Memory CRUD ──
 function getMemories(db) {
   const rows = query(db, 'SELECT id, key, value, source, created_at, updated_at FROM agent_memories ORDER BY key');
@@ -957,4 +1047,10 @@ module.exports = {
   formatSkill,
   formatPlugin,
   formatCliTool,
+  listWorkflows,
+  getWorkflow,
+  saveWorkflow,
+  deleteWorkflow,
+  listWorkflowExecutions,
+  saveExecution,
 };
