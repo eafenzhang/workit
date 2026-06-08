@@ -4,11 +4,9 @@ import { PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, StarIcon, G
 import { toast } from 'sonner';
 import KnowledgeEditor from '../components/KnowledgeEditor';
 import DOMPurify from 'dompurify';
-import UnifiedSidebar, { SidebarItem } from '../components/UnifiedSidebar';
-import PageHeader from '../components/PageHeader';
-import SearchBar, { FilterPills, type FilterPill } from '../components/SearchBar';
+import DataPage, { type FilterPill } from '../components/DataPage';
+import { SidebarItem } from '../components/UnifiedSidebar';
 import DetailPanel from '../components/DetailPanel';
-import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 // ── Toast message constants ──
@@ -542,10 +540,15 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   ];
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left Sidebar — UnifiedSidebar */}
-      <UnifiedSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(false)} title="分类目录"
-        actions={
+    <>
+      {/* Hidden file input for upload */}
+      <input type="file" ref={fileInputRef} multiple className="hidden" onChange={(e) => { if (e.target.files) handleUpload(e.target.files); }} />
+
+      <DataPage
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(false)}
+        sidebarTitle="分类目录"
+        sidebarActions={
           <>
             <button onClick={() => setShowCategoryEdit({ name: '', icon: 'FolderIcon', color: 'var(--wiki-text)' })} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 focus:outline-none transition-colors" title="新增分类">
               <PlusIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
@@ -558,7 +561,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
             </button>
           </>
         }
-        footer={
+        sidebarFooter={
           <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)' }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-wiki-text3">存储空间</span>
@@ -572,8 +575,8 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (storageStats.totalBytes > 0 ? (storageStats.usedBytes / storageStats.totalBytes) * 100 : 0))}%`, background: storageStats.usedBytes >= storageStats.totalBytes ? 'var(--wiki-danger)' : 'var(--wiki-text)' }} />
             </div>
           </div>
-        }>
-        {[{ ...categoriesList[0], count: totalCount }, ...categoriesList.slice(1).map(c => ({ ...c, count: allDocCounts[c.id] || 0 }))].map((cat) => {
+        }
+        sidebarItems={[{ ...categoriesList[0], count: totalCount }, ...categoriesList.slice(1).map(c => ({ ...c, count: allDocCounts[c.id] || 0 }))].map((cat) => {
           const iconMap: Record<string, any> = { GridIcon, FolderIcon, LinkIcon, BookOpenIcon, FileTextIcon, BookmarkIcon };
           const CatIcon = iconMap[cat.icon] || FolderIcon;
           return (
@@ -587,82 +590,60 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
             />
           );
         })}
-      </UnifiedSidebar>
-
-      {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <PageHeader
-          title="知识库"
-          description="管理文档、笔记和参考资料"
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          actions={
-            <>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                <UploadIcon size={14} />上传文档
-              </button>
-              <button onClick={() => { if (onOpenSubTab) onOpenSubTab('新建文档','knowledge-create'); else setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false }); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}>
-                <PlusIcon size={14} />新建文档
-              </button>
-            </>
-          }
-        />
-
-        <SearchBar
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder="搜索文档、标签..."
-          extra={
-            <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-              style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
-              {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
-              <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
+        title="知识库"
+        description="管理文档、笔记和参考资料"
+        headerActions={
+          <>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              <UploadIcon size={14} />上传文档
             </button>
+            <button onClick={() => { if (onOpenSubTab) onOpenSubTab('新建文档','knowledge-create'); else setShowEdit({ category: 'guide', type: 'MD', size: '0 KB', date: new Date().toISOString().split('T')[0], tags: [], featured: false }); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text)', border: '1px solid var(--wiki-border)' }}>
+              <PlusIcon size={14} />新建文档
+            </button>
+          </>
+        }
+        onSearchDebounced={setSearch}
+        searchPlaceholder="搜索文档、标签..."
+        filterPills={categoryPills}
+        activePillKey={activeCategory}
+        onPillChange={setActiveCategory}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        isEmpty={documents.length === 0}
+        emptyTitle="暂无文档"
+        emptyDescription="点击「上传文档」或「新建文档」开始"
+      >
+        {documents.map((doc) => {
+          const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
+          if (viewMode === 'grid') {
+            return (
+              <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>删除</button>
+                </div>
+                <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
+                <div className="flex flex-wrap gap-1 mb-3">{doc.tags.slice(0, 2).map((tag) => (<span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}</div>
+                <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}><span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span><span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span><span className="text-xs text-wiki-text3 ml-auto">{doc.size}</span></div>
+              </div>
+            );
+          } else {
+            return (
+              <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 hover:border-[var(--wiki-info)]/30 hover:bg-wiki-surface2" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
+              <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
+              <span className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
+              <span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span>
+              <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span>
+              <span className="text-xs text-wiki-text3 w-16 text-right">{doc.size}</span>
+              <span className="text-xs text-wiki-text3 w-24 text-right">{doc.date}</span>
+              <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-danger-bg)' }}><TrashIcon size={12} style={{ color: 'var(--wiki-danger)' }} /></button>
+            </div>
+            );
           }
-        />
-
-        <FilterPills items={categoryPills} activeKey={activeCategory} onChange={setActiveCategory} />
-
-        {/* Document Grid / List */}
-        <div className="overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <div className={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2'}>
-            {documents.length === 0 ? (
-              <EmptyState icon={FileTextIcon} title="暂无文档" description="点击「上传文档」或「新建文档」开始" />
-            ) : (
-              documents.map((doc) => {
-                const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
-                if (viewMode === 'grid') {
-                  return (
-                    <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>删除</button>
-                      </div>
-                      <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
-                      <div className="flex flex-wrap gap-1 mb-3">{doc.tags.slice(0, 2).map((tag) => (<span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}</div>
-                      <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}><span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span><span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span><span className="text-xs text-wiki-text3 ml-auto">{doc.size}</span></div>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 hover:border-[var(--wiki-info)]/30 hover:bg-wiki-surface2" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
-                      <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
-                      <span className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
-                      <span className="flex items-center gap-1 text-xs text-wiki-text3"><EyeIcon size={10} />{doc.views}</span>
-                      <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span>
-                      <span className="text-xs text-wiki-text3 w-16 text-right">{doc.size}</span>
-                      <span className="text-xs text-wiki-text3 w-24 text-right">{doc.date}</span>
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-danger-bg)' }}><TrashIcon size={12} style={{ color: 'var(--wiki-danger)' }} /></button>
-                    </div>
-                  );
-                }
-              })
-            )}
-          </div>
-        </div>
-      </div>
+        })}
+      </DataPage>
 
       {/* Document Detail Panel — unified slide-in from right */}
       <DetailPanel
@@ -721,7 +702,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
           />
       )}
 
-      
+
       {/* Category Edit Modal */}
       {showCategoryEdit !== null && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'var(--wiki-overlay-heavy)', backdropFilter: 'blur(4px)' }}>
@@ -787,6 +768,6 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
         onConfirm={confirmDeleteCategoryAction}
         onCancel={() => setConfirmDeleteCategory(null)}
       />
-    </div>
+    </>
   );
 }

@@ -23,9 +23,11 @@ export interface DataPageProps {
   headerActions?: ReactNode;
 
   // ── Search (built-in 300ms debounce) ──
+  /** Set to true to hide the search bar entirely (e.g. AppEcosystem) */
+  hideSearch?: boolean;
   searchPlaceholder?: string;
   /** Called with the debounced search value whenever it changes */
-  onSearchDebounced: (value: string) => void;
+  onSearchDebounced?: (value: string) => void;
   /** Optional initial search value */
   initialSearch?: string;
 
@@ -38,8 +40,10 @@ export interface DataPageProps {
   onPillChange?: (key: string) => void;
 
   // ── View mode ──
-  viewMode: 'grid' | 'list';
-  onViewModeChange: (mode: 'grid' | 'list') => void;
+  /** Set to true to hide the grid/list toggle button */
+  hideViewToggle?: boolean;
+  viewMode?: 'grid' | 'list';
+  onViewModeChange?: (mode: 'grid' | 'list') => void;
 
   // ── Content ──
   isEmpty: boolean;
@@ -80,6 +84,7 @@ export default function DataPage({
   title,
   description,
   headerActions,
+  hideSearch = false,
   searchPlaceholder = '搜索...',
   onSearchDebounced,
   initialSearch = '',
@@ -89,7 +94,8 @@ export default function DataPage({
   filterPills,
   activePillKey,
   onPillChange,
-  viewMode,
+  hideViewToggle = false,
+  viewMode = 'list',
   onViewModeChange,
   isEmpty,
   emptyTitle = '暂无数据',
@@ -106,6 +112,7 @@ export default function DataPage({
   const [searchInput, setSearchInput] = useState(initialSearch);
 
   useEffect(() => {
+    if (!onSearchDebounced) return;
     const timer = setTimeout(() => onSearchDebounced(searchInput), 300);
     return () => clearTimeout(timer);
   }, [searchInput, onSearchDebounced]);
@@ -114,6 +121,27 @@ export default function DataPage({
   useEffect(() => {
     setSearchInput(initialSearch);
   }, [initialSearch]);
+
+  // Build search bar extra content (view toggle + custom extras)
+  const searchBarExtra = (
+    <>
+      {!hideViewToggle && onViewModeChange && (
+        <button
+          onClick={() => onViewModeChange(viewMode === 'grid' ? 'list' : 'grid')}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+          style={{
+            background: 'var(--wiki-surface)',
+            border: '1px solid var(--wiki-border)',
+            color: 'var(--wiki-text2)',
+          }}
+        >
+          {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
+          <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
+        </button>
+      )}
+      {searchExtra}
+    </>
+  );
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -138,30 +166,16 @@ export default function DataPage({
           actions={headerActions}
         />
 
-        <SearchBar
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder={searchPlaceholder}
-          filterOpen={filterOpen}
-          onToggleFilter={onToggleFilter}
-          extra={
-            <>
-              <button
-                onClick={() => onViewModeChange(viewMode === 'grid' ? 'list' : 'grid')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-                style={{
-                  background: 'var(--wiki-surface)',
-                  border: '1px solid var(--wiki-border)',
-                  color: 'var(--wiki-text2)',
-                }}
-              >
-                {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
-                <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
-              </button>
-              {searchExtra}
-            </>
-          }
-        />
+        {!hideSearch && (
+          <SearchBar
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder={searchPlaceholder}
+            filterOpen={filterOpen}
+            onToggleFilter={onToggleFilter}
+            extra={searchBarExtra}
+          />
+        )}
 
         {/* Filter Panel (expandable) */}
         {filterPanel}

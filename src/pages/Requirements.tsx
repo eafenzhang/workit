@@ -7,10 +7,8 @@ import type { ContentBlock } from '../types/content';
 import ContentBlockRenderer from '../components/ContentBlockRenderer';
 import { rebuildBlocksFromLegacy } from '../utils/contentBlocks';
 import { DOC_EXTS, ARCHIVE_EXTS, CODE_EXTS, getFileExt, getFileCategory, formatFileSize } from '../components/FileChip';
-import UnifiedSidebar, { SidebarItem } from '../components/UnifiedSidebar';
-import PageHeader from '../components/PageHeader';
-import SearchBar, { FilterPills, type FilterPill } from '../components/SearchBar';
-import DetailPanel from '../components/DetailPanel';
+import DataPage, { type FilterPill } from '../components/DataPage';
+import { SidebarItem } from '../components/UnifiedSidebar';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -543,10 +541,12 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
     }));
 
     return (
-      <div data-cmp="Requirements" className="flex h-full overflow-hidden">
-        {/* Module sidebar — UnifiedSidebar */}
-        <UnifiedSidebar open={moduleSidebarOpen} onToggle={() => setModuleSidebarOpen(false)} title="模块分类"
-          actions={
+      <>
+        <DataPage
+          sidebarOpen={moduleSidebarOpen}
+          onToggleSidebar={() => setModuleSidebarOpen(false)}
+          sidebarTitle="模块分类"
+          sidebarActions={
             <>
               <button onClick={handleAddModule}
                 className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-wiki-surface2 transition-colors" title="新增模块">
@@ -563,59 +563,41 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                 <TrashIcon size={11} style={{ color: 'var(--wiki-danger)' }} />
               </button>
             </>
-          }>
-          {/* Module list — using SidebarItem like Knowledge */}
-          <SidebarItem
-            label="全部"
-            active={filterCategory === '全部'}
-            count={totalCount}
-            onClick={() => setFilterCategory('全部')}
-          />
-          {modules.map(m => {
-            const isActive = filterCategory === m;
-            return (
+          }
+          sidebarItems={
+            <>
               <SidebarItem
-                key={m}
-                label={m}
-                active={isActive}
-                count={moduleCounts[m]}
-                onClick={() => setFilterCategory(isActive ? '全部' : m)}
+                label="全部"
+                active={filterCategory === '全部'}
+                count={totalCount}
+                onClick={() => setFilterCategory('全部')}
               />
-            );
-          })}
-        </UnifiedSidebar>
-
-        {/* Main content area */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <PageHeader
-            title="采集库"
-            description="管理和跟踪采集条目"
-            sidebarOpen={moduleSidebarOpen}
-            onToggleSidebar={() => setModuleSidebarOpen(!moduleSidebarOpen)}
-            actions={
-              <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
-                <PlusIcon size={16} /><span>新建条目</span>
-              </button>
-            }
-          />
-
-          <SearchBar
-            value={searchInput}
-            onChange={setSearchInput}
-            placeholder="搜索..."
-            filterOpen={showFilter}
-            onToggleFilter={() => setShowFilter(!showFilter)}
-            extra={
-              <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-                style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text2)' }}>
-                {viewMode === 'grid' ? <ListIcon size={13} /> : <GridIcon size={13} />}
-                <span>{viewMode === 'grid' ? '列表' : '网格'}</span>
-              </button>
-            }
-          />
-
-          {showFilter && (
+              {modules.map(m => {
+                const isActive = filterCategory === m;
+                return (
+                  <SidebarItem
+                    key={m}
+                    label={m}
+                    active={isActive}
+                    count={moduleCounts[m]}
+                    onClick={() => setFilterCategory(isActive ? '全部' : m)}
+                  />
+                );
+              })}
+            </>
+          }
+          title="采集库"
+          description="管理和跟踪采集条目"
+          headerActions={
+            <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+              <PlusIcon size={16} /><span>新建条目</span>
+            </button>
+          }
+          onSearchDebounced={setSearch}
+          searchPlaceholder="搜索..."
+          filterOpen={showFilter}
+          onToggleFilter={() => setShowFilter(!showFilter)}
+          filterPanel={showFilter && (
             <div className="mx-8 mb-4 p-4 rounded-lg flex-shrink-0" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
               <div className="flex flex-wrap gap-4">
                 <div className="flex flex-col gap-1"><label className="text-xs text-wiki-text3">优先级</label>
@@ -642,79 +624,70 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
               </div>
             </div>
           )}
+          filterPills={statusPills}
+          activePillKey={filterStatus}
+          onPillChange={setFilterStatus}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          isEmpty={requirements.length === 0}
+          emptyTitle="暂无条目"
+          emptyDescription="点击「新建条目」开始采集"
+          page={currentPage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          onPageChange={fetchPage}
+        >
+          {requirements.map((req) => {
+            if (viewMode === 'grid') {
+              const statusCfg = statusConfig[req.status] || statusConfig['待评估'];
+              const priorityCfg = priorityConfig[req.priority] || priorityConfig['中'];
+              return (
+                <div key={req.id} onClick={() => openDetail(req)}
+                  className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200"
+                  style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={req.priority}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => {
+                          const p = e.target.value;
+                          apiFetch(`/api/requirements/${req.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
+                            setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, priority: p } : r));
+                          });
+                        }}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none"
+                        style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none' }}>
+                        {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded"
+                      style={{ background: statusCfg.bg, color: statusCfg.color }}>
+                      {req.status}
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{req.title}</div>
+                  <div className="text-xs text-wiki-text3 mb-3 line-clamp-2">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</div>
+                  <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}>
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{req.module}</span>
+                    <span className="flex items-center gap-1 text-xs text-wiki-text3 ml-auto"><UserIcon size={10} />{req.creator}</span>
+                    <span className="text-xs text-wiki-text3">{formatDate(req.createdAt)}</span>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
+                onPriorityChange={(reqId, p) => {
+                  apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
+                    setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, priority: p } : r));
+                  });
+                }} />
+            );
+          })}
+        </DataPage>
 
-          <FilterPills items={statusPills} activeKey={filterStatus} onChange={setFilterStatus} />
-
-          {/* List — with grid/list toggle like Knowledge */}
-          <div className="overflow-y-auto flex-1 px-8 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3' : 'flex flex-col gap-2.5'}>
-              {requirements.length === 0 ? (
-                <EmptyState icon={FileTextIcon} title="暂无条目" description="点击「新建条目」开始采集" />
-              ) : (
-                requirements.map((req) => {
-                  const statusCfg = statusConfig[req.status] || statusConfig['待评估'];
-                  const priorityCfg = priorityConfig[req.priority] || priorityConfig['中'];
-                  if (viewMode === 'grid') {
-                    return (
-                      <div key={req.id} onClick={() => openDetail(req)}
-                        className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200"
-                        style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={req.priority}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => {
-                                const p = e.target.value;
-                                apiFetch(`/api/requirements/${req.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
-                                  setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, priority: p } : r));
-                                });
-                              }}
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none"
-                              style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none' }}>
-                              {priorities.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                          </div>
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded"
-                            style={{ background: statusCfg.bg, color: statusCfg.color }}>
-                            {req.status}
-                          </span>
-                        </div>
-                        <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{req.title}</div>
-                        <div className="text-xs text-wiki-text3 mb-3 line-clamp-2">{req.aiSummary || req.desc?.substring(0, 80) || '暂无描述'}</div>
-                        <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{req.module}</span>
-                          <span className="flex items-center gap-1 text-xs text-wiki-text3 ml-auto"><UserIcon size={10} />{req.creator}</span>
-                          <span className="text-xs text-wiki-text3">{formatDate(req.createdAt)}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <ReqListItem key={req.id} req={req} onOpen={openDetail} formatDate={formatDate}
-                      onPriorityChange={(reqId, p) => {
-                        apiFetch(`/api/requirements/${reqId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: p }) }).then(() => {
-                          setRequirements(prev => prev.map(r => r.id === reqId ? { ...r, priority: p } : r));
-                        });
-                      }} />
-                  );
-                })
-              )}
-            </div>
-          </div>
-          {totalCount > pageSize && (
-            <div className="flex items-center justify-center gap-3 px-6 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--wiki-border)' }}>
-              <button onClick={() => fetchPage(currentPage - 1)} disabled={currentPage <= 1}
-                className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>上一页</button>
-              <span className="text-xs text-wiki-text2">{currentPage} / {totalPages}</span>
-              <button onClick={() => fetchPage(currentPage + 1)} disabled={currentPage >= totalPages}
-                className="px-3 py-1 rounded text-xs hover:bg-wiki-surface2 disabled:opacity-30 transition-colors" style={{ color: 'var(--wiki-text2)' }}>下一页</button>
-              <span className="text-xs text-wiki-text3">共 {totalCount} 条</span>
-            </div>
-          )}
-        </div>
-
-        {/* Module Edit Modal — matching Knowledge's category modal style */}
+        {/* Module Edit Modal */}
         {showModuleModal !== null && (
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'var(--wiki-overlay-heavy)', backdropFilter: 'blur(4px)' }}>
             <div className="rounded-lg p-6" style={{ width: 'min(420px, 95vw)', background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
@@ -759,7 +732,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
           onConfirm={confirmDelete}
           onCancel={() => setConfirmDeleteId(null)}
         />
-      </div>
+      </>
     );
   }
 

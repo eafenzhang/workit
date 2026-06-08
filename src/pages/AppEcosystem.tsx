@@ -4,8 +4,8 @@ import MCPTab from '../components/MCPTab';
 import CliToolsTab from '../components/CliToolsTab';
 import SkillsTab from '../components/SkillsTab';
 import PluginsTab from '../components/PluginsTab';
-import UnifiedSidebar, { SidebarItem } from '../components/UnifiedSidebar';
-import PageHeader from '../components/PageHeader';
+import DataPage from '../components/DataPage';
+import { SidebarItem } from '../components/UnifiedSidebar';
 import EmptyState from '../components/EmptyState';
 
 const TABS = [
@@ -38,41 +38,31 @@ export default function AppEcosystem() {
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Sidebar — matching Knowledge pattern */}
-      <UnifiedSidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen(false)}
-        title="应用生态"
-      >
-        {TABS.map(tab => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <SidebarItem
-              key={tab.id}
-              label={tab.label}
-              active={active}
-              onClick={() => setActiveTab(tab.id)}
-              icon={<Icon size={14} style={{ color: active ? 'var(--wiki-accent)' : 'var(--wiki-text3)' }} />}
-            />
-          );
-        })}
-      </UnifiedSidebar>
-
-      {/* Main content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <PageHeader
-          title={activeTabInfo?.label || '应用生态'}
-          description={activeTabInfo?.desc || '管理MCP工具、CLI命令、Skill技能和插件'}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          actions={tabActions}
-        />
-        <div className="flex-1 overflow-y-auto px-8 pb-4 scrollbar-thin">
-          {renderContent()}
-        </div>
-      </div>
-    </div>
+    <DataPage
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={() => setSidebarOpen(false)}
+      sidebarTitle="应用生态"
+      sidebarItems={TABS.map(tab => {
+        const Icon = tab.icon;
+        const active = activeTab === tab.id;
+        return (
+          <SidebarItem
+            key={tab.id}
+            label={tab.label}
+            active={active}
+            onClick={() => setActiveTab(tab.id)}
+            icon={<Icon size={14} style={{ color: active ? 'var(--wiki-accent)' : 'var(--wiki-text3)' }} />}
+          />
+        );
+      })}
+      title={activeTabInfo?.label || '应用生态'}
+      description={activeTabInfo?.desc || '管理MCP工具、CLI命令、Skill技能和插件'}
+      headerActions={tabActions}
+      hideSearch
+      hideViewToggle
+      isEmpty={false}
+    >
+      {renderContent()}
+    </DataPage>
   );
 }
