@@ -177,6 +177,27 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
   const handleStartLoading = useCallback(() => setBrowserLoading(true), []);
   const handleStopLoading = useCallback(() => setBrowserLoading(false), []);
 
+  // ── Minimize cleanup: destroy webview after delay to free memory ──
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (visible === false && webviewRef.current) {
+      // Start cleanup timer — destroy webview after 10s of being hidden
+      cleanupTimerRef.current = setTimeout(() => {
+        if (webviewRef.current) {
+          try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
+          webviewRef.current = null;
+        }
+      }, 10000);
+    } else if (visible === true && !webviewRef.current) {
+      // Window restored — recreate webview (triggers activeTabId effect)
+      if (cleanupTimerRef.current) { clearTimeout(cleanupTimerRef.current); cleanupTimerRef.current = null; }
+      // Force recreation by toggling a key — handled by tier effect
+    }
+    return () => {
+      if (cleanupTimerRef.current) { clearTimeout(cleanupTimerRef.current); cleanupTimerRef.current = null; }
+    };
+  }, [visible]);
+
   const attachWebviewEvents = useCallback((wv: any) => {
     wv.addEventListener('did-finish-load', handleWebviewLoad);
     wv.addEventListener('page-title-updated', handlePageTitle);
@@ -227,7 +248,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     webviewRef.current = wv;
 
     return () => { removeWebview(); };
-  }, [activeTabId]);
+  }, [activeTabId, recreateKey]);
 
   // Tier-based visibility: only hide/show, never destroy
   useEffect(() => {
@@ -271,14 +292,21 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     }
   }, [initialUrl]);
 
-  // Keep webview alive when window is hidden — no stop(), use visibility only
+  // Keep webview alive when window hidden; recreate if previously destroyed
+  const [recreateKey, setRecreateKey] = useState(0);
   useEffect(() => {
-    if (!webviewRef.current) return;
     if (visible === false) {
-      webviewRef.current.style.visibility = 'hidden';
-    } else {
-      webviewRef.current.style.visibility = 'visible';
-      webviewRef.current.style.display = 'flex';
+      if (webviewRef.current) {
+        webviewRef.current.style.visibility = 'hidden';
+      }
+    } else if (visible === true) {
+      if (webviewRef.current) {
+        webviewRef.current.style.visibility = 'visible';
+        webviewRef.current.style.display = 'flex';
+      } else {
+        // Webview was destroyed by cleanup timer — trigger recreation
+        setRecreateKey(k => k + 1);
+      }
     }
   }, [visible]);
 

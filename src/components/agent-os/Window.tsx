@@ -166,12 +166,13 @@ export default function Window({
     pointerEvents: isHidden ? 'none' as const : 'auto' as const,
     transition: isDragging || isResizing
       ? 'none' as const
-      : ('opacity 0.2s ease-out, transform 0.2s ease-out, left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out' as const),
+      : ('opacity 0.18s ease-out, transform 0.18s cubic-bezier(0.25,0.46,0.45,0.94)' as const),
+    willChange: (isDragging || isResizing) ? 'left, top, width, height' : 'auto',
   };
 
   return (
     <div
-      className="absolute flex flex-col overflow-hidden select-none will-change-transform"
+      className="absolute flex flex-col overflow-hidden select-none"
       style={{
         left: displayX,
         top: displayY,
