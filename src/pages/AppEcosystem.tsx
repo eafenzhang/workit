@@ -43,7 +43,7 @@ export default function AppEcosystem() {
   return (
     <DataPage
       sidebarOpen={sidebarOpen}
-      onToggleSidebar={() => setSidebarOpen(false)}
+      onToggleSidebar={() => setSidebarOpen(prev => !prev)}
       sidebarTitle="应用生态"
       sidebarItems={TABS.map(tab => {
         const Icon = tab.icon;

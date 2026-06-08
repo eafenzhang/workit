@@ -546,7 +546,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
 
       <DataPage
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(false)}
+        onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         sidebarTitle="分类目录"
         sidebarActions={
           <>

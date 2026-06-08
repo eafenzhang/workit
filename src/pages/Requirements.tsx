@@ -544,7 +544,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
       <>
         <DataPage
           sidebarOpen={moduleSidebarOpen}
-          onToggleSidebar={() => setModuleSidebarOpen(false)}
+          onToggleSidebar={() => setModuleSidebarOpen(prev => !prev)}
           sidebarTitle="模块分类"
           sidebarActions={
             <>
