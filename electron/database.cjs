@@ -287,6 +287,18 @@ function initDatabase(userDataPath) {
     log('initDatabase: migration v4 complete (workflows + workflow_executions)');
   }
 
+  // ── v7: balance column for models ──
+  if (currentVersion < 7) {
+    try {
+      db.exec("ALTER TABLE models ADD COLUMN balance TEXT DEFAULT ''");
+      db.exec("INSERT OR REPLACE INTO schema_version (version) VALUES (7)");
+      currentVersion = 7;
+      log('initDatabase: migration v7 complete (models.balance)');
+    } catch (e) {
+      if (!String(e.message||'').includes('duplicate column')) console.error('[db] v7 migration failed:', e.message);
+    }
+  }
+
   // ── v6: user_profile table ──
   if (currentVersion < 6) {
     db.exec(`CREATE TABLE IF NOT EXISTS user_profile (

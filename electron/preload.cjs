@@ -134,6 +134,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Profile persistence ──
   profileGet: () => ipcRenderer.invoke('profile:get'),
   profileSave: (profile) => ipcRenderer.invoke('profile:save', profile),
+  modelCheckBalance: (modelId) => ipcRenderer.invoke('model:check-balance', modelId),
   // ── Browser webview new-window ── (Electron 22+ setWindowOpenHandler IPC relay)
   onBrowserNewWindow: (cb) => {
     const handler = (_event, url) => cb(url);

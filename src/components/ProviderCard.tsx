@@ -1,5 +1,5 @@
 import React from 'react';
-import { StarIcon } from 'lucide-react';
+import { StarIcon, WalletIcon } from 'lucide-react';
 import { type ProviderConfig, type ModelItem } from '../data/providers';
 
 interface ProviderCardProps {
@@ -7,13 +7,15 @@ interface ProviderCardProps {
   saved: ModelItem | undefined;
   onClick: () => void;
   onSetDefault?: () => void;
+  onCheckBalance?: () => void;
+  checkingBalance?: boolean;
 }
 
-/** Renders a single provider card in the provider grid */
-export default function ProviderCard({ provider, saved, onClick, onSetDefault }: ProviderCardProps) {
+export default function ProviderCard({ provider, saved, onClick, onSetDefault, onCheckBalance, checkingBalance }: ProviderCardProps) {
   const configured = !!saved;
   const isDefault = saved?.isDefault;
   const borderColor = isDefault ? 'var(--wiki-warning)' : 'var(--wiki-border)';
+  const balance = saved?.balance;
   const statusLabel = configured
     ? saved?.enabled
       ? `已配置 · ${provider.models.find((m) => m.id === saved?.modelId)?.name}`
@@ -33,15 +35,30 @@ export default function ProviderCard({ provider, saved, onClick, onSetDefault }:
           <span className="text-sm font-semibold text-wiki-text">{provider.name}</span>
           {isDefault && <StarIcon size={12} style={{ color: 'var(--wiki-warning)' }} />}
           {configured && (
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ background: saved?.enabled ? 'var(--wiki-success)' : 'var(--wiki-text3)' }}
-            />
+            <span className="w-1.5 h-1.5 rounded-full"
+              style={{ background: saved?.enabled ? 'var(--wiki-success)' : 'var(--wiki-text3)' }} />
           )}
         </div>
         <div className="text-xs text-wiki-text3 mt-0.5">{statusLabel}</div>
+        {balance && (
+          <div className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--wiki-text2)' }}>
+            <WalletIcon size={10} />
+            <span>{balance}</span>
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
+        {configured && onCheckBalance && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCheckBalance(); }}
+            disabled={checkingBalance}
+            className="text-xs px-2 py-1 rounded transition-colors"
+            style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
+            title="查询余额"
+          >
+            <WalletIcon size={12} className={checkingBalance ? 'animate-pulse' : ''} />
+          </button>
+        )}
         {configured && !isDefault && onSetDefault && (
           <button
             onClick={(e) => { e.stopPropagation(); onSetDefault(); }}

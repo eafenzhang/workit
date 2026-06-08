@@ -86,6 +86,9 @@ export default function Window({
       } else if (type.includes('knowledge')) {
         routeParams.initialView = type;
         if (extra?.docId) routeParams.docId = extra.docId;
+      } else if (type.includes('design-studio')) {
+        routeParams.initialView = type;
+        if (extra?.docId) routeParams.docId = extra.docId;
       }
       openWindow(type, title, routeParams);
     },

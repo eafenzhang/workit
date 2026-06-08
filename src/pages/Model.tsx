@@ -34,7 +34,20 @@ export default function Model() {
   });
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingBalance, setCheckingBalance] = useState<number | null>(null);
   const [formEndpoint, setFormEndpoint] = useState('/chat/completions');
+
+  const checkBalance = async (modelId: number) => {
+    setCheckingBalance(modelId);
+    const api = (window as any).electronAPI;
+    try {
+      const r = await api?.modelCheckBalance?.(modelId);
+      if (r?.balance) toast.success(`余额: ${r.balance}`);
+      else if (r?.error) toast.error(r.error);
+    } catch { toast.error('查询失败'); }
+    setCheckingBalance(null);
+    fetchModels(); // Refresh to show updated balance
+  };
 
   /* ---- data fetching ---- */
 
@@ -241,6 +254,8 @@ export default function Model() {
               saved={saved}
               onClick={() => (saved ? openEdit(saved) : openAdd(p.id))}
               onSetDefault={saved && !saved.isDefault ? () => setDefault(saved.id) : undefined}
+              onCheckBalance={saved?.hasApiKey ? () => checkBalance(saved.id) : undefined}
+              checkingBalance={checkingBalance === saved?.id}
             />
           );
         })}

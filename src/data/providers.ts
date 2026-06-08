@@ -29,6 +29,7 @@ export interface ModelItem {
   isDefault: boolean;
   endpoint: string;
   createdAt: string;
+  balance?: string;
 }
 
 export interface ModelFormState {

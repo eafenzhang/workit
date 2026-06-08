@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { DatabaseIcon, LightbulbIcon, Bot, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
+import { DatabaseIcon, LightbulbIcon, Bot, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon, PaletteIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ const navItems = [
   { id: 'home', label: `首页`, icon: Bot, color: 'var(--wiki-text)', path: '/' },
   { id: 'requirements', label: `采集库`, icon: SparklesIcon, color: 'var(--wiki-text)', path: '/requirements' },
   { id: 'knowledge', label: `知识库`, icon: DatabaseIcon, color: 'var(--wiki-text)', path: '/knowledge' },
+  { id: 'design-studio', label: `设计稿`, icon: PaletteIcon, color: '#6366f1', path: '/design-studio' },
   { id: 'insights', label: `洞察分析`, icon: LightbulbIcon, color: 'var(--wiki-success)', path: '/insights' },
   { id: 'model', label: `模型配置`, icon: CpuIcon, color: 'var(--wiki-warning)', path: '/model' },
   { id: 'mcp', label: `应用生态`, icon: PackageIcon, color: 'var(--wiki-danger)', path: '/mcp' },

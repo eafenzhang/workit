@@ -26,6 +26,7 @@ const Browser = lazy(() => import('./Browser'));
 const Messages = lazy(() => import('./Messages'));
 const Settings = lazy(() => import('./Settings'));
 const Profile = lazy(() => import('./Profile'));
+const DesignStudio = lazy(() => import('./DesignStudio'));
 
 // Loading fallback spinner
 const Loading = () => (
@@ -58,6 +59,7 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
   messages: { type: 'messages', title: '消息中心' },
   settings: { type: 'settings', title: '系统设置' },
   profile: { type: 'profile', title: '用户Agent' },
+  'design-studio': { type: 'design-studio', title: '设计稿' },
 };
 
 export default function Index() {
@@ -114,7 +116,7 @@ export default function Index() {
     const params: Record<string, any> = { params: extra?.params };
     if (extra?.reqId != null) params.initialTab = { type, reqId: extra.reqId, params: extra?.params };
     if (extra?.docId != null) params.docId = extra.docId;
-    if (type.includes('knowledge-')) {
+    if (type.includes('knowledge-') || type.includes('design-studio-')) {
       params.initialView = type;
       if (extra?.docId != null) params.docId = extra.docId;
     }
@@ -254,6 +256,20 @@ export default function Index() {
       case 'knowledge-create':
       case 'knowledge-edit':
         return <Lazy><Knowledge
+          key={activeTab.id}
+          initialView={activeTab.type}
+          docId={activeTab.docId}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+          onCloseSelf={onCloseSelf}
+        /></Lazy>;
+      case 'design-studio':
+        return <Lazy><DesignStudio
+          key={activeTab.id}
+          onOpenSubTab={(title, type, extra) => openTab(type, title, extra)}
+        /></Lazy>;
+      case 'design-studio-detail':
+      case 'design-studio-create':
+        return <Lazy><DesignStudio
           key={activeTab.id}
           initialView={activeTab.type}
           docId={activeTab.docId}

@@ -17,6 +17,7 @@ import {
   UserIcon,
   GlobeIcon,
   LayersIcon,
+  PaletteIcon,
 } from 'lucide-react';
 
 // ── Dock items with filled icons and brand colors ──
@@ -25,6 +26,7 @@ const DOCK_ITEMS: (DockItem & { color: string })[] = [
   { id: 'home', label: '首页', icon: BotMessageSquareIcon, type: 'home', color: '#6366f1' },
   { id: 'requirements', label: '采集库', icon: SparklesIcon, type: 'requirements', color: '#f59e0b' },
   { id: 'knowledge', label: '知识库', icon: DatabaseIcon, type: 'knowledge', color: '#10b981' },
+  { id: 'design-studio', label: '设计稿', icon: PaletteIcon, type: 'design-studio', color: '#ec4899' },
   { id: 'insights', label: '洞察分析', icon: LightbulbIcon, type: 'insights', color: '#8b5cf6' },
   { id: 'mcp', label: '应用生态', icon: PackageIcon, type: 'mcp', color: '#06b6d4' },
   { id: 'model', label: '模型配置', icon: CpuIcon, type: 'model', color: '#ef4444' },

@@ -137,6 +137,56 @@ function setupIPC(mainWindow, db) {
     try { return getMemorySummary(db); } catch (e) { return { error: e.message }; }
   });
 
+  // ── Model balance check ──
+  ipcMain.handle('model:check-balance', async (_, modelId) => {
+    try {
+      const rows = query(db, 'SELECT provider, base_url, api_key, model_id FROM models WHERE id = ?', [modelId]);
+      if (!rows.length) return { error: '模型未找到' };
+      const [provider, baseUrl, encKey, mId] = [rows[0][0], rows[0][1], rows[0][2], rows[0][3]];
+      const apiKey = decryptApiKey(encKey);
+      if (!apiKey) return { error: '未配置API Key' };
+
+      // Known provider balance endpoints
+      /** @type {Record<string,string>} */
+      const BALANCE_URLS = {
+        'deepseek': 'https://api.deepseek.com/user/balance',
+        'openai': 'https://api.openai.com/v1/dashboard/billing/subscription',
+        'moonshot': 'https://api.moonshot.cn/v1/users/me/balance',
+      };
+
+      const balanceUrl = BALANCE_URLS[provider];
+      if (!balanceUrl) return { balance: '该平台暂不支持查询' };
+
+      const res = await fetch(balanceUrl, {
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!res.ok) return { balance: '查询失败 (HTTP ' + res.status + ')' };
+      const data = await res.json();
+
+      // Parse balance for known providers
+      var balance = '';
+      if (provider === 'deepseek') {
+        var infos = (data && data.balance_infos) ? data.balance_infos : [];
+        var b = infos.find(function(i) { return i.currency === 'CNY'; });
+        balance = b ? b.total_balance + ' ' + b.currency : JSON.stringify(data).substring(0, 100);
+      } else if (provider === 'openai') {
+        balance = data.hard_limit_usd ? '$' + data.hard_limit_usd : JSON.stringify(data).substring(0, 100);
+      } else if (provider === 'moonshot') {
+        balance = (data.data && data.data.total_balance) ? String(data.data.total_balance) : JSON.stringify(data).substring(0, 100);
+      } else {
+        balance = JSON.stringify(data).substring(0, 100);
+      }
+
+      // Save to DB
+      run(db, "UPDATE models SET balance = ? WHERE id = ?", [balance, modelId]);
+      return { balance };
+    } catch (e) {
+      return { error: e.message || '查询失败' };
+    }
+  });
+
   // ── Profile IPC handlers ──
   ipcMain.handle('profile:get', async () => {
     try { return getUserProfile(db) || {}; } catch (e) { return { error: e.message }; }
@@ -756,7 +806,7 @@ function setupIPC(mainWindow, db) {
       case 'GET':
         return query(db, 'SELECT * FROM models ORDER BY is_default DESC, id DESC').map(r => ({
           id: r[0], name: r[1], provider: r[2], baseUrl: r[3], apiKey: r[4] ? (() => { try { const dec = decryptApiKey(r[4]); return '******' + (dec ? dec.slice(-4) : ''); } catch { return '******'; } })() : '',
-          hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], endpoint: r[10] || '/chat/completions', createdAt: r[9],
+          hasApiKey: !!r[4], modelId: r[5], enabled: !!r[6], isDefault: !!r[7], endpoint: r[10] || '/chat/completions', createdAt: r[9], balance: r[11] || '',
         }));
       case 'POST': {
         const { name, provider, baseUrl, apiKey, modelId, endpoint } = data || {};

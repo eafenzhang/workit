@@ -38,6 +38,7 @@ const ProfilePage = React.lazy(() => import('../pages/Profile'));
 const BrowserPage = React.lazy(() => import('../pages/Browser'));
 
 const WorkflowsPage = React.lazy(() => import('../pages/Workflows'));
+const DesignStudioPage = React.lazy(() => import('../pages/DesignStudio'));
 
 /** Maps window.type → lazy page component */
 export const PAGE_COMPONENT_MAP: WindowPageMap = {
@@ -50,6 +51,9 @@ export const PAGE_COMPONENT_MAP: WindowPageMap = {
   'knowledge-detail': KnowledgePage,
   'knowledge-create': KnowledgePage,
   'knowledge-edit': KnowledgePage,
+  'design-studio': DesignStudioPage,
+  'design-studio-detail': DesignStudioPage,
+  'design-studio-create': DesignStudioPage,
   insights: InsightsPage,
   mcp: AppEcosystemPage,
   model: ModelPage,

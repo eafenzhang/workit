@@ -508,57 +508,13 @@ function Home({ onOpenTab }: HomeProps) {
 
   return (
     <div data-cmp="Home" className="flex flex-col h-full">
-      {/* Top bar: new chat left, tools center, history right */}
+      {/* Top bar: new chat left, history right */}
       <div className="flex items-center justify-between px-6 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--wiki-border)' }}>
-        <div className="flex items-center gap-2">
-          <button onClick={handleNewChat}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-            style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
-            <PlusIcon size={13} />新对话
-          </button>
-
-          {/* Tools button */}
-          <div className="relative">
-            <button onClick={() => setShowToolPanel(!showToolPanel)}
-              className={`flex items-center gap-1 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors ${toolsEnabled ? 'ring-1' : ''}`}
-              style={{ background: toolsEnabled ? 'rgba(99,102,241,0.12)' : 'var(--wiki-surface2)', color: toolsEnabled ? '#6366f1' : 'var(--wiki-text2)', border: toolsEnabled ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--wiki-border)' }}>
-              <WrenchIcon size={13} />
-              <span>工具</span>
-            </button>
-            {showToolPanel && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setShowToolPanel(false)} />
-                <div className="absolute top-full mt-1 left-0 w-48 rounded-lg shadow-xl z-30 p-1.5" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                  {[{ key: 'mcp', label: 'MCP工具', icon: PuzzleIcon, count: toolCounts.mcp },
-                    { key: 'cli', label: 'CLI命令', icon: TerminalIcon, count: toolCounts.cli },
-                    { key: 'skills', label: 'Skills', icon: ZapIcon, count: toolCounts.skills },
-                    { key: 'plugins', label: 'Plugins', icon: SettingsIcon, count: toolCounts.plugins },
-                  ].map(tc => {
-                    const Icon = tc.icon; const enabled = (toolCategories as any)[tc.key];
-                    return (
-                      <div key={tc.key} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-wiki-surface2 cursor-pointer"
-                        onClick={() => {
-                          const next = { ...toolCategories, [tc.key]: !enabled };
-                          setToolCategories(next);
-                          if (Object.values(next).some(Boolean) && !toolsEnabled) setToolsEnabled(true);
-                          if (!Object.values(next).some(Boolean) && toolsEnabled) setToolsEnabled(false);
-                        }}>
-                        <div className="flex items-center gap-1.5">
-                          <Icon size={11} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-                          <span className="text-xs" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
-                          {tc.count>0&&<span className="text-[10px] px-1 py-0.5 rounded" style={{background:'var(--wiki-surface2)',color:'var(--wiki-text3)'}}>{tc.count}</span>}
-                        </div>
-                        <div className="relative w-8 h-4 rounded-full cursor-pointer" style={{background:enabled?'#6366f1':'var(--wiki-border)'}}>
-                          <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all" style={{left:enabled?'18px':'2px',transition:'left 0.15s'}} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <button onClick={handleNewChat}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+          style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+          <PlusIcon size={13} />新对话
+        </button>
 
         <div className="relative">
             <button
@@ -668,82 +624,114 @@ function Home({ onOpenTab }: HomeProps) {
           </div>
         )}
       </div>
-      {/* Fixed bottom bar: model + tools + file + stop + input */}
+      {/* Fixed bottom bar — toolbar inside input */}
       <div className="flex-shrink-0 pb-3 pt-2 w-full flex justify-center" style={!hasMessages ? { position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--wiki-bg)' } : {}}>
         <div style={{ width: '42rem', maxWidth: 'calc(100% - 2rem)' }}>
-          {/* Model + Tools + Upload bar */}
-          <div className="flex items-center gap-2 mb-2 px-1">
-            {/* Model selector */}
-            <PortalDropdown
-              open={modelDropdownOpen}
-              onClose={() => setModelDropdownOpen(false)}
-              alignX="left" alignY="above"
-              trigger={
-                <button onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-                  className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 cursor-pointer transition-colors"
-                  style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
-                  <BotIcon size={12} />
-                  <span className="truncate max-w-[100px]">{currentModelLabel}</span>
-                  <ChevronDownIcon size={10} style={{ transform: modelDropdownOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
-                </button>
-              }
-            >
-              <div className="w-56 max-h-40 overflow-y-auto rounded-lg shadow-lg"
-                style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
-                {providers.map(p => (
-                  <div key={p.provider}>
-                    <div className="text-[10px] px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
-                    {p.models.map(m => (
-                      <div key={p.provider+'|'+m.id}
-                        onClick={() => { setSelectedProvider(p.provider); setSelectedModel(String(m.modelId)); try { localStorage.setItem('home_last_model', JSON.stringify({provider:p.provider,modelId:m.modelId})); } catch {} setModelDropdownOpen(false); }}
-                        className="px-3 py-1 text-xs cursor-pointer hover:bg-wiki-surface2 transition-colors truncate" style={{ color: selectedProvider===p.provider&&selectedModel===String(m.modelId)?'var(--wiki-text)':'var(--wiki-text2)' }}>
-                        {m.name.includes(' - ')?m.name.split(' - ').pop():m.name}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </PortalDropdown>
-
-            {/* File upload */}
-            <label className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 cursor-pointer transition-colors hover:bg-wiki-surface2"
-              style={{ color: 'var(--wiki-text2)' }} title="上传文件">
-              <PaperclipIcon size={12} />
-              <input type="file" className="hidden" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    const text = ev.target?.result?.toString()?.substring(0, 5000) || '';
-                    handleSend?.({ content: `[文件: ${file.name}]\n${text}`, providerId: selectedProvider, modelId: selectedModel });
-                  };
-                  if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|json|js|ts|py|html|css|xml|yaml|yml|log|csv)$/i)) {
-                    reader.readAsText(file);
-                  } else {
-                    handleSend?.({ content: `请分析文件: ${file.name} (${(file.size/1024).toFixed(1)}KB, ${file.type})`, providerId: selectedProvider, modelId: selectedModel });
-                  }
-                  e.target.value = '';
-                }
-              }} />
-            </label>
-
-            {/* Stop button */}
-            {sending && (
-              <button onClick={() => { /* abort via reload */ window.location.reload(); }}
-                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 ml-auto cursor-pointer transition-colors"
-                style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <StopCircleIcon size={12} />停止
-              </button>
-            )}
-          </div>
-
-          {/* Input area */}
           <HomeInput
             onSend={handleSend}
+            onStop={() => window.location.reload()}
             disabled={sending}
             selectedProvider={selectedProvider}
             selectedModel={selectedModel}
-            onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
+            toolbar={
+              <>
+                {/* Model selector */}
+                <PortalDropdown
+                  open={modelDropdownOpen}
+                  onClose={() => setModelDropdownOpen(false)}
+                  alignX="left" alignY="above"
+                  trigger={
+                    <button onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                      className="flex items-center gap-1 text-xs rounded-lg px-1.5 py-1 cursor-pointer transition-colors"
+                      style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)', border: '1px solid var(--wiki-border)' }}>
+                      <BotIcon size={11} />
+                      <span className="truncate max-w-[80px]">{currentModelLabel}</span>
+                      <ChevronDownIcon size={9} />
+                    </button>
+                  }
+                >
+                  <div className="w-52 max-h-36 overflow-y-auto rounded-lg shadow-lg"
+                    style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                    {providers.map(p => (
+                      <div key={p.provider}>
+                        <div className="text-[10px] px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
+                        {p.models.map(m => (
+                          <div key={p.provider+'|'+m.id}
+                            onClick={() => { setSelectedProvider(p.provider); setSelectedModel(String(m.modelId)); try { localStorage.setItem('home_last_model', JSON.stringify({provider:p.provider,modelId:m.modelId})); } catch {} setModelDropdownOpen(false); }}
+                            className="px-3 py-1 text-xs cursor-pointer hover:bg-wiki-surface2 transition-colors truncate"
+                            style={{ color: selectedProvider===p.provider&&selectedModel===String(m.modelId)?'var(--wiki-text)':'var(--wiki-text2)' }}>
+                            {m.name.includes(' - ')?m.name.split(' - ').pop():m.name}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </PortalDropdown>
+
+                {/* Tools */}
+                <div className="relative">
+                  <button onClick={() => setShowToolPanel(!showToolPanel)}
+                    className={`flex items-center gap-1 text-xs rounded-lg px-1.5 py-1 cursor-pointer transition-colors ${toolsEnabled ? 'ring-1' : ''}`}
+                    style={{ background: toolsEnabled ? 'rgba(99,102,241,0.12)' : 'var(--wiki-surface2)', color: toolsEnabled ? '#6366f1' : 'var(--wiki-text2)', border: toolsEnabled ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--wiki-border)' }}>
+                    <WrenchIcon size={11} />
+                    <span>工具</span>
+                  </button>
+                  {showToolPanel && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setShowToolPanel(false)} />
+                      <div className="absolute bottom-full mb-1 left-0 w-40 rounded-lg shadow-xl z-30 p-1" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                        {[{ key: 'mcp', label: 'MCP工具', icon: PuzzleIcon, count: toolCounts.mcp },
+                          { key: 'cli', label: 'CLI命令', icon: TerminalIcon, count: toolCounts.cli },
+                          { key: 'skills', label: 'Skills', icon: ZapIcon, count: toolCounts.skills },
+                          { key: 'plugins', label: 'Plugins', icon: SettingsIcon, count: toolCounts.plugins },
+                        ].map(tc => {
+                          const Icon = tc.icon; const enabled = (toolCategories as any)[tc.key];
+                          return (
+                            <div key={tc.key} className="flex items-center justify-between px-1.5 py-1 rounded hover:bg-wiki-surface2 cursor-pointer"
+                              onClick={() => {
+                                const next = { ...toolCategories, [tc.key]: !enabled };
+                                setToolCategories(next);
+                                if (Object.values(next).some(Boolean) && !toolsEnabled) setToolsEnabled(true);
+                                if (!Object.values(next).some(Boolean) && toolsEnabled) setToolsEnabled(false);
+                              }}>
+                              <div className="flex items-center gap-1">
+                                <Icon size={10} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
+                                <span className="text-[11px]" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
+                              </div>
+                              <div className="relative w-7 h-3.5 rounded-full cursor-pointer" style={{background:enabled?'#6366f1':'var(--wiki-border)'}}>
+                                <span className="absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-all" style={{left:enabled?'15px':'2px',transition:'left 0.15s'}} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* File upload */}
+                <label className="flex items-center gap-1 text-xs rounded-lg px-1.5 py-1 cursor-pointer transition-colors hover:bg-wiki-surface2"
+                  style={{ color: 'var(--wiki-text2)' }} title="上传文件">
+                  <PaperclipIcon size={11} />
+                  <input type="file" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const text = ev.target?.result?.toString()?.substring(0, 5000) || '';
+                        handleSend?.({ content: `[文件: ${file.name}]\n${text}`, providerId: selectedProvider, modelId: selectedModel });
+                      };
+                      if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|json|js|ts|py|html|css|xml|yaml|yml|log|csv)$/i)) {
+                        reader.readAsText(file);
+                      } else {
+                        handleSend?.({ content: `请分析文件: ${file.name} (${(file.size/1024).toFixed(1)}KB, ${file.type})`, providerId: selectedProvider, modelId: selectedModel });
+                      }
+                      e.target.value = '';
+                    }
+                  }} />
+                </label>
+              </>
+            }
           />
         </div>
       </div>
