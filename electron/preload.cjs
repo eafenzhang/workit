@@ -37,10 +37,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const channels = ['update:checking','update:available','update:not-available','update:progress','update:downloaded','update:error',
       'update-available','update-download-progress','update-downloaded']; // legacy channels
     channels.forEach(ch => {
-      const handler = (_e, data) => cb(ch.replace('update:','').replace('update-',''), data);
+      const handler = (_e, data) => {
+        let type = ch.replace('update:','').replace('update-','');
+        // Normalize: legacy 'download-progress' → 'progress'
+        if (type === 'download-progress') type = 'progress';
+        // Normalize: legacy 'downloaded' from update-downloaded → same as update:downloaded
+        cb(type, data);
+      };
       ipcRenderer.on(ch, handler);
     });
-    // Return combined unsubscribe
     return () => channels.forEach(ch => ipcRenderer.removeAllListeners(ch));
   },
   // Legacy event listeners (backward compat)

@@ -27,20 +27,20 @@ const App = () => {
     if (!api?.onUpdateEvent) return;
     const unsub = api.onUpdateEvent((type: string, data: any) => {
       const ver = data?.version || '';
+      const pct = typeof data === 'number' ? data : data?.percent ?? 0;
       switch (type) {
         case 'available':
           updateToastId.current = toast('发现新版本', {
-            description: `v${ver} 正在后台下载...`,
+            description: `v${ver} 正在后台下载... 0%`,
             duration: Infinity,
           });
           break;
-        case 'progress': {
-          const pct = data?.percent ?? data ?? 0;
-          if (updateToastId.current && pct > 0 && pct < 100) {
+        case 'progress':
+        case 'download-progress':
+          if (updateToastId.current) {
             toast('正在下载更新', { id: updateToastId.current, description: `${pct}%`, duration: Infinity });
           }
           break;
-        }
         case 'downloaded':
           if (updateToastId.current) toast.dismiss(updateToastId.current);
           toast('更新已就绪', {

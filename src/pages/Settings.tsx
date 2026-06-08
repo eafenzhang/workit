@@ -45,17 +45,17 @@ export default function Settings() {
     // Subscribe to unified update events
     if (api?.onUpdateEvent) {
       const u = api.onUpdateEvent((type: string, data: any) => {
+        // Normalize both new (update:xxx) and legacy (update-xxx) event types
+        const pct = typeof data === 'number' ? data : data?.percent ?? data?.progress ?? 0;
+        const ver = typeof data === 'string' ? data : data?.version || '';
         switch (type) {
           case 'checking': sync({ status: 'checking', error: '' }); break;
-          case 'available': sync({ status: 'downloading', version: data?.version, progress: 0 }); break;
+          case 'available': sync({ status: 'downloading', version: ver, progress: 0 }); break;
           case 'not-available': sync({ status: 'idle', error: '已是最新版本' }); setTimeout(() => sync({ error: '' }), 3000); break;
-          case 'progress': sync({ progress: data?.percent ?? data }); break;
-          case 'downloaded': sync({ status: 'ready', version: data?.version }); break;
+          case 'progress':
+          case 'download-progress': sync({ progress: pct }); if (pct >= 100) sync({ status: 'ready' }); break;
+          case 'downloaded': sync({ status: 'ready', version: ver }); break;
           case 'error': sync({ status: 'error', error: data?.message || '更新失败' }); break;
-          // Legacy events
-          case 'available': break;
-          case 'download-progress': sync({ progress: typeof data === 'number' ? data : data?.percent }); break;
-          case 'downloaded': sync({ status: 'ready' }); break;
         }
       });
       if (u) unsubs.push(u);
