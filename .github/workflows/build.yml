@@ -59,9 +59,7 @@ jobs:
       - name: Embed icon
         shell: bash
         run: |
-          npm install -g rcedit
-          VERSION=$(node -p "require('./package.json').version")
-          rcedit "release/win-unpacked/Workit.exe" --set-icon "build/icon.ico"
+          npx -y rcedit "release/win-unpacked/Workit.exe" --set-icon "build/icon.ico"
           echo "Icon embedded into Workit.exe"
 
       - name: Release
