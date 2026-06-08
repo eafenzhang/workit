@@ -45,9 +45,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     const win = state.windows.find(w => w.id === windowId);
     if (win?.browserTabs && win.browserTabs.length > 0) return win.browserTabs;
     const firstId = generateTabId();
-    // Default to a search-friendly new tab page instead of blank
-    const defaultUrl = initialUrl || 'https://www.google.com';
-    return [{ id: firstId, url: defaultUrl, title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
+    return [{ id: firstId, url: initialUrl || 'about:blank', title: initialUrl ? initialUrl.replace(/^https?:\/\//, '').substring(0, 30) : '新标签页' }];
   });
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     const win = state.windows.find(w => w.id === windowId);
@@ -243,8 +241,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     wv.style.cssText = 'height:100%;display:flex;';
     wv.setAttribute('allowpopups', '');
     wv.setAttribute('partition', `persist:browser:${windowId || 'default'}`);
-    const wvUrl = activeTabRef.current?.url || initialUrl || 'https://www.google.com';
-    wv.setAttribute('src', wvUrl);
+    wv.setAttribute('src', activeTabRef.current?.url || 'about:blank');
     attachWebviewEvents(wv);
 
     container.appendChild(wv);
@@ -486,23 +483,34 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
       `}</style>
       {browserLoading && <div className="browser-progress" />}
 
-      {/* Webview / Cold placeholder */}
+      {/* Webview / Placeholder */}
       <div
         ref={wvContainerRef}
         className="flex-1 flex flex-col overflow-hidden"
         style={{ display: 'flex' }}
         onContextMenu={handleContextMenu}
       >
-        {tier === 'cold' && (
+        {tier === 'cold' ? (
           <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
             <div className="text-center px-6">
               <div className="text-xs text-wiki-text3 mb-1">浏览器已休眠</div>
               <div className="text-[11px] text-wiki-text3 opacity-60 truncate max-w-[300px]">
-                {snapshot?.title || initialUrl || '无标题'}
+                {snapshot?.title || '无标题'}
               </div>
             </div>
           </div>
-        )}
+        ) : (!activeTab?.url || activeTab.url === 'about:blank') ? (
+          /* New tab page — shown when no URL is loaded */
+          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-bg)' }}>
+            <div className="text-center">
+              <div className="text-4xl mb-4 opacity-30" style={{ color: 'var(--wiki-text)' }}>Workit</div>
+              <div className="text-sm text-wiki-text2 mb-6">内置浏览器</div>
+              <div className="text-xs text-wiki-text3">
+                在地址栏输入网址或搜索内容开始浏览
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Context menu with fade animation */}
