@@ -79,7 +79,10 @@ export default function Settings() {
         setTimeout(() => sync({ error: '' }), 3000);
       }
     } catch (err: any) {
-      sync({ status: 'error', error: err?.message === 'timeout' ? '检查更新超时' : '网络请求失败' });
+      const msg = err?.message || '';
+      if (msg === 'timeout') sync({ status: 'error', error: '检查更新超时' });
+      else if (msg.includes('No handler')) sync({ status: 'idle', error: '更新服务未就绪（本地构建）' });
+      else sync({ status: 'error', error: '检查更新失败: ' + (msg || '未知错误') });
     }
   };
 

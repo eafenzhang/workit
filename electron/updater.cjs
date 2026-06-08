@@ -20,6 +20,13 @@ let _checkTimer = null;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 function setupAutoUpdater() {
+  // Register a fallback check-for-update handler for dev/local builds
+  // This prevents "No handler registered" errors in the UI
+  ipcMain.handle('check-for-update', async () => {
+    if (isDev) return { available: false, current: app.getVersion(), note: '开发模式' };
+    return { available: false, current: app.getVersion(), note: '更新服务未就绪' };
+  });
+
   if (isDev) { log('AutoUpdater: dev mode, skipping'); return; }
 
   try {
