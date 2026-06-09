@@ -70,7 +70,7 @@ export default function DockIcon({ item, isOpen, isMinimized, noDot, color, icon
             strokeWidth={isOpen || isHovered ? 2.4 : 1.6}
           />
         ) : (
-          <Icon size={isHovered ? 48 : 44} />
+          <Icon size={44} />
         )}
       </div>
 

@@ -1,14 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { SunIcon, MoonIcon, MonitorIcon, RefreshCwIcon, CheckIcon, CogIcon, Trash2Icon, PaletteIcon, InfoIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, MonitorIcon, RefreshCwIcon, CogIcon, Trash2Icon, PaletteIcon, InfoIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
 import { toast } from 'sonner';
-
-// ── Persist update state ──
-let _updStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' = 'idle';
-let _updVersion = '';
-let _updProgress = 0;
-let _updError = '';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -21,76 +15,16 @@ export default function Settings() {
   const [autoAnalyze, setAutoAnalyze] = useState(() => {
     try { return localStorage.getItem('ai_auto_analyze') === 'true'; } catch { return true; }
   });
-  const [updateStatus, setUpdateStatus] = useState(_updStatus);
-  const [latestVersion, setLatestVersion] = useState(_updVersion);
-  const [downloadProgress, setDownloadProgress] = useState(_updProgress);
   const [currentVersion, setCurrentVersion] = useState('1.0.0');
-  const [updateError, setUpdateError] = useState(_updError);
 
   const api = window.electronAPI;
-
-  const sync = (patch: Partial<{ status: typeof _updStatus; version: string; progress: number; error: string }>) => {
-    if (patch.status !== undefined) { _updStatus = patch.status; setUpdateStatus(patch.status); }
-    if (patch.version !== undefined) { _updVersion = patch.version; setLatestVersion(patch.version); }
-    if (patch.progress !== undefined) { _updProgress = patch.progress; setDownloadProgress(patch.progress); }
-    if (patch.error !== undefined) { _updError = patch.error; setUpdateError(patch.error); }
-  };
 
   useEffect(() => {
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
     api?.getSettings?.().then((s: any) => {
       if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
     }).catch(() => {});
-    const unsubs: (() => void)[] = [];
-    // Subscribe to unified update events
-    if (api?.onUpdateEvent) {
-      const u = api.onUpdateEvent((type: string, data: any) => {
-        const pct = typeof data === 'number' ? data : data?.percent ?? data?.progress ?? 0;
-        const ver = typeof data === 'string' ? data : data?.version || '';
-        switch (type) {
-          case 'checking': sync({ status: 'checking', error: '' }); break;
-          case 'available':
-            _updVersion = ver;
-            setLatestVersion(ver);
-            setUpdateStatus('downloading');
-            setDownloadProgress(0);
-            break;
-          case 'not-available': sync({ status: 'idle', error: '已是最新版本' }); setTimeout(() => sync({ error: '' }), 3000); break;
-          case 'progress':
-          case 'download-progress':
-            _updProgress = pct;
-            setDownloadProgress(pct);
-            setUpdateStatus('downloading');
-            break;
-          case 'downloaded':
-            _updStatus = 'ready'; setUpdateStatus('ready');
-            _updVersion = ver || _updVersion; setLatestVersion(ver || _updVersion);
-            break;
-          case 'error': sync({ status: 'error', error: data?.message || '更新失败' }); break;
-        }
-      });
-      if (u) unsubs.push(u);
-    }
-    return () => unsubs.forEach(fn => fn());
   }, []);
-
-  const checkForUpdate = async () => {
-    if (!api) return;
-    sync({ status: 'checking', error: '' });
-    try {
-      const result = await api.checkForUpdate();
-      if (result?.error) { sync({ status: 'error', error: result.error }); return; }
-      if (result?.available) {
-        // Updater auto-starts download via event — just update status
-        sync({ status: 'downloading', version: result.version, progress: 0 });
-      } else {
-        sync({ status: 'idle', error: result?.note || '已是最新版本' });
-        setTimeout(() => sync({ error: '' }), 3000);
-      }
-    } catch (err: any) {
-      sync({ status: 'error', error: '检查更新失败: ' + (err?.message || '网络错误') });
-    }
-  };
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
     <button onClick={() => onChange(!value)}
@@ -204,47 +138,11 @@ export default function Settings() {
               <div className="text-sm text-wiki-text3">智能体工作台</div>
               <div className="text-xs text-wiki-text3 mt-1">版本 {currentVersion}</div>
             </div>
-            {updateStatus === 'idle' && (
-              <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-                style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
-                <RefreshCwIcon size={12} />检查更新
-              </button>
-            )}
-            {updateStatus === 'checking' && (
-              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--wiki-text3)' }}>
-                <RefreshCwIcon size={12} className="animate-spin" />检查中...
-              </div>
-            )}
-            {updateStatus === 'downloading' && (
-              <div className="flex flex-col gap-2">
-                <div className="text-xs text-wiki-text">正在下载 v{latestVersion} {downloadProgress > 0 ? `- ${downloadProgress}%` : ''}</div>
-                <div className="flex items-center gap-3">
-                  <div className="w-44 h-2 rounded-full overflow-hidden" style={{ background: 'var(--wiki-surface2)' }}>
-                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.max(downloadProgress, 2)}%`, background: 'var(--wiki-text)' }} />
-                  </div>
-                  <span className="text-xs text-wiki-text3">{downloadProgress}%</span>
-                </div>
-              </div>
-            )}
-            {updateStatus === 'ready' && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-                  style={{ background: 'var(--wiki-success-bg)', color: 'var(--wiki-success)' }}>
-                  <CheckIcon size={12} />v{latestVersion} 已下载
-                </div>
-                <button onClick={() => api?.installUpdate()} className="px-4 py-2 rounded-lg text-xs font-medium"
-                  style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>安装并重启</button>
-              </div>
-            )}
-            {updateStatus === 'error' && (
-              <div>
-                <button onClick={checkForUpdate} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-                  style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>
-                  <RefreshCwIcon size={12} />重试
-                </button>
-                {updateError && <div className="text-xs mt-1 text-wiki-danger">{updateError}</div>}
-              </div>
-            )}
+            <button onClick={() => window.dispatchEvent(new CustomEvent('trigger-update-check'))}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>
+              <RefreshCwIcon size={12} />检查更新
+            </button>
           </div>
         </Section>
       </div>

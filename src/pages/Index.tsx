@@ -324,6 +324,7 @@ export default function Index() {
               activeTab={                     activeTab?.type === 'home' ? 'home' :
                              activeTab?.type === 'requirements' ? 'requirements' :
                              activeTab?.type === 'knowledge' ? 'knowledge' :
+                             activeTab?.type === 'design-studio' ? 'design-studio' :
                              activeTab?.type === 'insights' ? 'insights' :
                              activeTab?.type === 'mcp' ? 'mcp' :
                              activeTab?.type === 'model' ? 'model' :

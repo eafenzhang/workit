@@ -137,8 +137,9 @@ function Sidebar({
           title="用户Agent"
           aria-label="用户Agent"
         >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wiki-text2)' }} aria-hidden="true">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
+            style={{ background: activeTab === 'profile' ? 'var(--wiki-surface2)' : 'transparent' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: activeTab === 'profile' ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} aria-hidden="true">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>

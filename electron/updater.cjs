@@ -66,9 +66,12 @@ function setupAutoUpdater() {
 
     autoUpdater.on('update-available', (info) => {
       log('Updater: v' + info.version + ' available, auto-downloading');
-      broadcast('update:available', { version: info.version });
-      // Auto-start download silently
-      autoUpdater.downloadUpdate().catch(e => log('Updater: auto-download failed', e));
+      broadcast('update:available', {
+        version: info.version,
+        currentVersion: app.getVersion(),
+        releaseNotes: (info.releaseNotes || info.releaseName || '').replace(/<[^>]+>/g, ''),
+      });
+      // Don't auto-download — wait for user to click "立即升级" in dialog
     });
 
     autoUpdater.on('update-not-available', () => {
