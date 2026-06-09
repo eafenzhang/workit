@@ -33,11 +33,6 @@ function AppIcon({ gradient, Icon, iconColor, size: s = 44 }: {
   );
 }
 
-// ── Linear (outline) icon: just the lucide icon with brand color ──
-function LinearIcon({ Icon, color, size: s = 44 }: { Icon: any; color: string; size?: number }) {
-  return <Icon size={s} strokeWidth={1.6} style={{ color }} />;
-}
-
 // ── Gradient icons ──
 export const HomeIcon = (p: AppIconProps) => <AppIcon gradient={['#6366f1', '#8b5cf6']} Icon={BotMessageSquareIcon} iconColor="#ffffff" size={p.size} />;
 export const RequirementsIcon = (p: AppIconProps) => <AppIcon gradient={['#f59e0b', '#ef4444']} Icon={SparklesIcon} iconColor="#ffffff" size={p.size} />;
@@ -52,19 +47,19 @@ export const SettingsIcon = (p: AppIconProps) => <AppIcon gradient={['#64748b', 
 export const ProfileIcon = (p: AppIconProps) => <AppIcon gradient={['#ec4899', '#8b5cf6']} Icon={UserIcon} iconColor="#ffffff" size={p.size} />;
 export const RecentTasksIcon = (p: AppIconProps) => <AppIcon gradient={['#6b7280', '#4b5563']} Icon={LayersIcon} iconColor="#ffffff" size={p.size} />;
 
-// ── Linear icons — matching brand colors ──
-export const HomeLinearIcon = (p: AppIconProps) => <LinearIcon Icon={BotMessageSquareIcon} color="#6366f1" size={p.size} />;
-export const RequirementsLinearIcon = (p: AppIconProps) => <LinearIcon Icon={SparklesIcon} color="#f59e0b" size={p.size} />;
-export const KnowledgeLinearIcon = (p: AppIconProps) => <LinearIcon Icon={DatabaseIcon} color="#10b981" size={p.size} />;
-export const DesignStudioLinearIcon = (p: AppIconProps) => <LinearIcon Icon={PaletteIcon} color="#ec4899" size={p.size} />;
-export const InsightsLinearIcon = (p: AppIconProps) => <LinearIcon Icon={LightbulbIcon} color="#8b5cf6" size={p.size} />;
-export const AppEcosystemLinearIcon = (p: AppIconProps) => <LinearIcon Icon={PackageIcon} color="#06b6d4" size={p.size} />;
-export const ModelLinearIcon = (p: AppIconProps) => <LinearIcon Icon={CpuIcon} color="#ef4444" size={p.size} />;
-export const BrowserLinearIcon = (p: AppIconProps) => <LinearIcon Icon={GlobeIcon} color="#3b82f6" size={p.size} />;
-export const MessagesLinearIcon = (p: AppIconProps) => <LinearIcon Icon={MessageSquareIcon} color="#14b8a6" size={p.size} />;
-export const SettingsLinearIcon = (p: AppIconProps) => <LinearIcon Icon={SettingsLucideIcon} color="#64748b" size={p.size} />;
-export const ProfileLinearIcon = (p: AppIconProps) => <LinearIcon Icon={UserIcon} color="#ec4899" size={p.size} />;
-export const RecentTasksLinearIcon = (p: AppIconProps) => <LinearIcon Icon={LayersIcon} color="#6b7280" size={p.size} />;
+// ── Linear icons — raw lucide components (DockIcon applies color/strokeWidth effects) ──
+export const HomeLinearIcon = BotMessageSquareIcon;
+export const RequirementsLinearIcon = SparklesIcon;
+export const KnowledgeLinearIcon = DatabaseIcon;
+export const DesignStudioLinearIcon = PaletteIcon;
+export const InsightsLinearIcon = LightbulbIcon;
+export const AppEcosystemLinearIcon = PackageIcon;
+export const ModelLinearIcon = CpuIcon;
+export const BrowserLinearIcon = GlobeIcon;
+export const MessagesLinearIcon = MessageSquareIcon;
+export const SettingsLinearIcon = SettingsLucideIcon;
+export const ProfileLinearIcon = UserIcon;
+export const RecentTasksLinearIcon = LayersIcon;
 
 // ── Gradient map ──
 export const DOCK_APP_ICONS: Record<string, React.FC<AppIconProps>> = {

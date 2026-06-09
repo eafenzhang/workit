@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { DockItem } from '../../types/agent-os';
+import type { IconStyle } from './DockIcons';
 
 interface DockIconProps {
   item: DockItem;
@@ -9,6 +10,7 @@ interface DockIconProps {
   /** For browser: suppress dot when no windows exist at all */
   noDot?: boolean;
   color: string;
+  iconStyle: IconStyle;
   onClick: (type: string) => void;
   onContextMenu?: (type: string, e: React.MouseEvent) => void;
 }
@@ -16,8 +18,11 @@ interface DockIconProps {
 /**
  * A single icon in the Dock bar with filled icon, brand color,
  * glass hover effect, running indicator, and tooltip.
+ *
+ * Linear style: raw lucide icons with hover color transitions and drop-shadow.
+ * Gradient style: custom SVG gradient icons (styling handled by the SVG itself).
  */
-export default function DockIcon({ item, isOpen, isMinimized, noDot, color, onClick, onContextMenu }: DockIconProps) {
+export default function DockIcon({ item, isOpen, isMinimized, noDot, color, iconStyle, onClick, onContextMenu }: DockIconProps) {
   const [isHovered, setIsHovered] = useState(false);
   const Icon = item.icon;
 
@@ -54,7 +59,19 @@ export default function DockIcon({ item, isOpen, isMinimized, noDot, color, onCl
             : 'none',
         }}
       >
-        <Icon size={isHovered ? 48 : 44} />
+        {iconStyle === 'linear' ? (
+          <Icon
+            size={26}
+            style={{
+              color: isOpen || isHovered ? color : 'var(--wiki-text3)',
+              filter: isHovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
+              transition: 'color 0.2s, filter 0.2s',
+            }}
+            strokeWidth={isOpen || isHovered ? 2.4 : 1.6}
+          />
+        ) : (
+          <Icon size={isHovered ? 48 : 44} />
+        )}
       </div>
 
       {/* ── Running indicator ── */}

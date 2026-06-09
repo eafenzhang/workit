@@ -254,6 +254,7 @@ export default function DockBar({
             key={item.id}
             item={item}
             color={item.color}
+            iconStyle={iconStyle}
             isOpen={isOpen(item.type)}
             isMinimized={isMinimized(item.type)}
             noDot={item.type === 'browser' ? browserWindows.length === 0 : undefined}
