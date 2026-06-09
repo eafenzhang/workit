@@ -312,35 +312,52 @@
   .fade-in-up {
     animation: fadeInUp 0.2s ease-out;
   }
-  /* System scrollbar */
+  /* System scrollbar — ghost style: invisible until hover, no boundary asymmetry */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+    scrollbar-color: transparent transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
+    border: none;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.12);
-    border-radius: 2px;
+    background: transparent;
+    border-radius: 3px;
+    transition: background 0.3s ease;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover,
+  .scrollbar-thin::-webkit-scrollbar-thumb:active {
+    background: rgba(0, 0, 0, 0.15);
+  }
+  /* Show faint thumb on scrollable hover */
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.08);
+  }
+  /* Always visible when actively scrolling */
+  .scrollbar-thin:active::-webkit-scrollbar-thumb,
+  .scrollbar-thin:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
   }
 }
 
-/* Dark scrollbar — use thinner, more subtle thumbs */
+/* Dark scrollbar — ghost style */
 .dark .scrollbar-thin {
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  scrollbar-color: transparent transparent;
 }
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.12);
 }
-.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+.dark .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+}
+.dark .scrollbar-thin:active::-webkit-scrollbar-thumb,
+.dark .scrollbar-thin:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Apply theme attribute to html */
