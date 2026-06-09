@@ -35,6 +35,7 @@ export default function UpdateDialog() {
           break;
         case 'downloaded':
           setPercent(100);
+          if (data?.version && !info?.version) setInfo(prev=>({...prev,version:data.version,currentVersion:prev?.currentVersion||''}));
           setPhase('downloaded');
           break;
         case 'error':
@@ -79,16 +80,19 @@ export default function UpdateDialog() {
     setPercent(0);
     setError('');
     try {
-      await api?.downloadUpdate?.();
+      const r = await api?.downloadUpdate?.();
+      if (r?.ok && r?.installerPath) setInstallerPath(r.installerPath);
     } catch (e: any) {
       setError(e?.message || '下载失败');
       setPhase('error');
     }
   }, [api]);
 
-  const handleInstall = useCallback(() => {
-    api?.installUpdate?.();
-  }, [api]);
+  const handleInstall = useCallback(async () => {
+    await api?.installUpdate?.(installerPath);
+  }, [api, installerPath]);
+
+  const [installerPath, setInstallerPath] = useState('');
 
   const handleClose = useCallback(() => {
     setAnimating(false);

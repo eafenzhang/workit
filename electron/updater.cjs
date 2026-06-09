@@ -1,9 +1,10 @@
-// updater.js — Auto-updater: silent background download + periodic check + progress events
+// updater.js — Auto-updater with GitHub API fallback for local/dev builds
 const { app, ipcMain } = require('electron');
 const { log } = require('./database.cjs');
 const { getMainWindow, getQCWindow } = require('./window.cjs');
 
 const isDev = process.defaultApp || /electron/.test(process.argv[0]);
+const GITHUB_API = 'https://api.github.com/repos/eafenzhang/workit/releases/latest';
 
 // Broadcast to all renderer windows
 function broadcast(channel, payload) {
@@ -17,30 +18,50 @@ function broadcast(channel, payload) {
 
 let _updater = null;
 let _checkTimer = null;
-const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+// GitHub API fallback — works even without electron-updater / app-update.yml
+async function checkGitHubRelease() {
+  try {
+    const resp = await fetch(GITHUB_API, {
+      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Workit-Updater' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return { available: false, error: 'GitHub API错误: HTTP ' + resp.status, current: app.getVersion() };
+    const release = await resp.json();
+    const tag = (release.tag_name || '').replace(/^v/, '');
+    const current = app.getVersion();
+    if (!tag) return { available: false, current };
+    const isNewer = tag !== current;
+    return {
+      available: isNewer,
+      version: tag,
+      current,
+      releaseNotes: (release.body || '').substring(0, 2000),
+    };
+  } catch (e) {
+    return { available: false, error: '检查失败: ' + (e.message || '网络错误'), current: app.getVersion() };
+  }
+}
 
 function setupAutoUpdater() {
-  // Register a fallback check-for-update handler for dev/local builds
-  // This prevents "No handler registered" errors in the UI
-  ipcMain.handle('check-for-update', async () => {
-    if (isDev) return { available: false, current: app.getVersion(), note: '开发模式' };
-    return { available: false, current: app.getVersion(), note: '更新服务未就绪' };
-  });
+  // Default handler — uses GitHub API fallback by default, replaced by electron-updater if available
+  let updateHandler = checkGitHubRelease;
+  ipcMain.handle('check-for-update', async () => updateHandler());
 
-  if (isDev) { log('AutoUpdater: dev mode, skipping'); return; }
+  if (isDev) { log('AutoUpdater: dev mode, using GitHub API fallback'); return; }
 
   try {
     const { autoUpdater } = require('electron-updater');
     _updater = autoUpdater;
 
-    // Verify update feed
     try {
       if (!autoUpdater.currentVersion) {
-        log('AutoUpdater: no update feed (local build), skipping');
+        log('AutoUpdater: no update feed, using GitHub API fallback');
         return;
       }
     } catch {
-      log('AutoUpdater: app-update.yml not found (local build), skipping');
+      log('AutoUpdater: app-update.yml not found, using GitHub API fallback');
       return;
     }
 
@@ -93,9 +114,8 @@ function setupAutoUpdater() {
       broadcast('update:error', { message: e.message || 'Unknown error' });
     });
 
-    // ── IPC handlers ──
-    ipcMain.handle('check-for-update', async () => {
-      // Retry up to 2 times for transient network errors (504, timeout, etc.)
+    // Replace fallback handler with real electron-updater handler
+    updateHandler = async () => {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           const r = await autoUpdater.checkForUpdates();
@@ -113,19 +133,53 @@ function setupAutoUpdater() {
             await new Promise(r => setTimeout(r, 5000));
             continue;
           }
-          log('Updater check error: ' + msg);
-          return { available: false, error: msg || 'Unknown error', current: app.getVersion() };
+          log('Updater: electron-updater failed, falling back to GitHub API: ' + msg);
+          return checkGitHubRelease();
         }
       }
-      return { available: false, error: '检查超时', current: app.getVersion() };
-    });
+      return checkGitHubRelease();
+    };
 
     ipcMain.handle('download-update', async () => {
-      try { await autoUpdater.downloadUpdate(); return { ok: true }; }
-      catch (e) { return { ok: false, error: e.message }; }
+      try {
+        // Try electron-updater first
+        if (_updater) { await autoUpdater.downloadUpdate(); return { ok: true }; }
+        // Fallback: download from GitHub releases
+        const resp = await fetch(GITHUB_API, { headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Workit-Updater' } });
+        const release = await resp.json();
+        const asset = release.assets?.find(a => a.name?.endsWith('.exe'));
+        if (!asset) return { ok: false, error: '未找到安装包' };
+        // Download with progress
+        const dlResp = await fetch(asset.browser_download_url);
+        const total = parseInt(dlResp.headers.get('content-length') || '0');
+        let downloaded = 0;
+        const reader = dlResp.body.getReader();
+        const chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          downloaded += value.length;
+          if (total > 0) broadcast('update:progress', { percent: Math.round(downloaded / total * 100) });
+        }
+        const { writeFileSync } = require('fs');
+        const { join } = require('path');
+        const installerPath = join(app.getPath('temp'), 'Workit-Update.exe');
+        writeFileSync(installerPath, Buffer.concat(chunks));
+        broadcast('update:downloaded', { version: release.tag_name });
+        return { ok: true, installerPath };
+      } catch (e) { return { ok: false, error: e.message }; }
     });
 
-    ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall(); return true; });
+    ipcMain.handle('install-update', (_, installerPath) => {
+      if (installerPath) {
+        const { exec } = require('child_process');
+        exec('start "" "' + installerPath + '"', () => app.quit());
+        return true;
+      }
+      if (_updater) { autoUpdater.quitAndInstall(); return true; }
+      return false;
+    });
 
     // ── Retry helper for update checks ──
     const checkWithRetry = (label, maxRetries = 3) => {
