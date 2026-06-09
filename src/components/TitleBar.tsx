@@ -42,6 +42,7 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
     >
       {/* Sidebar toggle button — hidden in OS mode */}
       {!isOSMode && (
+      <>
       <button
         onClick={onToggleSidebar}
         className="h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors flex-shrink-0 focus:outline-none"
@@ -54,6 +55,11 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
           : <PanelLeftCloseIcon size={14} style={{ color: 'var(--wiki-text2)' }} />
         }
       </button>
+      {/* OS mode toggle — also in no-drag region to avoid Electron drag capture */}
+      {onToggleOSMode && (
+        <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
+      )}
+      </>
       )}
 
       {/* Tab bar slot — children render here */}
@@ -73,10 +79,6 @@ export default function TitleBar({ children, sidebarCollapsed = false, onToggleS
         >
           <GlobeIcon size={15} style={{ color: 'var(--wiki-text2)' }} />
         </button>
-        )}
-        {/* OS mode toggle button */}
-        {onToggleOSMode && (
-          <OSToggleButton isOSMode={isOSMode} onToggle={onToggleOSMode} />
         )}
         <button onClick={handleFullscreen} className="w-11 h-full flex items-center justify-center hover:bg-wiki-surface2 transition-colors focus:outline-none" aria-label="全屏" title="全屏">
           {fullscreen ? <Minimize2Icon size={15} style={{ color: 'var(--wiki-text2)' }} /> : <Maximize2Icon size={15} style={{ color: 'var(--wiki-text2)' }} />}
