@@ -10,6 +10,7 @@ interface DesktopSettingsModalProps {
 
 type WallpaperType = 'color' | 'image';
 type DockFullscreenBehavior = 'show' | 'hide' | 'float';
+type IconStyle = 'gradient' | 'linear';
 
 interface WallpaperState {
   type: WallpaperType;
@@ -20,6 +21,7 @@ interface WallpaperState {
 
 const LS_WALLPAPER_KEY = 'agent-os-wallpaper';
 const LS_DOCK_FS_KEY = 'agent-os-dock-fullscreen';
+const LS_ICON_STYLE_KEY = 'agent-os-icon-style';
 
 const COLOR_PRESETS = [
   { id: 'dark-1', bg: '#1a1a1f', label: '暗色' },
@@ -85,11 +87,29 @@ function saveDockBehavior(behavior: DockFullscreenBehavior) {
   }
 }
 
+function loadIconStyle(): IconStyle {
+  try {
+    const raw = localStorage.getItem(LS_ICON_STYLE_KEY);
+    if (raw === 'gradient' || raw === 'linear') return raw;
+  } catch {}
+  return 'linear';
+}
+
+function saveIconStyle(style: IconStyle) {
+  try {
+    localStorage.setItem(LS_ICON_STYLE_KEY, style);
+    window.dispatchEvent(new CustomEvent('agent-os-icon-style-changed'));
+  } catch {
+    // Storage quota exceeded
+  }
+}
+
 // ── Component ────────────────────────────────────────────────────
 
 export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSettingsModalProps) {
   const [wallpaper, setWallpaper] = useState<WallpaperState>(loadWallpaper);
   const [dockBehavior, setDockBehavior] = useState<DockFullscreenBehavior>(loadDockBehavior);
+  const [iconStyle, setIconStyle] = useState<IconStyle>(loadIconStyle);
   const [animating, setAnimating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,6 +118,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
     if (isOpen) {
       setWallpaper(loadWallpaper());
       setDockBehavior(loadDockBehavior());
+      setIconStyle(loadIconStyle());
       requestAnimationFrame(() => setAnimating(true));
     } else {
       setAnimating(false);
@@ -149,6 +170,11 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
   const handleDockChange = useCallback((behavior: DockFullscreenBehavior) => {
     setDockBehavior(behavior);
     saveDockBehavior(behavior);
+  }, []);
+
+  const handleIconStyleChange = useCallback((style: IconStyle) => {
+    setIconStyle(style);
+    saveIconStyle(style);
   }, []);
 
   const isCurrentColor = (color: string) =>
@@ -306,6 +332,67 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
             </div>
             <p className="text-[10px] mt-2" style={{ color: 'var(--wiki-text3)' }}>
               Dock 栏的显示方式
+            </p>
+          </section>
+
+          {/* ── Divider ── */}
+          <div style={{ borderTop: '1px solid var(--wiki-border)' }} />
+
+          {/* ── Icon style ── */}
+          <section>
+            <h3 className="text-xs font-semibold mb-3" style={{ color: 'var(--wiki-text2)' }}>
+              Dock 图标风格
+            </h3>
+            <div
+              className="rounded-lg p-1 flex gap-1"
+              style={{
+                background: 'var(--wiki-surface2)',
+                border: '1px solid var(--wiki-border)',
+              }}
+            >
+              <button
+                onClick={() => handleIconStyleChange('linear')}
+                className="flex-1 py-1.5 rounded-md text-xs transition-colors"
+                style={{
+                  background:
+                    iconStyle === 'linear'
+                      ? 'var(--wiki-surface)'
+                      : 'transparent',
+                  color:
+                    iconStyle === 'linear'
+                      ? 'var(--wiki-text)'
+                      : 'var(--wiki-text3)',
+                  boxShadow:
+                    iconStyle === 'linear'
+                      ? '0 1px 3px rgba(0,0,0,0.12)'
+                      : 'none',
+                }}
+              >
+                线性图标
+              </button>
+              <button
+                onClick={() => handleIconStyleChange('gradient')}
+                className="flex-1 py-1.5 rounded-md text-xs transition-colors"
+                style={{
+                  background:
+                    iconStyle === 'gradient'
+                      ? 'var(--wiki-surface)'
+                      : 'transparent',
+                  color:
+                    iconStyle === 'gradient'
+                      ? 'var(--wiki-text)'
+                      : 'var(--wiki-text3)',
+                  boxShadow:
+                    iconStyle === 'gradient'
+                      ? '0 1px 3px rgba(0,0,0,0.12)'
+                      : 'none',
+                }}
+              >
+                渐变图标
+              </button>
+            </div>
+            <p className="text-[10px] mt-2" style={{ color: 'var(--wiki-text3)' }}>
+              默认线性图标，勾选后显示 macOS 风格渐变背景图标
             </p>
           </section>
         </div>

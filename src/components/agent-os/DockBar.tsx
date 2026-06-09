@@ -3,31 +3,35 @@ import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';
 import { GlobeIcon, LayersIcon } from 'lucide-react';
-import { DOCK_APP_ICONS } from './DockIcons';
+import { DOCK_APP_ICONS, DOCK_LINEAR_ICONS, getIconStyle, getIconsForStyle, type IconStyle } from './DockIcons';
 
-// ── Dock items with macOS-inspired custom icons ──
+// ── Dock items with dynamic icon style ──
 
-const DOCK_ITEMS: (DockItem & { color: string })[] = [
-  { id: 'home', label: '首页', icon: DOCK_APP_ICONS['home'], type: 'home', color: '#6366f1' },
-  { id: 'requirements', label: '采集库', icon: DOCK_APP_ICONS['requirements'], type: 'requirements', color: '#f59e0b' },
-  { id: 'knowledge', label: '知识库', icon: DOCK_APP_ICONS['knowledge'], type: 'knowledge', color: '#10b981' },
-  { id: 'design-studio', label: '设计稿', icon: DOCK_APP_ICONS['design-studio'], type: 'design-studio', color: '#ec4899' },
-  { id: 'insights', label: '洞察分析', icon: DOCK_APP_ICONS['insights'], type: 'insights', color: '#8b5cf6' },
-  { id: 'mcp', label: '应用生态', icon: DOCK_APP_ICONS['mcp'], type: 'mcp', color: '#06b6d4' },
-  { id: 'model', label: '模型配置', icon: DOCK_APP_ICONS['model'], type: 'model', color: '#ef4444' },
-  { id: 'browser', label: '浏览器', icon: DOCK_APP_ICONS['browser'], type: 'browser', color: '#3b82f6' },
-  { id: 'messages', label: '消息中心', icon: DOCK_APP_ICONS['messages'], type: 'messages', color: '#14b8a6' },
-  { id: 'settings', label: '系统设置', icon: DOCK_APP_ICONS['settings'], type: 'settings', color: '#64748b' },
-  { id: 'profile', label: '用户Agent', icon: DOCK_APP_ICONS['profile'], type: 'profile', color: '#ec4899' },
-];
+function getDockItems(style: IconStyle): (DockItem & { color: string })[] {
+  const icons = getIconsForStyle(style);
+  return [
+    { id: 'home', label: '首页', icon: icons['home'], type: 'home', color: '#6366f1' },
+    { id: 'requirements', label: '采集库', icon: icons['requirements'], type: 'requirements', color: '#f59e0b' },
+    { id: 'knowledge', label: '知识库', icon: icons['knowledge'], type: 'knowledge', color: '#10b981' },
+    { id: 'design-studio', label: '设计稿', icon: icons['design-studio'], type: 'design-studio', color: '#ec4899' },
+    { id: 'insights', label: '洞察分析', icon: icons['insights'], type: 'insights', color: '#8b5cf6' },
+    { id: 'mcp', label: '应用生态', icon: icons['mcp'], type: 'mcp', color: '#06b6d4' },
+    { id: 'model', label: '模型配置', icon: icons['model'], type: 'model', color: '#ef4444' },
+    { id: 'browser', label: '浏览器', icon: icons['browser'], type: 'browser', color: '#3b82f6' },
+    { id: 'messages', label: '消息中心', icon: icons['messages'], type: 'messages', color: '#14b8a6' },
+    { id: 'settings', label: '系统设置', icon: icons['settings'], type: 'settings', color: '#64748b' },
+    { id: 'profile', label: '用户Agent', icon: icons['profile'], type: 'profile', color: '#ec4899' },
+  ];
+}
 
 type DockState = 'show' | 'hide' | 'float';
 
 /** macOS-style Dock icon for 最近任务 */
-function TaskIcon({ onClick }: { onClick: () => void }) {
+function TaskIcon({ onClick, style }: { onClick: () => void; style: IconStyle }) {
   const [hovered, setHovered] = useState(false);
   const color = '#6b7280';
-  const Icon = DOCK_APP_ICONS['recent-tasks'];
+  const icons = getIconsForStyle(style);
+  const Icon = icons['recent-tasks'];
   return (
     <button onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       className="flex flex-col items-center justify-end relative focus:outline-none"
@@ -74,6 +78,9 @@ export default function DockBar({
   );
 
   const [dockHovered, setDockHovered] = useState(false);
+  const [iconStyle, setIconStyle] = useState<IconStyle>(getIconStyle);
+
+  const DOCK_ITEMS = useMemo(() => getDockItems(iconStyle), [iconStyle]);
 
   const browserWindows = useMemo(
     () => windows.filter((w: OSWindow) => w.type === 'browser' && !w.isMinimized),
@@ -85,6 +92,13 @@ export default function DockBar({
     const observer = new MutationObserver(check);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
+  }, []);
+
+  // Listen for icon style changes from settings
+  useEffect(() => {
+    const handler = () => setIconStyle(getIconStyle());
+    window.addEventListener('agent-os-icon-style-changed', handler);
+    return () => window.removeEventListener('agent-os-icon-style-changed', handler);
   }, []);
 
   const isOpen = useCallback(
@@ -233,7 +247,7 @@ export default function DockBar({
           }}
         >
         {/* ── 最近任务 button (DockIcon replica) ── */}
-        <TaskIcon onClick={openTaskManager} />{''}
+        <TaskIcon onClick={openTaskManager} style={iconStyle} />{''}
 
         {DOCK_ITEMS.map((item) => (
           <DockIcon

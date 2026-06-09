@@ -1004,7 +1004,8 @@ function getUserProfile(db) {
 
 function saveUserProfile(db, profile) {
   const { nickname, role, avatar, personality, memory_skills, avatarColor } = profile || {};
-  run(db, "UPDATE user_profile SET nickname=?, role=?, avatar=?, personality=?, memory_skills=?, avatar_color=?, updated_at=datetime('now','localtime') WHERE id=1",
+  // Use INSERT OR REPLACE so the row is created even if it doesn't exist yet (e.g., fresh DB without migration seed)
+  run(db, "INSERT OR REPLACE INTO user_profile (id, nickname, role, avatar, personality, memory_skills, avatar_color, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))",
     [nickname||'', role||'', avatar||'', personality||'', memory_skills||'', avatarColor||'#6366f1']);
   return getUserProfile(db);
 }
