@@ -56,6 +56,7 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
   insights: { type: 'insights', title: '洞察分析' },
   mcp: { type: 'mcp', title: '应用生态' },
   model: { type: 'model', title: '模型配置' },
+  browser: { type: 'browser', title: '浏览器' },
   messages: { type: 'messages', title: '消息中心' },
   settings: { type: 'settings', title: '系统设置' },
   profile: { type: 'profile', title: '用户Agent' },
@@ -328,6 +329,7 @@ export default function Index() {
                              activeTab?.type === 'insights' ? 'insights' :
                              activeTab?.type === 'mcp' ? 'mcp' :
                              activeTab?.type === 'model' ? 'model' :
+                             activeTab?.type === 'browser' ? 'browser' :
                              activeTab?.type === 'messages' ? 'messages' :
                              activeTab?.type === 'settings' ? 'settings' :
                              activeTab?.type === 'profile' ? 'profile' : 'home'}

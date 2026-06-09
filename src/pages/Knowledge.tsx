@@ -266,14 +266,9 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
         data.forEach((d: Document) => { counts[d.category] = (counts[d.category] || 0) + 1; });
         setAllDocCounts(counts);
       });
-    apiFetch(API.storageStats)
-      .then(r => r.json())
-      .then(s => { const usedGB = (s.usedBytes || 0) / (1024 * 1024 * 1024); setStorageStats({ usedBytes: usedGB, totalBytes: 1.0 }); })
-      .catch(() => setStorageStats({ usedBytes: 0, totalBytes: 1.0 }));
   }, [docChangeKey]);
 
   const [allDocCounts, setAllDocCounts] = useState<Record<string, number>>({});
-  const [storageStats, setStorageStats] = useState({ usedBytes: 0, totalBytes: 0 });
 
   // P1-14: Fetch categories from database API
   const fetchCategories = () => {
@@ -560,21 +555,6 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
               <TrashIcon size={12} style={{ color: 'var(--wiki-danger)' }} />
             </button>
           </>
-        }
-        sidebarFooter={
-          <div className="p-4 rounded-lg" style={{ background: 'var(--wiki-surface2)' }}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-wiki-text3">存储空间</span>
-              <span className="text-xs text-wiki-text">1.00 GB</span>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-wiki-text3">文件占用</span>
-              <span className="text-xs text-wiki-text">{storageStats.usedBytes < 0.001 ? (storageStats.usedBytes * 1024).toFixed(1) + ' MB' : storageStats.usedBytes.toFixed(2) + ' GB'}</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--wiki-border)' }}>
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (storageStats.totalBytes > 0 ? (storageStats.usedBytes / storageStats.totalBytes) * 100 : 0))}%`, background: storageStats.usedBytes >= storageStats.totalBytes ? 'var(--wiki-danger)' : 'var(--wiki-text)' }} />
-            </div>
-          </div>
         }
         sidebarItems={[{ ...categoriesList[0], count: totalCount }, ...categoriesList.slice(1).map(c => ({ ...c, count: allDocCounts[c.id] || 0 }))].map((cat) => {
           const iconMap: Record<string, any> = { GridIcon, FolderIcon, LinkIcon, BookOpenIcon, FileTextIcon, BookmarkIcon };

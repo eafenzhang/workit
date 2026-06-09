@@ -205,7 +205,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const [moduleSidebarOpen, setModuleSidebarOpen] = useState(false); // default collapsed, like Knowledge sidebar
+  const [moduleSidebarOpen, setModuleSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;

@@ -72,7 +72,7 @@ export default function DesignStudio(p: Props) {
       {cats.map(c=><SidebarItem key={c} label={c.replace('设计稿-','')} active={cat===c} onClick={()=>setCat(cat===c?'all':c)}/>)}
     </UnifiedSidebar>
     <div className="flex flex-col flex-1 overflow-hidden">
-      <PageHeader title="设计稿" description="基于OpenPencil架构的Agent驱动原型设计画板" sidebarOpen={so} onToggleSidebar={()=>setSo(!so)} actions={<button onClick={openC} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{background:'var(--wiki-info)',color:'#fff'}}><PlusIcon size={14}/>新建画板</button>}/>
+      <PageHeader title="设计稿" description="基于OpenPencil架构的Agent驱动原型设计画板" sidebarOpen={so} onToggleSidebar={()=>setSo(!so)} actions={<button onClick={openC} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium" style={{background:'var(--wiki-accent)',color:'var(--wiki-bg)'}}><PlusIcon size={14}/>新建画板</button>}/>
       <SearchBar value={si} onChange={setSi} placeholder="搜索设计稿..." extra={<button onClick={()=>setVm(vm==='grid'?'list':'grid')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs" style={{background:'var(--wiki-surface)',border:'1px solid var(--wiki-border)',color:'var(--wiki-text2)'}}>{vm==='grid'?<ListIcon size={13}/>:<GridIcon size={13}/>}<span>{vm==='grid'?'列表':'网格'}</span></button>}/>
       <FilterPills items={[{key:'all',label:'全部',color:'var(--wiki-text)'},...cats.map(c=>({key:c,label:c.replace('设计稿-',''),color:CAT_CFG[c.replace('设计稿-','')]?.color||'#888'}))]} activeKey={cat} onChange={setCat}/>
       <div className="overflow-y-auto flex-1 px-8 pb-4" style={{scrollbarWidth:'none',msOverflowStyle:'none'}}>

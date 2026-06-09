@@ -38,27 +38,22 @@ export default function ProviderCard({ provider, saved, onClick, onSetDefault, o
             <span className="w-1.5 h-1.5 rounded-full"
               style={{ background: saved?.enabled ? 'var(--wiki-success)' : 'var(--wiki-text3)' }} />
           )}
+          {balance && (
+            <span className="text-xs flex items-center gap-1" style={{ color: 'var(--wiki-text2)' }}>
+              <WalletIcon size={10} /><span>{balance}</span>
+            </span>
+          )}
+          {configured && onCheckBalance && (
+            <button onClick={(e) => { e.stopPropagation(); onCheckBalance(); }} disabled={checkingBalance}
+              className="text-xs px-1.5 py-0.5 rounded transition-colors"
+              style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }} title="查询余额">
+              <WalletIcon size={11} className={checkingBalance ? 'animate-pulse' : ''} />
+            </button>
+          )}
         </div>
         <div className="text-xs text-wiki-text3 mt-0.5">{statusLabel}</div>
-        {balance && (
-          <div className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--wiki-text2)' }}>
-            <WalletIcon size={10} />
-            <span>{balance}</span>
-          </div>
-        )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        {configured && onCheckBalance && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onCheckBalance(); }}
-            disabled={checkingBalance}
-            className="text-xs px-2 py-1 rounded transition-colors"
-            style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}
-            title="查询余额"
-          >
-            <WalletIcon size={12} className={checkingBalance ? 'animate-pulse' : ''} />
-          </button>
-        )}
         {configured && !isDefault && onSetDefault && (
           <button
             onClick={(e) => { e.stopPropagation(); onSetDefault(); }}

@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { DatabaseIcon, LightbulbIcon, Bot, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon, PaletteIcon } from 'lucide-react';
+import { DatabaseIcon, LightbulbIcon, Bot, SparklesIcon, SettingsIcon, PackageIcon, CpuIcon, GlobeIcon, MessageSquareIcon, PaletteIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -17,6 +17,7 @@ const navItems = [
   { id: 'insights', label: `洞察分析`, icon: LightbulbIcon, color: 'var(--wiki-success)', path: '/insights' },
   { id: 'model', label: `模型配置`, icon: CpuIcon, color: 'var(--wiki-warning)', path: '/model' },
   { id: 'mcp', label: `应用生态`, icon: PackageIcon, color: 'var(--wiki-danger)', path: '/mcp' },
+  { id: 'browser', label: `浏览器`, icon: GlobeIcon, color: 'var(--wiki-info)', path: '/browser' },
   { id: 'messages', label: `消息中心`, icon: MessageSquareIcon, color: '#ec4899', path: '/messages' },
 ];
 
@@ -132,7 +133,7 @@ function Sidebar({
       <div className="px-1.5 pb-4">
         <button
           onClick={handleProfileClick}
-          className="flex items-center justify-center px-1.5 rounded-lg transition-all duration-200 hover:bg-wiki-surface2 w-full focus:outline-none relative group"
+          className="flex items-center justify-center px-1.5 rounded-lg transition-all duration-200 w-full focus:outline-none relative group"
           style={{ height: '44px' }}
           title="用户Agent"
           aria-label="用户Agent"
