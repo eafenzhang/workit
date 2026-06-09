@@ -36,7 +36,7 @@ function HomeInput({ onSend, onStop, disabled, selectedProvider, selectedModel, 
   }, [handleSend]);
 
   return (
-    <div data-cmp="HomeInput" className="w-full max-w-[716px] mx-auto">
+    <div data-cmp="HomeInput" className="w-full max-w-[696px] mx-auto">
       <div className="rounded-xl" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
         <textarea
           ref={textareaRef}
