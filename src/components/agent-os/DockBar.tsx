@@ -325,7 +325,7 @@ export default function DockBar({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate" style={{ color: 'rgba(255,255,255,0.9)' }}>{w.title}</div>
-                          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{item?.label || w.type}</div>
+                          <div className="text-xs mt-0.5 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{item?.label || w.type}</div>
                         </div>
                       </div>
                       <div className="w-full h-20 rounded-lg overflow-hidden" style={{
@@ -425,10 +425,10 @@ export default function DockBar({
                       <div className="text-xs truncate flex items-center gap-1" style={{ color: 'var(--wiki-text)' }}>
                         {bw.title || bw.initialUrl || '新标签页'}
                         {bw.webviewTier === 'warm' && (
-                          <span className="text-[10px] px-1 rounded" style={{ background: '#f59e0b20', color: '#f59e0b' }}>后台</span>
+                          <span className="text-xs px-1 rounded" style={{ background: '#f59e0b20', color: '#f59e0b' }}>后台</span>
                         )}
                       </div>
-                      <div className="text-[10px] truncate" style={{ color: 'var(--wiki-text3)' }}>
+                      <div className="text-xs truncate" style={{ color: 'var(--wiki-text3)' }}>
                         {bw.initialUrl || bw.params?.url || ''}
                       </div>
                     </div>

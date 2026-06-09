@@ -729,7 +729,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                   ].map(({ icon, label, el: IconComp }) => (
                     <button key={icon} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, icon }))} className="flex flex-col items-center gap-1 p-3 rounded-lg transition-all" style={{ background: showCategoryEdit.icon === icon ? 'var(--wiki-surface2)' : 'transparent', border: showCategoryEdit.icon === icon ? '1px solid var(--wiki-border)' : '1px solid transparent', width: 80 }}>
                       <IconComp size={20} style={{ color: showCategoryEdit.icon === icon ? showCategoryEdit.color || 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-                      <span className="text-[10px]" style={{ color: 'var(--wiki-text3)' }}>{label}</span>
+                      <span className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{label}</span>
                     </button>
                   ))}
                 </div>
@@ -739,7 +739,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                 <div className="flex gap-2">
                   {['var(--wiki-text)', '#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'].map(c => (
                     <button key={c} onClick={() => setShowCategoryEdit(prev => ({ ...prev!, color: c }))} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: c === 'var(--wiki-text)' ? 'var(--wiki-surface2)' : c, border: showCategoryEdit.color === c ? '2px solid var(--wiki-text)' : '2px solid transparent' }}>
-                      {showCategoryEdit.color === c && <span style={{ color: c === '#333333' || c === '#666666' || c === '#10b981' ? '#fff' : '#fff', fontSize: 12 }}>✓</span>}
+                      {showCategoryEdit.color === c && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
                     </button>
                   ))}
                 </div>

@@ -283,7 +283,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
               {wallpaper.type === 'image' && (
                 <div className="flex items-center gap-1.5">
                   <ImageIcon size={12} style={{ color: 'var(--wiki-accent)' }} />
-                  <span className="text-[11px]" style={{ color: 'var(--wiki-accent)' }}>
+                  <span className="text-xs" style={{ color: 'var(--wiki-accent)' }}>
                     已设置
                   </span>
                 </div>
@@ -330,7 +330,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
                 </button>
               ))}
             </div>
-            <p className="text-[10px] mt-2" style={{ color: 'var(--wiki-text3)' }}>
+            <p className="text-xs mt-2" style={{ color: 'var(--wiki-text3)' }}>
               Dock 栏的显示方式
             </p>
           </section>
@@ -391,7 +391,7 @@ export default function DesktopSettingsModal({ isOpen, onClose }: DesktopSetting
                 渐变图标
               </button>
             </div>
-            <p className="text-[10px] mt-2" style={{ color: 'var(--wiki-text3)' }}>
+            <p className="text-xs mt-2" style={{ color: 'var(--wiki-text3)' }}>
               默认线性图标，勾选后显示 macOS 风格渐变背景图标
             </p>
           </section>

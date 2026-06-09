@@ -140,7 +140,7 @@ export default function UpdateDialog() {
             </div>
             <div>
               <div className="text-sm font-semibold" style={{ color: 'var(--wiki-text)' }}>Workit</div>
-              <div className="text-[11px]" style={{ color: 'var(--wiki-text3)' }}>软件更新</div>
+              <div className="text-xs" style={{ color: 'var(--wiki-text3)' }}>软件更新</div>
             </div>
           </div>
           {(phase !== 'downloading') && (
@@ -208,7 +208,7 @@ export default function UpdateDialog() {
               </div>
               <div className="flex items-center gap-2 justify-center">
                 <RotateCwIcon size={12} className="animate-spin" style={{ color: 'var(--wiki-text3)' }} />
-                <span className="text-[11px]" style={{ color: 'var(--wiki-text3)' }}>请勿关闭应用</span>
+                <span className="text-xs" style={{ color: 'var(--wiki-text3)' }}>请勿关闭应用</span>
               </div>
             </div>
           )}

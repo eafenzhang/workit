@@ -34,7 +34,7 @@ export default function ProfileWizard({ onComplete }: ProfileWizardProps) {
     <div className="flex items-center justify-center gap-2 mb-8">
       {STEPS.map((label, i) => (
         <div key={i} className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold" style={{
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold" style={{
             background: i <= step ? 'var(--wiki-text)' : 'var(--wiki-border)',
             color: i <= step ? 'var(--wiki-bg)' : 'var(--wiki-text3)',
           }}>{i + 1}</div>

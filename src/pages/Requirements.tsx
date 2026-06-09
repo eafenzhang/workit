@@ -118,7 +118,7 @@ const ReqListItem = memo(function ReqListItem({
         <select
           value={req.priority}
           onChange={e => onPriorityChange?.(req.id, e.target.value)}
-          className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none text-center"
+          className="text-xs font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none text-center"
           style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none', width: '28px' }}
           title="修改优先级">
           {priorities.map(p => <option key={p} value={p}>{p}</option>)}
@@ -128,7 +128,7 @@ const ReqListItem = memo(function ReqListItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-wiki-text truncate">{req.title}</span>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded flex-shrink-0"
+          <span className="text-xs font-medium px-2 py-0.5 rounded flex-shrink-0"
             style={{ background: statusCfg.bg, color: statusCfg.color }}>
             {req.status}
           </span>
@@ -171,10 +171,10 @@ function WorkflowHistory({ history, currentStatus }: { history: { from: string; 
       {expanded && (
         <div className="mt-2 flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
           {history.map((h, i) => (
-            <div key={i} className="flex items-start gap-2 text-[11px] py-1 px-2 rounded" style={{ background: 'var(--wiki-surface2)' }}>
-              <span className="px-1 py-0.5 rounded text-[10px] flex-shrink-0" style={{ background: statusConfig[h.from]?.bg || 'var(--wiki-surface)', color: statusConfig[h.from]?.color || 'var(--wiki-text3)' }}>{h.from}</span>
+            <div key={i} className="flex items-start gap-2 text-xs py-1 px-2 rounded" style={{ background: 'var(--wiki-surface2)' }}>
+              <span className="px-1 py-0.5 rounded text-xs flex-shrink-0" style={{ background: statusConfig[h.from]?.bg || 'var(--wiki-surface)', color: statusConfig[h.from]?.color || 'var(--wiki-text3)' }}>{h.from}</span>
               <span style={{ color: 'var(--wiki-text3)' }}>→</span>
-              <span className="px-1 py-0.5 rounded text-[10px] flex-shrink-0" style={{ background: statusConfig[h.to]?.bg || 'var(--wiki-surface)', color: statusConfig[h.to]?.color || 'var(--wiki-text3)' }}>{h.to}</span>
+              <span className="px-1 py-0.5 rounded text-xs flex-shrink-0" style={{ background: statusConfig[h.to]?.bg || 'var(--wiki-surface)', color: statusConfig[h.to]?.color || 'var(--wiki-text3)' }}>{h.to}</span>
               <span className="flex-1 min-w-0 text-wiki-text3 ml-1">
                 {h.handler && <span className="mr-2">{h.handler}</span>}
                 {h.time && <span className="mr-2">{h.time}</span>}
@@ -656,12 +656,12 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                             setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, priority: p } : r));
                           });
                         }}
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none"
+                        className="text-xs font-bold px-1.5 py-0.5 rounded appearance-none cursor-pointer outline-none"
                         style={{ background: priorityCfg.bg, color: priorityCfg.color, border: 'none' }}>
                         {priorities.map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
                     </div>
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded"
+                    <span className="text-xs font-medium px-2 py-0.5 rounded"
                       style={{ background: statusCfg.bg, color: statusCfg.color }}>
                       {req.status}
                     </span>
@@ -774,7 +774,7 @@ function Requirements({ initialTab, onOpenSubTab, onCloseSelf }: Props) {
                   setRemarkModal({ step, reqId: detailReq.id });
                   setRemarkText('');
                 }}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors"
                   style={{
                     background: done ? '#10b98120' : cur ? 'var(--wiki-text)' : 'transparent',
                     color: done ? '#10b981' : cur ? 'var(--wiki-bg)' : i === ci + 1 ? 'var(--wiki-text2)' : 'var(--wiki-text3)',

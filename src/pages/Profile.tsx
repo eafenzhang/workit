@@ -226,7 +226,7 @@ export default function Profile() {
                     border: '1px solid', borderColor: 'var(--wiki-border)',
                   }}>
                     <Icon size={18} style={{ color: sel ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }} />
-                    <span className="text-[11px] font-medium" style={{ color: sel ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }}>{p.label}</span>
+                    <span className="text-xs font-medium" style={{ color: sel ? 'var(--wiki-bg)' : 'var(--wiki-text2)' }}>{p.label}</span>
                   </button>
                 );
               })}
@@ -294,7 +294,7 @@ export default function Profile() {
                     <div className="flex items-center gap-2">
                       <BrainIcon size={15} style={{ color: 'var(--wiki-accent)' }} />
                       <span className="text-sm font-semibold text-wiki-text">长期记忆</span>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>自动提取</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text3)' }}>自动提取</span>
                     </div>
                     {persistentMemories.length > 0 && (
                       <button onClick={handleClearMemories}
@@ -313,7 +313,7 @@ export default function Profile() {
                       {persistentMemories.map(m => (
                         <div key={m.id} className="group flex items-start gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-wiki-surface2"
                           style={{ border: '1px solid var(--wiki-border)' }}>
-                          <span className="text-[11px] font-medium px-2 py-0.5 rounded flex-shrink-0 mt-0.5"
+                          <span className="text-xs font-medium px-2 py-0.5 rounded flex-shrink-0 mt-0.5"
                             style={{ background: 'var(--wiki-accent)', color: '#fff' }}>{m.key}</span>
                           <span className="text-sm flex-1 min-w-0" style={{ color: 'var(--wiki-text2)' }}>{m.value}</span>
                           <button onClick={() => handleDeleteMemory(m.key)}
@@ -392,7 +392,7 @@ export default function Profile() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-wiki-text">{s.name}</div>
-                          <div className="text-[11px] text-wiki-text3 truncate">{s.description}</div>
+                          <div className="text-xs text-wiki-text3 truncate">{s.description}</div>
                         </div>
                       </div>
                     );

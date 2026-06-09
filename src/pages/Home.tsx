@@ -5,6 +5,13 @@ import HomeInput, { type HomeSendPayload } from '../components/HomeInput';
 import PortalDropdown from '../components/PortalDropdown';
 import AIFeedback from '../components/AIFeedback';
 import { toast } from 'sonner';
+
+// Shared inline style objects
+const HL = {
+  input: {background:'var(--wiki-surface2)',border:'1px solid var(--wiki-border)',color:'var(--wiki-text)'} as React.CSSProperties,
+  panel: {background:'var(--wiki-surface)',border:'1px solid var(--wiki-border)'} as React.CSSProperties,
+  surface: {background:'var(--wiki-surface2)'} as React.CSSProperties,
+};
 import { apiFetch, API } from '../api';
 import { getGreeting, getTodayDate, generateMessageId, WELCOME_MESSAGES } from '../data/homeDefaults';
 import ReactMarkdown from 'react-markdown';
@@ -221,7 +228,7 @@ function ToolCallBubble({ msg }: { msg: HomeMessage }) {
             <ToolIcon size={11} style={{ color: iconColor }} />
           </div>
           <span className="font-mono text-xs" style={{ color: 'var(--wiki-text)' }}>{displayName}</span>
-          {msg._meta?.args && <span className="text-[10px] text-wiki-text3 truncate max-w-[120px]">{JSON.stringify(msg._meta.args).substring(0, 40)}</span>}
+          {msg._meta?.args && <span className="text-xs text-wiki-text3 truncate max-w-[120px]">{JSON.stringify(msg._meta.args).substring(0, 40)}</span>}
           <span className="ml-auto">{expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}</span>
         </div>
         {expanded && msg._meta?.result && (
@@ -544,7 +551,7 @@ function Home({ onOpenTab }: HomeProps) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm truncate" style={{ color: c.id === activeConvId ? 'var(--wiki-text)' : 'var(--wiki-text2)', fontWeight: c.id === activeConvId ? 600 : 400 }}>{c.title || '新对话'}</div>
-                        <div className="text-[11px] mt-0.5" style={{ color: 'var(--wiki-text3)' }}>{c.messages.length} 条消息 · {c.createdAt?.slice(0, 10)}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--wiki-text3)' }}>{c.messages.length} 条消息 · {c.createdAt?.slice(0, 10)}</div>
                       </div>
                       <button onClick={(e) => handleDeleteConv(c.id, e)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-red-50 transition-all flex-shrink-0" title="删除">
                         <XIcon size={12} style={{ color: 'var(--wiki-text3)' }} />
@@ -654,7 +661,7 @@ function Home({ onOpenTab }: HomeProps) {
                     style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     {providers.map(p => (
                       <div key={p.provider}>
-                        <div className="text-[10px] px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
+                        <div className="text-xs px-3 py-1 font-semibold text-wiki-text3" style={{ background: 'var(--wiki-surface2)' }}>{p.label}</div>
                         {p.models.map(m => (
                           <div key={p.provider+'|'+m.id}
                             onClick={() => { setSelectedProvider(p.provider); setSelectedModel(String(m.modelId)); try { localStorage.setItem('home_last_model', JSON.stringify({provider:p.provider,modelId:m.modelId})); } catch {} setModelDropdownOpen(false); }}
@@ -696,7 +703,7 @@ function Home({ onOpenTab }: HomeProps) {
                               }}>
                               <div className="flex items-center gap-1">
                                 <Icon size={10} style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }} />
-                                <span className="text-[11px]" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
+                                <span className="text-xs" style={{ color: enabled ? 'var(--wiki-text)' : 'var(--wiki-text3)' }}>{tc.label}</span>
                               </div>
                               <div className="relative w-7 h-3.5 rounded-full cursor-pointer" style={{background:enabled?'#6366f1':'var(--wiki-border)'}}>
                                 <span className="absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-all" style={{left:enabled?'15px':'2px',transition:'left 0.15s'}} />
