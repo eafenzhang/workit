@@ -3,7 +3,7 @@ import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';
 import { GlobeIcon, LayersIcon } from 'lucide-react';
-import { DOCK_APP_ICONS, DOCK_LINEAR_ICONS, getIconStyle, getIconsForStyle, type IconStyle } from './DockIcons';
+import { getIconStyle, getIconsForStyle, type IconStyle } from './DockIcons';
 
 // ── Dock items with dynamic icon style ──
 
@@ -32,6 +32,7 @@ function TaskIcon({ onClick, style }: { onClick: () => void; style: IconStyle })
   const color = '#6b7280';
   const icons = getIconsForStyle(style);
   const Icon = icons['recent-tasks'];
+  const isGradient = style === 'gradient';
   return (
     <button onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       className="flex flex-col items-center justify-end relative focus:outline-none"
@@ -40,7 +41,14 @@ function TaskIcon({ onClick, style }: { onClick: () => void; style: IconStyle })
       <div className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
         style={{ width: '44px', height: '44px', background: hovered ? `${color}22` : 'transparent',
           transform: hovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)', boxShadow: hovered ? `0 8px 16px ${color}33` : 'none' }}>
-        <Icon size={hovered ? 48 : 44} />
+        {isGradient ? (
+          <Icon size={44} />
+        ) : (
+          <Icon size={26} strokeWidth={hovered ? 2.4 : 1.6}
+            style={{ color: hovered ? color : 'var(--wiki-text3)',
+              filter: hovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
+              transition: 'color 0.2s, filter 0.2s' }} />
+        )}
       </div>
       <div style={{ width: '4px', height: '4px', marginTop: '3px', opacity: 0 }} />
       <span className="absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-all duration-150"
