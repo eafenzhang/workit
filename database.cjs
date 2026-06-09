@@ -733,7 +733,8 @@ async function _callModel(model, messages, tools, responseFormat) {
     // OpenAI response
     if (data.choices?.[0]?.message) {
       const msg = data.choices[0].message;
-      content = msg.content || '';
+      // DeepSeek reasoning mode: content may be empty while reasoning_content has the actual output
+      content = msg.content || msg.reasoning_content || '';
       stopReason = data.choices[0].finish_reason || 'stop';
 
       if (msg.tool_calls && msg.tool_calls.length > 0) {
