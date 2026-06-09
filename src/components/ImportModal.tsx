@@ -248,7 +248,7 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-6 pb-6">
           {mode === 'file' ? (
             <div>
               {/* Drag & drop area */}
@@ -341,7 +341,7 @@ export default function ImportModal({ open, onClose, onImported, apiPrefix, titl
                   {selectedIndices.size === parsedItems.length ? '取消全选' : '全选'}
                 </button>
               </div>
-              <div className="max-h-[280px] overflow-y-auto rounded-lg" style={{ border: '1px solid var(--wiki-border)' }}>
+              <div className="max-h-[280px] overflow-y-auto scrollbar-thin rounded-lg" style={{ border: '1px solid var(--wiki-border)' }}>
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--wiki-border)' }}>

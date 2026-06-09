@@ -416,7 +416,7 @@ export default function MCPTab({ hideToolbar, onRenderActions }: { hideToolbar?:
                                 style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }}
                               />
                               {result !== undefined && (
-                                <pre className="text-xs mt-2 p-2 rounded max-h-40 overflow-y-auto" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text2)', whiteSpace: 'pre-wrap' }}>
+                                <pre className="text-xs mt-2 p-2 rounded max-h-40 overflow-y-auto scrollbar-thin" style={{ background: 'var(--wiki-surface)', color: 'var(--wiki-text2)', whiteSpace: 'pre-wrap' }}>
                                   {result}
                                 </pre>
                               )}

@@ -82,6 +82,8 @@
   --wiki-warning-bg: rgba(245,158,11,0.1);
   --wiki-info: #6366f1;
   --wiki-info-bg: rgba(99,102,241,0.1);
+  --wiki-brand: #6366f1;
+  --wiki-brand-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
   --wiki-overlay: rgba(0, 0, 0, 0.3);
   --wiki-overlay-heavy: rgba(0, 0, 0, 0.85);
 
@@ -145,6 +147,8 @@
   --wiki-warning-bg: rgba(251,191,36,0.15);
   --wiki-info: #818cf8;
   --wiki-info-bg: rgba(129,140,248,0.15);
+  --wiki-brand: #818cf8;
+  --wiki-brand-gradient: linear-gradient(135deg, #818cf8, #a78bfa);
   --wiki-overlay: rgba(0, 0, 0, 0.5);
   --wiki-overlay-heavy: rgba(0, 0, 0, 0.92);
 

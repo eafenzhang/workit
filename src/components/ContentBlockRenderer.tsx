@@ -283,7 +283,7 @@ function FileBlock({ block }: { block: ContentBlock }) {
         )}
         {/* Office: data URL — JS render */}
         {['.doc','.docx','.xls','.xlsx','.ppt','.pptx'].includes(ext) && url.startsWith('data:') && (
-          <div className="w-full h-full" style={{ background: '#fff' }}>
+          <div className="w-full h-full" style={{ background: 'var(--wiki-surface)' }}>
             <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400 text-sm">加载预览...</div>}>
               <OfficePreview dataUrl={url} fileName={fname} />
             </Suspense>

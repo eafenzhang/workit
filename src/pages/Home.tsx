@@ -650,7 +650,7 @@ function Home({ onOpenTab }: HomeProps) {
                     </button>
                   }
                 >
-                  <div className="w-52 max-h-36 overflow-y-auto rounded-lg shadow-lg"
+                  <div className="w-52 max-h-36 overflow-y-auto scrollbar-thin rounded-lg shadow-lg"
                     style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     {providers.map(p => (
                       <div key={p.provider}>

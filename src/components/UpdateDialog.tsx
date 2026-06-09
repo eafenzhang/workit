@@ -182,7 +182,7 @@ export default function UpdateDialog() {
               <button
                 onClick={handleDownload}
                 className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
+                style={{ background: 'var(--wiki-brand-gradient)', color: '#fff' }}
               >
                 <DownloadIcon size={15} /> 立即升级
               </button>
@@ -202,7 +202,7 @@ export default function UpdateDialog() {
                   className="h-full rounded-full transition-all duration-300 ease-out"
                   style={{
                     width: percent + '%',
-                    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    background: 'var(--wiki-brand-gradient)',
                   }}
                 />
               </div>
@@ -226,7 +226,7 @@ export default function UpdateDialog() {
               <button
                 onClick={handleInstall}
                 className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all hover:opacity-90"
-                style={{ background: '#10b981', color: '#fff' }}
+                style={{ background: 'var(--wiki-success)', color: '#fff' }}
               >
                 <RotateCwIcon size={15} /> 重启并安装
               </button>

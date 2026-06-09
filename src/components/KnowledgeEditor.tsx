@@ -192,7 +192,7 @@ export default function KnowledgeEditor({
           </div>
         </div>
         <EditorToolbar editor={editor} onImageUpload={onImageUpload} />
-        <div className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--wiki-bg)' }} onPaste={handlePasteImage} onDrop={handleDropImage} onDragOver={(e) => e.preventDefault()}>
+        <div className="flex-1 overflow-y-auto scrollbar-thin p-6" style={{ background: 'var(--wiki-bg)' }} onPaste={handlePasteImage} onDrop={handleDropImage} onDragOver={(e) => e.preventDefault()}>
           <div className="w-full">
             <EditorContent editor={editor} className="prose prose-lg max-w-none text-wiki-text [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[500px] [&_.ProseMirror_p]:text-wiki-text [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-wiki-accent [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_code]:bg-wiki-surface2 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror img]:max-w-full [&_.ProseMirror_img]:cursor-pointer [&_.ProseMirror_a]:text-wiki-accent [&_.ProseMirror_a]:underline" />
           </div>
@@ -233,7 +233,7 @@ export default function KnowledgeEditor({
         <EditorToolbar editor={editor} onImageUpload={onImageUpload} />
 
         {/* Editor Content */}
-        <div className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--wiki-bg)' }} onPaste={handlePasteImage} onDrop={handleDropImage} onDragOver={(e) => e.preventDefault()}>
+        <div className="flex-1 overflow-y-auto scrollbar-thin p-6" style={{ background: 'var(--wiki-bg)' }} onPaste={handlePasteImage} onDrop={handleDropImage} onDragOver={(e) => e.preventDefault()}>
           <div className="w-full">
             <EditorContent
               editor={editor}

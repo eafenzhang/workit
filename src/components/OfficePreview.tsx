@@ -122,7 +122,7 @@ export default function OfficePreview({ dataUrl, fileName }: Props) {
   if (state.status === 'html') {
     return (
       <div
-        className="w-full h-full overflow-auto p-6"
+        className="w-full h-full overflow-auto scrollbar-thin p-6"
         style={{ background: 'var(--wiki-bg)', color: 'var(--wiki-text)', fontSize: '14px', lineHeight: '1.8' }}
         dangerouslySetInnerHTML={{ __html: state.html }}
       />

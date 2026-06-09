@@ -459,7 +459,7 @@ export default function QuickCapture() {
 
       {(showModal || isStandalone) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: isStandalone ? 'transparent' : 'var(--wiki-overlay-heavy)', backdropFilter: isStandalone ? 'none' : 'blur(4px)' }}>
-          <div className="w-[672px] max-h-[85vh] overflow-y-auto p-5 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+          <div className="w-[672px] max-h-[85vh] overflow-y-auto scrollbar-thin p-5 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--wiki-text)", color: "var(--wiki-bg)" }}>
@@ -476,7 +476,7 @@ export default function QuickCapture() {
 
             {/* Mixed content display: items in copy order */}
             {captured && captured.items.length > 0 && (
-              <div className="mb-4 p-3 rounded-lg max-h-60 overflow-y-auto" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
+              <div className="mb-4 p-3 rounded-lg max-h-60 overflow-y-auto scrollbar-thin" style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)' }}>
                 {chatMessages && !captured.items.some(i => i.type !== 'text') ? (
                   <>
                     <div className="text-xs text-wiki-text3 mb-2">对话记录 ({chatMessages.length} 条)</div>
@@ -703,7 +703,7 @@ export default function QuickCapture() {
                     try {
                       const base64 = previewItem.content.split(',')[1];
                       const text = decodeURIComponent(escape(atob(base64)));
-                      return <pre className="w-full h-full overflow-auto p-6 text-sm font-mono whitespace-pre-wrap" style={{ color: 'var(--wiki-text)' }}>{text}</pre>;
+                      return <pre className="w-full h-full overflow-auto scrollbar-thin p-6 text-sm font-mono whitespace-pre-wrap" style={{ color: 'var(--wiki-text)' }}>{text}</pre>;
                     } catch {
                       return <div className="flex items-center justify-center h-full text-gray-500">无法预览此文件</div>;
                     }

@@ -437,7 +437,7 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
               {sidebarTab === 'bookmarks' ? (
                 bookmarks.length === 0 ? (
                   <div className="text-xs text-wiki-text3 p-4 text-center">暂无收藏<br/><span className="text-[10px]">点击地址栏 ☆ 添加收藏</span></div>
