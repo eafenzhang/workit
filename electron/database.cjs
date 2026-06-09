@@ -671,7 +671,7 @@ async function _callModel(model, messages, tools, responseFormat) {
       model: model.modelId,
       messages: messages.filter(m => m.role !== 'system'),
       system: messages.find(m => m.role === 'system')?.content,
-      max_tokens: 4000,
+      max_tokens: 16384,
       temperature: 0.7,
     };
     if (tools && tools.length > 0) {
@@ -681,9 +681,13 @@ async function _callModel(model, messages, tools, responseFormat) {
     body = {
       model: model.modelId,
       messages,
-      max_tokens: 4000,
+      max_tokens: 16384,
       temperature: 0.7,
     };
+    // Disable thinking/reasoning mode for DeepSeek models to get direct output
+    if (model.modelId.includes('deepseek')) {
+      body.thinking = { type: 'disabled' };
+    }
     if (responseFormat === 'json_object') {
       body.response_format = { type: 'json_object' };
     }
@@ -733,7 +737,8 @@ async function _callModel(model, messages, tools, responseFormat) {
     // OpenAI response
     if (data.choices?.[0]?.message) {
       const msg = data.choices[0].message;
-      content = msg.content || '';
+      // DeepSeek reasoning models: content may be empty while answer is in reasoning_content
+      content = msg.content || msg.reasoning_content || '';
       stopReason = data.choices[0].finish_reason || 'stop';
 
       if (msg.tool_calls && msg.tool_calls.length > 0) {
