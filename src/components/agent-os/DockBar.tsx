@@ -2,79 +2,46 @@ import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useAgentOS } from '../../context/AgentOSContext';
 import type { DockItem, OSWindow } from '../../types/agent-os';
 import DockIcon from './DockIcon';
+import { GlobeIcon, LayersIcon } from 'lucide-react';
+import { DOCK_APP_ICONS } from './DockIcons';
 
-// ── Filled icons with brand colors ──
-
-import {
-  BotMessageSquareIcon,
-  SparklesIcon,
-  DatabaseIcon,
-  LightbulbIcon,
-  PackageIcon,
-  CpuIcon,
-  MessageSquareIcon,
-  SettingsIcon,
-  UserIcon,
-  GlobeIcon,
-  LayersIcon,
-  PaletteIcon,
-} from 'lucide-react';
-
-// ── Dock items with filled icons and brand colors ──
+// ── Dock items with macOS-inspired custom icons ──
 
 const DOCK_ITEMS: (DockItem & { color: string })[] = [
-  { id: 'home', label: '首页', icon: BotMessageSquareIcon, type: 'home', color: '#6366f1' },
-  { id: 'requirements', label: '采集库', icon: SparklesIcon, type: 'requirements', color: '#f59e0b' },
-  { id: 'knowledge', label: '知识库', icon: DatabaseIcon, type: 'knowledge', color: '#10b981' },
-  { id: 'design-studio', label: '设计稿', icon: PaletteIcon, type: 'design-studio', color: '#ec4899' },
-  { id: 'insights', label: '洞察分析', icon: LightbulbIcon, type: 'insights', color: '#8b5cf6' },
-  { id: 'mcp', label: '应用生态', icon: PackageIcon, type: 'mcp', color: '#06b6d4' },
-  { id: 'model', label: '模型配置', icon: CpuIcon, type: 'model', color: '#ef4444' },
-  { id: 'browser', label: '浏览器', icon: GlobeIcon, type: 'browser', color: '#3b82f6' },
-  { id: 'messages', label: '消息中心', icon: MessageSquareIcon, type: 'messages', color: '#14b8a6' },
-  { id: 'settings', label: '系统设置', icon: SettingsIcon, type: 'settings', color: '#64748b' },
-  { id: 'profile', label: '用户Agent', icon: UserIcon, type: 'profile', color: '#ec4899' },
+  { id: 'home', label: '首页', icon: DOCK_APP_ICONS['home'], type: 'home', color: '#6366f1' },
+  { id: 'requirements', label: '采集库', icon: DOCK_APP_ICONS['requirements'], type: 'requirements', color: '#f59e0b' },
+  { id: 'knowledge', label: '知识库', icon: DOCK_APP_ICONS['knowledge'], type: 'knowledge', color: '#10b981' },
+  { id: 'design-studio', label: '设计稿', icon: DOCK_APP_ICONS['design-studio'], type: 'design-studio', color: '#ec4899' },
+  { id: 'insights', label: '洞察分析', icon: DOCK_APP_ICONS['insights'], type: 'insights', color: '#8b5cf6' },
+  { id: 'mcp', label: '应用生态', icon: DOCK_APP_ICONS['mcp'], type: 'mcp', color: '#06b6d4' },
+  { id: 'model', label: '模型配置', icon: DOCK_APP_ICONS['model'], type: 'model', color: '#ef4444' },
+  { id: 'browser', label: '浏览器', icon: DOCK_APP_ICONS['browser'], type: 'browser', color: '#3b82f6' },
+  { id: 'messages', label: '消息中心', icon: DOCK_APP_ICONS['messages'], type: 'messages', color: '#14b8a6' },
+  { id: 'settings', label: '系统设置', icon: DOCK_APP_ICONS['settings'], type: 'settings', color: '#64748b' },
+  { id: 'profile', label: '用户Agent', icon: DOCK_APP_ICONS['profile'], type: 'profile', color: '#ec4899' },
 ];
 
 type DockState = 'show' | 'hide' | 'float';
 
-/** Internal replica of DockIcon for the 最近任务 button */
+/** macOS-style Dock icon for 最近任务 */
 function TaskIcon({ onClick }: { onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
-  const color = '#6b7280'; // neutral gray
+  const color = '#6b7280';
+  const Icon = DOCK_APP_ICONS['recent-tasks'];
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <button onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       className="flex flex-col items-center justify-end relative focus:outline-none"
       style={{ width: '48px', height: '56px', border: 'none', background: 'transparent', padding: 0 }}
-      aria-label="最近任务"
-      title="最近任务"
-    >
+      aria-label="最近任务" title="最近任务">
       <div className="flex items-center justify-center rounded-xl transition-all duration-200 ease-out"
-        style={{
-          width: '44px', height: '44px',
-          background: hovered ? `${color}22` : 'transparent',
-          transform: hovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
-          boxShadow: hovered ? `0 8px 16px ${color}33` : 'none',
-        }}>
-        <LayersIcon size={26} style={{
-          color: hovered ? color : 'var(--wiki-text3)',
-          filter: hovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
-          transition: 'color 0.2s, filter 0.2s',
-        }} strokeWidth={hovered ? 2.4 : 1.6} />
+        style={{ width: '44px', height: '44px', background: hovered ? `${color}22` : 'transparent',
+          transform: hovered ? 'scale(1.15) translateY(-2px)' : 'scale(1)', boxShadow: hovered ? `0 8px 16px ${color}33` : 'none' }}>
+        <Icon size={hovered ? 48 : 44} />
       </div>
-      {/* Placeholder dot — keeps vertical alignment with DockIcons that have running indicators */}
       <div style={{ width: '4px', height: '4px', marginTop: '3px', opacity: 0 }} />
       <span className="absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap z-50 pointer-events-none transition-all duration-150"
-        style={{
-          bottom: '100%', marginBottom: '10px',
-          background: hovered ? 'var(--wiki-text)' : 'transparent',
-          color: hovered ? 'var(--wiki-bg)' : 'transparent',
-          opacity: hovered ? 1 : 0,
-          transform: hovered ? 'translateY(0)' : 'translateY(4px)',
-        }}>
+        style={{ bottom: '100%', marginBottom: '10px', background: hovered ? 'var(--wiki-text)' : 'transparent',
+          color: hovered ? 'var(--wiki-bg)' : 'transparent', opacity: hovered ? 1 : 0, transform: hovered ? 'translateY(0)' : 'translateY(4px)' }}>
         最近任务
       </span>
     </button>

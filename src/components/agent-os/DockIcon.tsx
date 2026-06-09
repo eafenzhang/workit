@@ -54,15 +54,7 @@ export default function DockIcon({ item, isOpen, isMinimized, noDot, color, onCl
             : 'none',
         }}
       >
-        <Icon
-          size={26}
-          style={{
-            color: isOpen || isHovered ? color : 'var(--wiki-text3)',
-            filter: isHovered ? `drop-shadow(0 2px 4px ${color}44)` : 'none',
-            transition: 'color 0.2s, filter 0.2s',
-          }}
-          strokeWidth={isOpen || isHovered ? 2.4 : 1.6}
-        />
+        <Icon size={isHovered ? 48 : 44} />
       </div>
 
       {/* ── Running indicator ── */}
