@@ -453,7 +453,7 @@ async function callAI(db, prompt) {
  * @param {boolean} [options.mcpEnabled] - Whether to include MCP tools
  * @returns {Promise<{content?: string, error?: string, toolCallHistory?: Array}>} The AI response content or an error
  */
-async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcpEnabled, toolsEnabled }) {
+async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcpEnabled, toolsEnabled, responseFormat }) {
   // Look up model by provider + model_id (not database row id)
   let model;
   let isAnthropic = false;
@@ -538,7 +538,7 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcp
     const toolCallHistory = [];
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const result = await _callModel(model, currentMessages, tools);
+      const result = await _callModel(model, currentMessages, tools, responseFormat);
 
       // If no tool calls, return content directly
       if (!result.tool_calls || result.tool_calls.length === 0) {
@@ -555,7 +555,7 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcp
           role: 'user',
           content: '你已调用工具多次，请基于已获得的信息直接回答用户的问题，不要再调用工具。',
         });
-        const finalResult = await _callModel(model, currentMessages, null); // no tools
+        const finalResult = await _callModel(model, currentMessages, null, responseFormat); // no tools
         return {
           content: finalResult.content,
           toolCallHistory,
@@ -635,7 +635,7 @@ async function chatWithAI(db, { providerId, modelId, messages, systemPrompt, mcp
  * @returns {Promise<{content: string, tool_calls: Array|null, stop_reason: string}>}
  * @throws {Error} If the API returns an error or unexpected format
  */
-async function _callModel(model, messages, tools) {
+async function _callModel(model, messages, tools, responseFormat) {
   const isAnthropic = model.endpoint?.includes('messages') || model.baseUrl.includes('anthropic');
   let url = model.baseUrl.replace(/\/+$/, '');
   if (model.endpoint) {
@@ -684,6 +684,9 @@ async function _callModel(model, messages, tools) {
       max_tokens: 4000,
       temperature: 0.7,
     };
+    if (responseFormat === 'json_object') {
+      body.response_format = { type: 'json_object' };
+    }
     if (tools && tools.length > 0) {
       body.tools = tools;
       body.tool_choice = 'auto';

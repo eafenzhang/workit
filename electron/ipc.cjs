@@ -89,9 +89,9 @@ function setupIPC(mainWindow, db) {
   });
 
   // Chat with AI — uses conversation history + user agent config + tools/skills/plugins
-  ipcMain.handle('chat:send', async (_, { providerId, modelId, messages, systemPrompt, toolsEnabled }) => {
+  ipcMain.handle('chat:send', async (_, { providerId, modelId, messages, systemPrompt, toolsEnabled, responseFormat }) => {
     try {
-      return await chatWithAI(db, { providerId, modelId, messages, systemPrompt, toolsEnabled });
+      return await chatWithAI(db, { providerId, modelId, messages, systemPrompt, toolsEnabled, responseFormat });
     } catch (e) { return { error: e.message }; }
   });
 
