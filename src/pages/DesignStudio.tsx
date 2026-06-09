@@ -247,7 +247,7 @@ function DesignEditor({docId,onClose}:{docId:number;onClose:()=>void}) {
           {chatMsgs.map((m,i)=><div key={i} className={`text-[11px] ${m.role==='user'?'text-right':''}`}><span className="inline-block px-2 py-0.5 rounded-lg max-w-[85%]" style={{background:m.role==='user'?'var(--wiki-text)':'var(--wiki-surface2)',color:m.role==='user'?'var(--wiki-bg)':'var(--wiki-text2)'}}>{m.content}</span></div>)}
           {aiGen&&<div className="text-[11px] text-wiki-text3">AI 设计中...</div>}
         </div>
-        <div className="flex gap-1.5 px-3 py-2">
+        <div className="flex gap-1.5 px-3 py-2"><select value={styleRef} onChange={e=>setStyleRef(e.target.value)} className="text-[9px] px-1 py-1.5 rounded-lg outline-none flex-shrink-0" style={{background:'var(--wiki-surface2)',color:'var(--wiki-text2)',border:'1px solid var(--wiki-border)'}} title="风格参考"><option value="auto">风格</option><option value="Apple">Apple</option><option value="Airbnb">Airbnb</option><option value="Material">Material</option><option value="Minimal">极简</option><option value="Glassmorphism">玻璃态</option></select>
           <input className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none" style={{background:'var(--wiki-surface2)',color:'var(--wiki-text)',border:'1px solid var(--wiki-border)'}} placeholder="描述设计..." value={aiIn} onChange={e=>setAiIn(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();aiGenFn()}}}/>
           <button onClick={aiGenFn} disabled={aiGen||!aiIn.trim()} className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-30" style={{background:'#6366f1',color:'#fff'}}>{aiGen?<RotateCwIcon size={12} className="animate-spin"/>:<SendIcon size={12}/>}</button>
         </div>
@@ -265,6 +265,7 @@ function DesignEditor({docId,onClose}:{docId:number;onClose:()=>void}) {
 function DesignCreator({onClose}:{onClose:()=>void}) {
   const [aiIn,setAiIn]=useState('');const[cat,setCat]=useState('设计稿-网页');
   const [gen,setGen]=useState(false);const[nodes,setNodes]=useState<DesignNode[]>([]);
+  const [styleRef,setStyleRef]=useState('auto');const [plan,setPlan]=useState('');
   const [title,setTitle]=useState('');const[vp,setVp]=useState(1024);
   const [tool,setTool]=useState<'select'|'frame'|'rect'|'text'|'ellipse'|'image'>('select');
   const [sel,setSel]=useState<string|null>(null);
