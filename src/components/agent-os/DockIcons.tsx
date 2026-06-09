@@ -3,7 +3,7 @@ import React from 'react';
 import {
   BotMessageSquareIcon, SparklesIcon, DatabaseIcon, PaletteIcon,
   LightbulbIcon, PackageIcon, CpuIcon, GlobeIcon, MessageSquareIcon,
-  SettingsIcon, UserIcon, LayersIcon,
+  SettingsIcon as SettingsLucideIcon, UserIcon, LayersIcon,
 } from 'lucide-react';
 
 interface AppIconProps { size?: number }
@@ -48,7 +48,7 @@ export const AppEcosystemIcon = (p: AppIconProps) => <AppIcon gradient={['#06b6d
 export const ModelIcon = (p: AppIconProps) => <AppIcon gradient={['#ef4444', '#f59e0b']} Icon={CpuIcon} iconColor="#ffffff" size={p.size} />;
 export const BrowserIcon = (p: AppIconProps) => <AppIcon gradient={['#3b82f6', '#6366f1']} Icon={GlobeIcon} iconColor="#ffffff" size={p.size} />;
 export const MessagesIcon = (p: AppIconProps) => <AppIcon gradient={['#14b8a6', '#10b981']} Icon={MessageSquareIcon} iconColor="#ffffff" size={p.size} />;
-export const SettingsIcon = (p: AppIconProps) => <AppIcon gradient={['#64748b', '#475569']} Icon={SettingsIcon} iconColor="#ffffff" size={p.size} />;
+export const SettingsIcon = (p: AppIconProps) => <AppIcon gradient={['#64748b', '#475569']} Icon={SettingsLucideIcon} iconColor="#ffffff" size={p.size} />;
 export const ProfileIcon = (p: AppIconProps) => <AppIcon gradient={['#ec4899', '#8b5cf6']} Icon={UserIcon} iconColor="#ffffff" size={p.size} />;
 export const RecentTasksIcon = (p: AppIconProps) => <AppIcon gradient={['#6b7280', '#4b5563']} Icon={LayersIcon} iconColor="#ffffff" size={p.size} />;
 
@@ -62,7 +62,7 @@ export const AppEcosystemLinearIcon = (p: AppIconProps) => <LinearIcon Icon={Pac
 export const ModelLinearIcon = (p: AppIconProps) => <LinearIcon Icon={CpuIcon} color="#ef4444" size={p.size} />;
 export const BrowserLinearIcon = (p: AppIconProps) => <LinearIcon Icon={GlobeIcon} color="#3b82f6" size={p.size} />;
 export const MessagesLinearIcon = (p: AppIconProps) => <LinearIcon Icon={MessageSquareIcon} color="#14b8a6" size={p.size} />;
-export const SettingsLinearIcon = (p: AppIconProps) => <LinearIcon Icon={SettingsIcon} color="#64748b" size={p.size} />;
+export const SettingsLinearIcon = (p: AppIconProps) => <LinearIcon Icon={SettingsLucideIcon} color="#64748b" size={p.size} />;
 export const ProfileLinearIcon = (p: AppIconProps) => <LinearIcon Icon={UserIcon} color="#ec4899" size={p.size} />;
 export const RecentTasksLinearIcon = (p: AppIconProps) => <LinearIcon Icon={LayersIcon} color="#6b7280" size={p.size} />;
 
