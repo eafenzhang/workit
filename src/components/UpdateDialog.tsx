@@ -15,6 +15,7 @@ export default function UpdateDialog() {
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState('');
   const [animating, setAnimating] = useState(false);
+  const [installerPath, setInstallerPath] = useState('');
 
   const api = (window as any).electronAPI;
 
@@ -91,8 +92,6 @@ export default function UpdateDialog() {
   const handleInstall = useCallback(async () => {
     await api?.installUpdate?.(installerPath);
   }, [api, installerPath]);
-
-  const [installerPath, setInstallerPath] = useState('');
 
   const handleClose = useCallback(() => {
     setAnimating(false);
