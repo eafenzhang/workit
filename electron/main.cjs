@@ -26,12 +26,16 @@ app.whenReady().then(async () => {
   try {
     // 1. Start AionCore backend
     aioncoreManager = new AionCoreManager();
-    await aioncoreManager.start({
-      port: 13400,
-      // Override dataDir from env or use default
-      dataDir: process.env.AIONCORE_DATA_DIR || undefined,
-    });
-    log('AionCore backend started on port ' + aioncoreManager.getPort());
+    try {
+      await aioncoreManager.start({
+        port: 13400,
+        dataDir: process.env.AIONCORE_DATA_DIR || undefined,
+      });
+      log('AionCore backend started on port ' + aioncoreManager.getPort());
+    } catch (aionErr) {
+      log('AionCore backend failed to start: ' + (aionErr.message || String(aionErr)));
+      log('App will continue without backend — some features unavailable');
+    }
 
     // 2. Initialize local database (for Electron-native features: window state, settings, etc.)
     db = await initDatabase();

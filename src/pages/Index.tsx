@@ -310,7 +310,6 @@ export default function Index() {
       <TitleBar
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
-        onOpenBrowser={() => onOpenBrowser()}
         isOSMode={isOSMode}
         onToggleOSMode={toggleOSMode}
       >
