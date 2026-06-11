@@ -30,81 +30,111 @@ class AionCoreManager {
   }
 
   /**
-   * Resolve the AionCore binary path.
-   * Tries multiple locations, logs all attempts.
+   * Find or extract the AionCore binary.
+   * 1. Search predefined paths first
+   * 2. If not found, try to extract from asar resources
+   * 3. Extract to a permanent location for future runs
    */
-  resolveBinaryPath() {
+  resolveAndExtractBinary() {
     const isWin = process.platform === 'win32';
     const binName = isWin ? 'aioncore.exe' : 'aioncore';
 
-    // 1. Environment variable override
+    // 1. Check environment variable override
     if (process.env.AIONCORE_PATH) {
-      log(`Using AIONCORE_PATH env: ${process.env.AIONCORE_PATH}`);
-      return process.env.AIONCORE_PATH;
+      const p = process.env.AIONCORE_PATH;
+      log(`Using AIONCORE_PATH env: ${p}`);
+      if (fs.existsSync(p)) return p;
+      warn(`AIONCORE_PATH points to non-existent file: ${p}`);
     }
 
-    // 2. All candidate paths in priority order
-    const candidates = [];
+    // 2. Define the cache location (permanent, inside userData)
+    const cachedPath = path.join(app.getPath('userData'), 'aioncore', binName);
 
-    // a: process.resourcesPath (standard Electron resources dir)
+    // 3. Check if cached version exists
+    if (fs.existsSync(cachedPath)) {
+      log(`Found cached binary at: ${cachedPath}`);
+      return cachedPath;
+    }
+
+    // 4. Search all possible source locations
+    const searchPaths = [];
+
+    // extraResources → resources/aioncore/aioncore.exe
     if (process.resourcesPath) {
-      candidates.push(path.join(process.resourcesPath, 'aioncore', binName));
+      searchPaths.push(path.join(process.resourcesPath, 'aioncore', binName));
     }
 
-    // b: Resources next to app (macOS .app bundle fallback)
-    try {
-      candidates.push(path.join(app.getAppPath(), '..', 'Resources', 'aioncore', binName));
-    } catch (e) {}
+    // Resources alongside app
+    try { searchPaths.push(path.join(app.getAppPath(), '..', 'Resources', 'aioncore', binName)); } catch (e) {}
 
-    // c: App-adjacent (dev mode / portable)
-    try {
-      candidates.push(path.join(app.getAppPath(), 'aioncore', binName));
-    } catch (e) {}
+    // App-adjacent directory (dev mode)
+    try { searchPaths.push(path.join(app.getAppPath(), 'aioncore', binName)); } catch (e) {}
 
-    // d: App executable dir
+    // Electron executable directory
     try {
       const exeDir = path.dirname(app.getPath('exe'));
-      candidates.push(path.join(exeDir, 'aioncore', binName));
-      candidates.push(path.join(exeDir, 'resources', 'aioncore', binName));
+      searchPaths.push(path.join(exeDir, 'aioncore', binName));
+      searchPaths.push(path.join(exeDir, 'resources', 'aioncore', binName));
     } catch (e) {}
 
-    // e: CWD
-    candidates.push(path.join(process.cwd(), 'aioncore', binName));
+    // inside app.asar (if bundled as a file entry)
+    try {
+      const asarPath = path.join(app.getAppPath(), 'aioncore', binName);
+      searchPaths.push(asarPath);
+    } catch (e) {}
 
-    // f: PATH fallback
-    candidates.push(binName);
+    // Log search diagnostics
+    log(`Searching for ${binName}...`);
+    log(`process.resourcesPath = ${process.resourcesPath || '(undefined)'}`);
+    try { log(`app.getAppPath() = ${app.getAppPath()}`); } catch (e) {}
+    try { log(`app.getPath('exe') = ${app.getPath('exe')}`); } catch (e) {}
+    log(`userData = ${app.getPath('userData')}`);
+    log(`cachedPath = ${cachedPath}`);
 
-    // Log diagnostics once
-    if (!_diagnosticsLogged) {
-      _diagnosticsLogged = true;
-      log(`Searching for ${binName}...`);
-      log(`process.resourcesPath = ${process.resourcesPath || '(undefined)'}`);
-      try { log(`app.getAppPath() = ${app.getAppPath()}`); } catch (e) {}
-      try { log(`app.getPath('exe') = ${app.getPath('exe')}`); } catch (e) {}
-      log(`app.getPath('userData') = ${app.getPath('userData')}`);
-    }
-
-    for (const candidate of candidates) {
-      if (candidate === binName) {
-        // PATH fallback — no file to check
-        log(`Falling back to PATH: ${binName}`);
-        return binName;
-      }
+    for (const src of searchPaths) {
       try {
-        if (fs.existsSync(candidate)) {
-          log(`Found binary at: ${candidate}`);
-          return candidate;
+        if (fs.existsSync(src)) {
+          log(`Found source binary at: ${src}`);
+
+          // Copy to cache for future runs
+          try {
+            const cacheDir = path.dirname(cachedPath);
+            if (!fs.existsSync(cacheDir)) {
+              fs.mkdirSync(cacheDir, { recursive: true });
+            }
+            fs.copyFileSync(src, cachedPath);
+            fs.chmodSync(cachedPath, 0o755);
+            log(`Cached binary to: ${cachedPath}`);
+            return cachedPath;
+          } catch (e) {
+            warn(`Failed to cache binary: ${e.message}. Running from source.`);
+            return src;
+          }
         } else {
-          warn(`Not found: ${candidate}`);
+          warn(`Not found: ${src}`);
         }
       } catch (e) {
-        warn(`Error checking path ${candidate}: ${e.message}`);
+        warn(`Error checking path ${src}: ${e.message}`);
       }
     }
 
-    // If nothing found, return PATH fallback
-    warn('No aioncore binary found anywhere, using PATH fallback');
-    return binName;
+    // 5. Last resort: check if aioncore is in PATH
+    log('No bundled binary found, checking PATH...');
+    const which = isWin ? 'where' : 'which';
+    try {
+      const { execSync } = require('child_process');
+      const pathResult = execSync(`${which} ${binName}`, { encoding: 'utf-8', timeout: 3000 }).trim().split('\n')[0];
+      if (pathResult && fs.existsSync(pathResult)) {
+        log(`Found in PATH: ${pathResult}`);
+        return pathResult;
+      }
+    } catch (e) {
+      warn(`Not in PATH: ${e.message}`);
+    }
+
+    const err = new Error(`AionCore binary not found. Please ensure ${binName} is in PATH`);
+    log(err.message);
+    throw err;
   }
 
   /**
@@ -117,7 +147,7 @@ class AionCoreManager {
 
     this.port = port;
     this.dataDir = dataDir;
-    this.binaryPath = this.resolveBinaryPath();
+    this.binaryPath = this.resolveAndExtractBinary();
 
     log(`Starting on port ${port}`);
     log(`Data directory: ${dataDir}`);
