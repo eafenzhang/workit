@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { SunIcon, MoonIcon, MonitorIcon, RefreshCwIcon, CheckIcon, CogIcon, Trash2Icon, PaletteIcon, InfoIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, MonitorIcon, RefreshCwIcon, CheckIcon, CogIcon, Trash2Icon, PaletteIcon, InfoIcon, GlobeIcon } from 'lucide-react';
 import { APP_ICON } from '../constants/icon';
 import { toast } from 'sonner';
+import { aioncore } from '../lib/aioncore';
 
 // ── Persist update state ──
 let _updStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' = 'idle';
@@ -26,6 +27,9 @@ export default function Settings() {
   const [downloadProgress, setDownloadProgress] = useState(_updProgress);
   const [currentVersion, setCurrentVersion] = useState('1.0.0');
   const [updateError, setUpdateError] = useState(_updError);
+  // AionCore backend info
+  const [backendInfo, setBackendInfo] = useState<{ version?: string; dataDir?: string }>({});
+  const [backendOnline, setBackendOnline] = useState(false);
 
   const api = window.electronAPI;
 
@@ -37,6 +41,19 @@ export default function Settings() {
   };
 
   useEffect(() => {
+    // AionCore backend info
+    aioncore.system.getInfo().then((info) => {
+      setBackendOnline(true);
+      setBackendInfo({ version: info.version, dataDir: info.dataDir });
+      setCurrentVersion(info.version || '0.1.0');
+    }).catch(() => setBackendOnline(false));
+
+    // AionCore system settings
+    aioncore.system.getSettings().then((s) => {
+      // Map AionCore settings to local state as needed
+    }).catch(() => {});
+
+    // Electron-native settings
     api?.getVersion?.().then((v: string) => { if (v) setCurrentVersion(v); }).catch(() => {});
     api?.getSettings?.().then((s: any) => {
       if (s) { setMinimizeToTray(s.minimizeToTray); setOpenAtLogin(s.openAtLogin); }
@@ -137,7 +154,7 @@ export default function Settings() {
               const Icon = opt.icon;
               const isActive = theme === opt.id;
               return (
-                <button key={opt.id} onClick={() => setTheme(opt.id)}
+                <button key={opt.id} onClick={() => setTheme(opt.id as any)}
                   className="flex flex-col items-center gap-2 p-4 rounded-lg transition-all"
                   style={{ background: isActive ? 'var(--wiki-surface2)' : 'transparent', border: '1px solid var(--wiki-border)' }}>
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -176,6 +193,38 @@ export default function Settings() {
               <Trash2Icon size={12} />清理缓存
             </button>
           </div>
+        </Section>
+
+        {/* 后端服务 */}
+        <Section icon={GlobeIcon} title="后端服务（AionCore）">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-wiki-text">运行状态</div>
+              <div className="text-xs text-wiki-text3 mt-1">
+                {backendOnline ? '后端服务运行中' : '未连接'}
+              </div>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              backendOnline ? 'text-green-600' : 'text-red-500'
+            }`} style={{
+              background: backendOnline ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+            }}>
+              <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+              {backendOnline ? '在线' : '离线'}
+            </span>
+          </div>
+          {backendOnline && (
+            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div className="text-wiki-text3">后端版本</div>
+                <div className="font-medium text-wiki-text">{backendInfo.version || '-'}</div>
+              </div>
+              <div>
+                <div className="text-wiki-text3">数据目录</div>
+                <div className="font-medium text-wiki-text truncate">{backendInfo.dataDir || '-'}</div>
+              </div>
+            </div>
+          )}
         </Section>
 
         {/* 关于 */}

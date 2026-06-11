@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: { node: process.versions.node, chrome: process.versions.chrome, electron: process.versions.electron },
   getVersion: () => ipcRenderer.invoke('get-version'),
+  // AionCore backend port
+  aioncorePort: null,  // Will be set via IPC message
   // Window controls
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
@@ -102,4 +104,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpConnect: (serverId) => ipcRenderer.invoke('mcp:connect', serverId),
   /** Disconnect from a specific MCP server */
   mcpDisconnect: (serverId) => ipcRenderer.invoke('mcp:disconnect', serverId),
+  // ── AionCore Backend ──
+  /** Listen for AionCore port assignment */
+  onAioncorePort: (cb) => {
+    const handler = (_event, port) => {
+      electronAPI.aioncorePort = port;
+      cb(port);
+    };
+    ipcRenderer.on('aioncore:port', handler);
+    return () => ipcRenderer.removeListener('aioncore:port', handler);
+  },
 });

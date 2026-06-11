@@ -1,4 +1,3 @@
-import { apiFetch, API } from '../api';
 import { useEffect, useState, useCallback } from 'react';
 import {
   ServerIcon, TrashIcon, XIcon, CheckCircleIcon, PlugIcon, UploadIcon, EditIcon,
@@ -7,6 +6,8 @@ import {
 import { toast } from 'sonner';
 import ImportModal from './ImportModal';
 import { useMcpStatus, getStatusColor, getStatusLabel, type McpStatus } from '../hooks/useMcpStatus';
+import { aioncore } from '../lib/aioncore';
+import type { McpServerResponse } from '../lib/api-types';
 
 // ── Toast message constants ──
 const TOAST = {
@@ -71,27 +72,37 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
   }, []);
 
   const fetchServers = () => {
-    apiFetch(API.mcp)
-      .then(r => r.json())
-      .then(data => setServers(data))
+    aioncore.mcp.listServers()
+      .then((data: McpServerResponse[]) => {
+        setServers(data.map(s => ({
+          id: typeof s.id === 'string' ? parseInt(s.id, 10) : s.id,
+          name: s.name,
+          type: s.transport || 'stdio',
+          command: s.command,
+          args: s.args || [],
+          env: s.env || {},
+          enabled: s.enabled,
+          config: {},
+          createdAt: s.createdAt || '',
+        })));
+      })
       .catch(() => {});
   };
 
   const toggleServer = (server: MCPServer) => {
-    apiFetch(API.mcpById(server.id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...server, enabled: !server.enabled }),
-    }).then(() => {
-      fetchServers();
-      toast.success(server.enabled ? TOAST.mcpDisabled : TOAST.mcpEnabled);
-    });
+    aioncore.mcp.toggleServer(server.id)
+      .then(() => {
+        fetchServers();
+        toast.success(server.enabled ? 'MCP已禁用' : 'MCP已启用');
+      })
+      .catch(() => toast.error('操作失败'));
   };
 
   const deleteServer = (id: number) => {
     if (!confirm('确定删除？')) return;
-    apiFetch(API.mcpById(id), { method: 'DELETE' })
-      .then(() => { fetchServers(); toast.success(TOAST.deleted); });
+    aioncore.mcp.deleteServer(id)
+      .then(() => { fetchServers(); toast.success('已删除'); })
+      .catch(() => toast.error('删除失败'));
   };
 
   // ── Tool detail panel: fetch tools ──
@@ -425,8 +436,7 @@ export default function MCPTab({ hideToolbar }: { hideToolbar?: boolean }) {
       />}
 
       {/* Import Modal */}
-      <ImportModal open={showImport} onClose={() => setShowImport(false)} onImported={fetchServers}
-        apiPrefix={API.mcp} title="导入 MCP 服务器" template={MCP_TEMPLATE} />
+      {showImport && <ImportMCPModal onClose={() => setShowImport(false)} onImported={fetchServers} />}
     </>
   );
 }
@@ -475,26 +485,17 @@ function AddServerModal({ onClose, onAdd, editingId, editData }: {
       return;
     }
     setSaving(true);
-    const url = isEdit ? API.mcpById(editingId) : API.mcp;
-    const method = isEdit ? 'PUT' : 'POST';
     const envParsed = isEdit ? (editData!.env || {}) : parseEnv();
-    const body = isEdit
-      ? { name, type, command, args: args ? args.split(' ').filter(Boolean) : [], env: envParsed, config: editData!.config }
-      : { name, type, command, args: args ? args.split(' ').filter(Boolean) : [], env: envParsed, config: {}, enabled: false };
+    const transport = type === 'sse' ? 'sse' as const : 'stdio' as const;
     try {
-      const res = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.success) {
-        onAdd();
-        onClose();
-        toast.success(isEdit ? 'MCP服务已更新' : TOAST.mcpAdded);
+      if (isEdit) {
+        await aioncore.mcp.editServer(editingId, { name, command, args: args ? args.split(' ').filter(Boolean) : [], env: envParsed, transport });
       } else {
-        toast.error(TOAST.dataError(data.error));
+        await aioncore.mcp.addServer({ name, command, args: args ? args.split(' ').filter(Boolean) : [], env: envParsed, transport });
       }
+      onAdd();
+      onClose();
+      toast.success(isEdit ? 'MCP服务已更新' : TOAST.mcpAdded);
     } catch {
       toast.error(TOAST.saveFailed);
     } finally {
@@ -553,6 +554,51 @@ function AddServerModal({ onClose, onAdd, editingId, editData }: {
         <button onClick={handleSubmit} disabled={saving}
           className="w-full py-2 rounded-lg text-xs font-medium" style={{ background: saving ? 'var(--wiki-surface2)' : 'var(--wiki-text)', color: saving ? 'var(--wiki-text3)' : 'var(--wiki-bg)' }}>
           {saving ? '保存中...' : (isEdit ? '保存修改' : '添加')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Import MCP Servers Modal (replaces old generic ImportModal) ──
+function ImportMCPModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [jsonText, setJsonText] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  const handleImport = async () => {
+    let servers: any[];
+    try { servers = JSON.parse(jsonText); }
+    catch { toast.error('JSON 格式错误'); return; }
+    if (!Array.isArray(servers)) servers = [servers];
+
+    setImporting(true);
+    try {
+      await aioncore.mcp.importServers({ servers });
+      toast.success(`已导入 ${servers.length} 个服务`);
+      onImported();
+      onClose();
+    } catch {
+      toast.error('导入失败');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--wiki-overlay-heavy)' }}>
+      <div className="w-[500px] rounded-lg p-6" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-wiki-text">导入 MCP 服务器</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-wiki-surface2"><XIcon size={18} style={{ color: 'var(--wiki-text3)' }} /></button>
+        </div>
+        <textarea value={jsonText} onChange={e => setJsonText(e.target.value)} rows={12}
+          className="w-full px-3 py-2 rounded-lg text-xs font-mono mb-4"
+          placeholder='[{"name":"my-server","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/path"]}]'
+          style={{ background: 'var(--wiki-surface2)', border: '1px solid var(--wiki-border)', color: 'var(--wiki-text)' }} />
+        <button onClick={handleImport} disabled={importing || !jsonText.trim()}
+          className="w-full py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+          style={{ background: 'var(--wiki-text)', color: 'var(--wiki-bg)' }}>
+          {importing ? '导入中...' : '导入'}
         </button>
       </div>
     </div>

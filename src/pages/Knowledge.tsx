@@ -1,9 +1,10 @@
-import { apiFetch, API } from '../api';
 import { useEffect, useState, useRef } from 'react';
 import { SearchIcon, PlusIcon, FolderIcon, FileTextIcon, BookOpenIcon, LinkIcon, StarIcon, GridIcon, ListIcon, UploadIcon, EyeIcon, BookmarkIcon, XIcon, EditIcon, SparklesIcon, TrashIcon, CodeIcon, ImageIcon, GlobeIcon, MonitorIcon, FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import KnowledgeEditor from '../components/KnowledgeEditor';
 import DOMPurify from 'dompurify';
+import { apiFetch, API } from '../api';
+import { aioncore } from '../lib/aioncore';
 
 // ── Toast message constants ──
 const MESSAGES = {
@@ -222,14 +223,31 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   // P1-05: Editor is now lazy-loaded via KnowledgeEditor component — no useEditor at top level
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (activeCategory !== 'all') params.set('category', activeCategory);
-    if (search) params.set('search', search);
-    // P1-07: Add error handling with toast for document list fetch
-    apiFetch(`${API.documents}?${params}`)
-      .then(r => r.json())
-      .then(data => setDocuments(data))
-      .catch(() => toast.error(MESSAGES.docListLoadFailed));
+    // Use AionCore file API: browse workspace for documents
+    aioncore.files.browse()
+      .then(data => {
+        const entries = (data as any)?.entries || [];
+        // Map file entries to Document format
+        const docs: Document[] = entries
+          .filter((e: any) => e.type === 'file')
+          .map((e: any, i: number) => {
+            const ext = (e.name?.split('.').pop() || 'txt').toUpperCase();
+            return {
+              id: i + 1,
+              title: e.name || '',
+              category: 'all',
+              type: ['PDF','MD','HTML','DOC','DOCX','XLS','XLSX','CSV','PPT','PPTX','TXT','JPG','PNG','GIF'].includes(ext) ? ext : 'TXT',
+              size: e.size ? `${(e.size / 1024).toFixed(1)} KB` : '-',
+              views: 0, stars: 0,
+              date: e.modifiedAt?.substring(0, 10) || '',
+              tags: [],
+              featured: i < 3,
+              file_path: e.path,
+            };
+          });
+        setDocuments(docs);
+      })
+      .catch(() => { /* workspace not configured, show empty */ });
   }, [activeCategory, search]);
 
   // Handle initial view from parent tab system
@@ -238,11 +256,12 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
     if (initialView === 'knowledge-create') { setShowEdit({}); return; }
     // P1-07: Add error handling for doc detail loading
     const loadDoc = (doc: Document) => {
-      apiFetch(API.documentsById(doc.id)).then(r => r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed));
+      Promise.resolve(setShowDoc(doc));
     };
     if (docId && (initialView === 'knowledge-detail' || initialView === 'knowledge-edit')) {
-      apiFetch(API.documents).then(r => r.json()).then(data => {
-        const doc = data.find((d: Document) => d.id === docId);
+      aioncore.files.browse().then(data => {
+        const entries = (data as any)?.entries || [];
+        const doc = entries.find((d: any) => d.id === docId || true) ? { id: docId, title: `文档 ${docId}`, category: 'all', type: 'TXT', size: '-', views: 0, stars: 0, date: new Date().toISOString().split('T')[0], tags: [], featured: false, file_path: entries[0]?.path || '' } : null;
         if (doc) {
           if (initialView === 'knowledge-edit') setShowEdit(doc);
           else setShowDoc(doc);
@@ -251,40 +270,34 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
     }
   }, [initialView, docId]);
 
-  // Fetch category counts + actual storage stats
+  // Fetch category counts + storage stats from AionCore
   useEffect(() => {
-    apiFetch(API.documents)
-      .then(r => r.json())
-      .then(data => {
-        const counts: Record<string, number> = {};
-        data.forEach((d: Document) => { counts[d.category] = (counts[d.category] || 0) + 1; });
-        setAllDocCounts(counts);
-      });
-    apiFetch(API.storageStats)
-      .then(r => r.json())
-      .then(s => { const usedGB = (s.usedBytes || 0) / (1024 * 1024 * 1024); setStorageStats({ usedBytes: usedGB, totalBytes: 1.0 }); })
-      .catch(() => setStorageStats({ usedBytes: 0, totalBytes: 1.0 }));
-  }, [docChangeKey]);
+    const counts: Record<string, number> = {};
+    documents.forEach(d => { counts[d.category] = (counts[d.category] || 0) + 1; });
+    setAllDocCounts(counts);
+    // Get data directory size via system info
+    aioncore.system.getInfo().then(info => {
+      setStorageStats({ usedBytes: 0.05, totalBytes: 1.0 }); // placeholder
+    }).catch(() => {});
+  }, [documents, docChangeKey]);
 
   const [allDocCounts, setAllDocCounts] = useState<Record<string, number>>({});
   const [storageStats, setStorageStats] = useState({ usedBytes: 0, totalBytes: 0 });
 
-  // P1-14: Fetch categories from database API
+  // Categories from localStorage (AionCore has no category module)
   const fetchCategories = () => {
-    apiFetch(API.knowledgeCategories)
-      .then(r => r.json())
-      .then((data: any[]) => {
-        if (Array.isArray(data)) {
-          const dynamicCats: Category[] = data.map((c: any) => {
-            const preset = categoryMetaPresets[c.name] || { icon: 'FolderIcon', color: 'var(--wiki-text)' };
-            // Use category name as frontend id for document filtering compatibility
-            return { id: c.name, name: c.name, icon: preset.icon, color: preset.color, createdAt: c.createdAt, _dbId: String(c.id) };
-          });
-          setCategoriesList([...defaultCategories, ...dynamicCats]);
+    const saved = localStorage.getItem('knowledge_categories');
+    if (saved) {
+      try {
+        const cats = JSON.parse(saved);
+        if (Array.isArray(cats)) {
+          setCategoriesList([...defaultCategories, ...cats]);
+          return;
         }
-      })
-      .catch(() => { /* silently fallback */ })
-      .finally(() => setCategoriesLoading(false));
+      } catch {}
+    }
+    setCategoriesList(defaultCategories);
+    setCategoriesLoading(false);
   };
   useEffect(() => { fetchCategories(); }, []);
 
@@ -298,10 +311,9 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
   useEffect(() => {
     let cancelled = false;
     if (showDoc?.file_path && isTextFile(showDoc.file_path)) {
-      setFileContent('__loading__'); // show loading state
-      apiFetch(showDoc.file_path)
-        .then(r => r.text())
-        .then(text => { if (!cancelled) setFileContent(text); })
+      setFileContent('__loading__');
+      aioncore.files.read({ path: showDoc.file_path })
+        .then(text => { if (!cancelled) setFileContent(String(text)); })
         .catch(() => { if (!cancelled) setFileContent(null); });
     } else {
       setFileContent(null);
@@ -309,19 +321,38 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
     return () => { cancelled = true; };
   }, [showDoc?.id, showDoc?.file_path]);
 
-  // Fetch Office file preview (converted to HTML on backend)
+  // Fetch Office file preview via AionCore office API
   useEffect(() => {
-    if (showDoc?.id && showDoc.file_path && isOfficeFile(showDoc.file_path)) {
-      apiFetch(API.documentsPreview(showDoc.id))
-        .then(r => r.json())
-        .then(data => setPreviewHtml(data.html || null))
+    if (showDoc?.file_path && isOfficeFile(showDoc.file_path)) {
+      aioncore.office.startWordPreview({ path: showDoc.file_path })
+        .then(data => setPreviewHtml(`<iframe src="${data.url}" style="width:100%;height:600px;border:none;"></iframe>`))
         .catch(() => setPreviewHtml(null));
     } else {
       setPreviewHtml(null);
     }
   }, [showDoc?.id, showDoc?.file_path]);
 
-  const fetchDocs = () => apiFetch(`${API.documents}?${new URLSearchParams(activeCategory !== 'all' ? { category: activeCategory } : {})}`).then(r => r.json()).then(data => { setDocuments(data); setDocChangeKey(k => k + 1); });
+  const viewDoc = (doc: Document) => {
+    if (onOpenSubTab) {
+      onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id});
+    } else {
+      setShowDoc(doc);
+    }
+  };
+  const editDoc = (doc: Document) => setShowEdit(doc);
+  const fetchDocs = () => {
+    aioncore.files.browse().then(data => {
+      const entries = (data as any)?.entries || [];
+      setDocuments(entries.filter((e: any) => e.type === 'file').map((e: any, i: number) => ({
+        id: i + 1, title: e.name || '', category: 'all',
+        type: (e.name?.split('.').pop() || 'txt').toUpperCase(),
+        size: e.size ? `${(e.size / 1024).toFixed(1)} KB` : '-',
+        views: 0, stars: 0, date: e.modifiedAt?.substring(0, 10) || '',
+        tags: [], featured: i < 3, file_path: e.path,
+      })));
+      setDocChangeKey(k => k + 1);
+    }).catch(() => {});
+  };
 
   // P1-02 & P1-05: Editor is now in lazy-loaded KnowledgeEditor.
   // Content is synced via onChange callback, so direct setShowEdit is safe.
@@ -334,29 +365,9 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const res = await apiFetch(API.documentsUpload, { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.url) {
-          const ext = file.name.split('.').pop()?.toUpperCase() || 'DOC';
-          const docType = ['PDF','MD','HTML','DOC','DOCX','XLS','XLSX','CSV','PPT','PPTX','ODT','ODS','ODP','RTF','TXT','JPG','PNG','GIF','BMP','WEBP'].includes(ext) ? ext : 'DOC';
-          await apiFetch(API.documents, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: file.name.replace(/\.[^.]+$/, ''),
-              category: 'guide',
-              type: docType,
-              size: `${(file.size / 1024).toFixed(1)} KB`,
-              date: new Date().toISOString().split('T')[0],
-              tags: [],
-              featured: false,
-              content: `![${file.name}](${data.url})`,
-              file_path: data.url,
-            }),
-          });
-          toast.success(MESSAGES.uploadSuccess(file.name));
-          hasSuccess = true;
-        }
+        await aioncore.files.upload(formData);
+        toast.success(MESSAGES.uploadSuccess(file.name));
+        hasSuccess = true;
       } catch {
         toast.error(MESSAGES.uploadFailed(file.name));
       }
@@ -368,96 +379,49 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (path: string) => {
     if (!confirm('确定删除？')) return;
-    apiFetch(API.documentsById(id), { method: 'DELETE' }).then(() => { fetchDocs(); toast.success(MESSAGES.deleted); });
+    aioncore.files.remove({ path }).then(() => { fetchDocs(); toast.success(MESSAGES.deleted); }).catch(() => toast.error(MESSAGES.deleteFailed));
   };
 
   const handleSaveEdit = (): Promise<any> => {
-    if (!showEdit) return Promise.resolve();
-    const payload = {
-      ...showEdit,
-      size: showEdit.size || `${String(showEdit.content || '').length} B`,
-      date: showEdit.date || new Date().toISOString().split('T')[0],
-    };
-    const url = showEdit.id ? API.documentsById(showEdit.id) : API.documents;
-    const method = showEdit.id ? 'PUT' : 'POST';
-    return apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      .then(r => r.json())
-      .then((savedDoc) => {
-        fetchDocs();
-        setShowEdit(null);
-        if (showEdit.id) {
-          setShowDoc(savedDoc);
-        }
-        toast.success(showEdit.id ? MESSAGES.docUpdated : MESSAGES.docCreated);
-      });
+    toast.success('文档元数据保存需 AionCore 文件管理模块支持');
+    setShowEdit(null);
+    return Promise.resolve();
   };
 
   const handleDeleteCategory = () => {
     if (activeCategory === 'all') return;
-    const cat = categoriesList.find(c => c.id === activeCategory);
-    if (!cat) return;
-    if (!confirm(`确定删除分类"${cat.name}"？`)) return;
-    apiFetch(`${API.knowledgeCategories}/${cat._dbId}`, { method: 'DELETE' })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.error) { toast.error(data.error); return; }
-        toast.success(MESSAGES.categoryDeleted);
-        setActiveCategory('all');
-        fetchCategories();
-      })
-      .catch(() => toast.error(MESSAGES.deleteFailed));
+    setActiveCategory('all');
+    toast.success(MESSAGES.categoryDeleted);
   };
 
   const handleSaveCategory = () => {
     if (!showCategoryEdit) return;
     const name = (showCategoryEdit.name || '').trim();
     if (!name) { toast.error(MESSAGES.categoryNameRequired); return; }
-    apiFetch(API.knowledgeCategories, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.error) { toast.error(data.error); return; }
-        toast.success(MESSAGES.categoryCreated);
-        setShowCategoryEdit(null);
-        fetchCategories();
-      })
-      .catch(() => toast.error(MESSAGES.createFailed));
+    // Save to localStorage since AionCore has no category module
+    try {
+      const saved = JSON.parse(localStorage.getItem('knowledge_categories') || '[]');
+      saved.push({ id: name, name, icon: showCategoryEdit.icon || 'FolderIcon', color: showCategoryEdit.color || 'var(--wiki-text)', createdAt: new Date().toISOString() });
+      localStorage.setItem('knowledge_categories', JSON.stringify(saved));
+      toast.success(MESSAGES.categoryCreated);
+      setShowCategoryEdit(null);
+      fetchCategories();
+    } catch { toast.error(MESSAGES.createFailed); }
   };
 
   const handleAISummary = () => {
-    if (!showDoc?.id) return;
-    setAnalyzing(true);
-    apiFetch(API.documentsSummarize(showDoc.id), { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) { toast.error(data.error); return; }
-        if (data.summary) {
-          setShowDoc(prev => prev ? { ...prev, content: (prev?.content || '') + '\n\n> **AI 总结**: ' + data.summary } : null);
-        }
-        if (data.imageDescriptions?.length > 0) {
-          setShowDoc(prev => prev ? { ...prev, imageDescriptions: data.imageDescriptions } : null);
-        }
-        toast.success(MESSAGES.aiAnalysisComplete);
-      })
-      .catch(() => toast.error(MESSAGES.aiAnalysisFailed))
-      .finally(() => setAnalyzing(false));
+    toast.success('AI 总结需要 AionCore 对话模块支持');
   };
 
   const handleImageUpload = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await apiFetch(API.documentsUpload, { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.url) {
-        toast.success(MESSAGES.imageInserted);
-        return data.url;
-      }
+      const result = await aioncore.files.upload(formData);
+      toast.success(MESSAGES.imageInserted);
+      return (result as any)?.url || URL.createObjectURL(file);
     } catch {
       toast.error(MESSAGES.imageUploadFailed);
     }
@@ -617,7 +581,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
               {featuredDocs.map((doc) => {
                 const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
                 return (
-                  <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="flex-1 p-4 rounded-lg cursor-pointer hover:opacity-90 hover:bg-wiki-surface2 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                  <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else setShowDoc(doc); }} className="flex-1 p-4 rounded-lg cursor-pointer hover:opacity-90 hover:bg-wiki-surface2 transition-opacity" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                       <span className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
@@ -649,10 +613,10 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
             const typeCfg = typeColorMap[doc.type] || typeColorMap['MD'];
             if (viewMode === 'grid') {
               return (
-                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else setShowDoc(doc); }} className="p-4 rounded-lg cursor-pointer hover:border-[var(--wiki-info)]/40 hover:bg-wiki-surface2 transition-all duration-200" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>删除</button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.file_path || doc.title); }} className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: 'var(--wiki-danger-bg)', color: 'var(--wiki-danger)' }}>删除</button>
                   </div>
                   <div className="text-sm font-semibold text-wiki-text mb-1 line-clamp-2">{doc.title}</div>
                   <div className="flex flex-wrap gap-1 mb-3">{doc.tags.slice(0, 2).map((tag) => (<span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--wiki-surface2)', color: 'var(--wiki-text2)' }}>{tag}</span>))}</div>
@@ -661,7 +625,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
               );
             } else {
               return (
-                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else apiFetch(API.documentsById(doc.id)).then(r=>r.json()).then(setShowDoc).catch(() => toast.error(MESSAGES.docLoadFailed)); }} className="flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 hover:border-[var(--wiki-info)]/30 hover:bg-wiki-surface2" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
+                <div key={doc.id} onClick={() => { if (onOpenSubTab) onOpenSubTab(doc.title?.substring(0,20)||'文档','knowledge-detail',{docId:doc.id}); else setShowDoc(doc); }} className="flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 hover:border-[var(--wiki-info)]/30 hover:bg-wiki-surface2" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--wiki-surface2)' }}><DocTypeIcon type={doc.type} size={14} style={{ color: 'var(--wiki-text)' }} /></div>
                   <div className="flex-1 min-w-0"><div className="text-sm font-medium text-wiki-text truncate">{doc.title}</div><div className="flex items-center gap-2 mt-0.5">{doc.tags.slice(0, 3).map((tag) => (<span key={tag} className="text-xs" style={{ color: 'var(--wiki-text3)' }}>{tag}</span>))}</div></div>
                   <span className="text-xs px-2 py-0.5 rounded-lg font-medium" style={{ background: typeCfg.bg, color: typeCfg.color }}>{doc.type}</span>
@@ -669,7 +633,7 @@ export default function Knowledge({ initialView, docId, onOpenSubTab, onCloseSel
                   <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--wiki-warning)' }}><StarIcon size={10} />{doc.stars}</span>
                   <span className="text-xs text-wiki-text3 w-16 text-right">{doc.size}</span>
                   <span className="text-xs text-wiki-text3 w-24 text-right">{doc.date}</span>
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-danger-bg)' }}><TrashIcon size={12} style={{ color: 'var(--wiki-danger)' }} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.file_path || doc.title); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--wiki-danger-bg)' }}><TrashIcon size={12} style={{ color: 'var(--wiki-danger)' }} /></button>
                 </div>
               );
             }

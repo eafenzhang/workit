@@ -8,6 +8,7 @@ import { apiFetch, API } from '../api';
 import { getGreeting, getTodayDate, generateMessageId, WELCOME_MESSAGES } from '../data/homeDefaults';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { aioncore } from '../lib/aioncore';
 
 // Provider display names (synced with src/data/providers.ts)
 const PROVIDER_NAMES: Record<string, string> = {
@@ -270,16 +271,26 @@ function Home({ onOpenTab }: HomeProps) {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   useEffect(() => {
     const load = () => {
-      apiFetch(API.models).then(r => r.json()).then((list: FlatModel[]) => {
-        const arr = Array.isArray(list) ? list.filter(m => m.enabled) : [];
+      aioncore.providers.list().then((list) => {
         const groups: Record<string, GroupedProvider> = {};
-        for (const m of arr) {
-          if (!groups[m.provider]) groups[m.provider] = { provider: m.provider, label: PROVIDER_NAMES[m.provider] || m.provider, models: [] };
-          groups[m.provider].models.push({ id: m.id, modelId: m.modelId, name: m.name });
+        for (const p of list) {
+          const providerId = p.id;
+          if (!groups[providerId]) {
+            groups[providerId] = { provider: providerId, label: PROVIDER_NAMES[providerId] || p.name, models: [] };
+          }
+          if (p.models && p.models.length > 0) {
+            for (const m of p.models) {
+              groups[providerId].models.push({ id: parseInt(p.id, 10) || 0, modelId: m, name: `${p.name} - ${m}` });
+            }
+          }
         }
         setProviders(Object.values(groups));
-        const def = arr.find(m => m.isDefault);
-        if (def) { setSelectedProvider(def.provider); setSelectedModel(String(def.modelId)); }
+        if (list.length > 0 && !selectedProvider) {
+          setSelectedProvider(list[0].id);
+          if (list[0].models && list[0].models[0]) {
+            setSelectedModel(list[0].models[0]);
+          }
+        }
       }).catch(() => {});
     };
     load();
@@ -668,7 +679,7 @@ function Home({ onOpenTab }: HomeProps) {
             selectedModel={selectedModel}
             toolsEnabled={toolsEnabled}
             onProviderChange={(pid, mid) => { setSelectedProvider(pid); setSelectedModel(mid); }}
-            onMcpToggle={() => setToolsEnabled(!toolsEnabled)}
+            onToolsToggle={() => setToolsEnabled(!toolsEnabled)}
           />
           </div>
         </div>

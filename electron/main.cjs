@@ -12,15 +12,28 @@ const { setupIPC } = require('./ipc.cjs');
 const { createWindow } = require('./window.cjs');
 const { setupAutoUpdater } = require('./updater.cjs');
 const { McpClientManager, setStatusPushFn } = require('./mcp-manager.cjs');
+const { AionCoreManager } = require('./aioncore-manager.cjs');
 
 let mainWindow;
 let db;
 let mcpManager;
+let aioncoreManager;
 
 app.whenReady().then(async () => {
   const preloadPath = path.join(app.getAppPath(), 'electron', 'preload.cjs');
   log('App ready');
+
   try {
+    // 1. Start AionCore backend
+    aioncoreManager = new AionCoreManager();
+    await aioncoreManager.start({
+      port: 13400,
+      // Override dataDir from env or use default
+      dataDir: process.env.AIONCORE_DATA_DIR || undefined,
+    });
+    log('AionCore backend started on port ' + aioncoreManager.getPort());
+
+    // 2. Initialize local database (for Electron-native features: window state, settings, etc.)
     db = await initDatabase();
     mcpManager = McpClientManager.getInstance();
 
@@ -38,11 +51,17 @@ app.whenReady().then(async () => {
       }
     });
 
+    // 3. Create the main window, passing AionCore port to preload
     mainWindow = createWindow(preloadPath);
     setupIPC(mainWindow, db);
     setupAutoUpdater();
 
-    // Auto-connect to all enabled MCP servers on startup
+    // Pass AionCore port to renderer
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.send('aioncore:port', aioncoreManager.getPort());
+    });
+
+    // 4. Auto-connect to all enabled MCP servers on startup
     const enabledServers = query(db, 'SELECT * FROM mcp_servers WHERE enabled = 1');
     for (const row of enabledServers) {
       const id = row[0];
@@ -58,14 +77,21 @@ app.whenReady().then(async () => {
   } catch (e) { log('App ready handler failed', e); }
 });
 
-// Pass mcpManager to cleanup on shutdown
+// Clean shutdown: stop MCP manager + AionCore
 app.on('before-quit', (event) => {
-  if (mcpManager) {
-    event.preventDefault();
-    mcpManager.shutdown()
-      .catch(e => log('McpManager shutdown error', e))
-      .finally(() => app.quit());
-  }
+  event.preventDefault();
+
+  const cleanup = async () => {
+    if (mcpManager) {
+      try { await mcpManager.shutdown(); } catch (e) { log('McpManager shutdown error', e); }
+    }
+    if (aioncoreManager) {
+      try { await aioncoreManager.stop(); } catch (e) { log('AionCore shutdown error', e); }
+    }
+    app.quit();
+  };
+
+  cleanup();
 });
 
 app.on('web-contents-created', (_, contents) => {

@@ -458,7 +458,7 @@ export default function QuickCapture() {
       )}
 
       {(showModal || isStandalone) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: isStandalone ? 'transparent' : 'var(--wiki-overlay-heavy)', backdropFilter: isStandalone ? 'none' : 'blur(4px)' }}>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center" style={{ background: isStandalone ? 'transparent' : 'var(--wiki-overlay-heavy)', backdropFilter: isStandalone ? 'none' : 'blur(4px)' }}>
           <div className="w-[672px] max-h-[85vh] overflow-y-auto p-5 rounded-lg" style={{ background: 'var(--wiki-surface)', border: '1px solid var(--wiki-border)' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">

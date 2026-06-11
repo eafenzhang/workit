@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { DatabaseIcon, LightbulbIcon, HomeIcon, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
+import { DatabaseIcon, LightbulbIcon, HomeIcon, SparklesIcon, SettingsIcon, ServerIcon, PackageIcon, CpuIcon, MessageSquareIcon, MessageCircleIcon, BotIcon, ClockIcon, UsersIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -17,6 +17,11 @@ const navItems = [
   { id: 'model', label: `模型配置`, icon: CpuIcon, color: 'var(--wiki-warning)', path: '/model' },
   { id: 'mcp', label: `应用生态`, icon: PackageIcon, color: 'var(--wiki-danger)', path: '/mcp' },
   { id: 'messages', label: `消息中心`, icon: MessageSquareIcon, color: '#ec4899', path: '/messages' },
+  { id: 'channels', label: `IM渠道`, icon: MessageCircleIcon, color: '#26A5E4', path: '/channels' },
+  { id: 'agents', label: `Agent管理`, icon: BotIcon, color: '#6366f1', path: '/agents' },
+  { id: 'workflows', label: `定时任务`, icon: ClockIcon, color: '#f59e0b', path: '/workflows' },
+  { id: 'assistants', label: `AI助手`, icon: BotIcon, color: '#10b981', path: '/assistants' },
+  { id: 'team', label: `团队协作`, icon: UsersIcon, color: '#8b5cf6', path: '/team' },
 ];
 
 /** Extracted style constants for Sidebar component */

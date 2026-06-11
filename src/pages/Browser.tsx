@@ -1,8 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowLeftIcon, ArrowRightIcon, RotateCwIcon, ExternalLinkIcon, StarIcon, ClockIcon, XIcon, PlusIcon } from 'lucide-react';
 import { useAgentOS } from '../context/AgentOSContext';
+import WebviewContainer from '../components/WebviewContainer';
 
-declare global { namespace JSX { interface IntrinsicElements { webview: any; } } }
+// ── External webview store (survives component unmount/remount) ────
+// When the Browser component unmounts (e.g. window loses focus in OS mode),
+// the webview element is detached from the DOM but kept alive here.
+// On remount, it's reattached — no page reload needed.
+const webviewStore = new Map<string, HTMLWebViewElement>();
 
 interface BrowserTab {
   id: string;
@@ -39,6 +44,38 @@ function generateTabId(): string { return `tab-${Date.now()}-${Math.random().toS
 
 export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChange, onOpenNewTab, visible, tier = 'hot', snapshot }: Props) {
   const { closeWindow, state } = useAgentOS();
+
+  // ── Debug ──
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  const mountIdRef = useRef(`browser-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
+  const prevTierRef = useRef(tier);
+  if (prevTierRef.current !== tier) {
+    console.log(`[Browser] TIER CHANGED: ${prevTierRef.current} → ${tier} (render #${renderCountRef.current}) id=${mountIdRef.current}`);
+    prevTierRef.current = tier;
+  }
+  useEffect(() => {
+    console.log(`[Browser] MOUNTED id=${mountIdRef.current}`);
+    return () => {
+      console.log(`[Browser] UNMOUNTED id=${mountIdRef.current}`);
+    };
+  }, []);
+
+  // Track visible changes
+  const prevVisibleRef = useRef(visible);
+  if (prevVisibleRef.current !== visible) {
+    console.log(`[Browser] VISIBLE CHANGED: ${prevVisibleRef.current} → ${visible} id=${mountIdRef.current}`);
+    prevVisibleRef.current = visible;
+  }
+
+  // ── Debug state visible in UI ──
+  const [reloadCount, setReloadCount] = useState(0);
+  const [lastReloadReason, setLastReloadReason] = useState('');
+  const debugReload = (reason: string) => {
+    setReloadCount(c => c + 1);
+    setLastReloadReason(reason);
+    console.warn(`[Browser] ⚡ RELOAD #${reloadCount + 1} reason: ${reason} mount=${mountIdRef.current} tier=${tier} render=#${renderCountRef.current}`);
+  };
 
   // ── Tab state ──
   const [tabs, setTabs] = useState<BrowserTab[]>(() => {
@@ -159,7 +196,18 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     }
   }, [updateTabUrl]);
 
-  const handleStartLoading = useCallback(() => setBrowserLoading(true), []);
+  const handleStartLoading = useCallback((e?: any) => {
+    // Ghost did-start-loading from Electron compositor changes? Compare URLs.
+    const currentUrl = webviewRef.current?.getURL?.();
+    const navUrl = e?.url || '';
+    // No URL in event → ghost event from compositor → suppress
+    if (!navUrl) return;
+    // Same URL is loading again → ghost event → suppress
+    if (currentUrl && navUrl === currentUrl) return;
+    // Initial load (about:blank → real URL) → suppress progress bar too
+    if (navUrl === 'about:blank') return;
+    setBrowserLoading(true);
+  }, []);
   const handleStopLoading = useCallback(() => setBrowserLoading(false), []);
 
   const attachWebviewEvents = useCallback((wv: any) => {
@@ -188,38 +236,64 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     });
   }, [handleWebviewLoad, handlePageTitle, handleWillNavigate, handleStartLoading, handleStopLoading, openNewTab]);
 
-  // Create / recreate webview on tier change or active tab change
+  // ── Webview lifecycle ────────────────────────────────────────────
+  // Original code destroyed+recreated webview on EVERY tier change (warm→hot).
+  // Fix: only destroy on tab switch or cold tier. On tier change the webview
+  // stays alive — the visible CSS effect handles hide/show.
+  const prevTabIdRef3 = useRef(activeTabId);
+  const storeKey = windowId || 'default';
+
   useEffect(() => {
+    const tabChanged = prevTabIdRef3.current !== activeTabId;
+    prevTabIdRef3.current = activeTabId;
+
     const container = wvContainerRef.current;
     if (!container) return;
 
-    const removeWebview = () => {
+    // Destroy only on tab switch or cold tier (NOT on warm↔hot transitions)
+    if (tabChanged || tier === 'cold') {
       if (webviewRef.current) {
-        try {
-          webviewRef.current.stop();
-          webviewRef.current.remove();
-        } catch {}
+        try { webviewRef.current.stop(); webviewRef.current.remove(); } catch {}
         webviewRef.current = null;
       }
-    };
-    removeWebview();
+    }
 
     if (tier === 'cold') return;
 
+    // Try to restore from external store (component remounted)
+    if (!webviewRef.current && webviewStore.has(storeKey)) {
+      const stored = webviewStore.get(storeKey)!;
+      if (!stored.parentElement) {
+        container.appendChild(stored);
+        webviewRef.current = stored;
+      }
+    }
+
+    // Webview alive — don't recreate
+    if (webviewRef.current) return;
+
+    // Create new webview
     const wv = document.createElement('webview') as any;
     wv.className = 'flex-1 w-full border-0';
     wv.style.cssText = 'height:100%;display:flex;';
     wv.setAttribute('allowpopups', '');
     wv.setAttribute('src', activeTabRef.current?.url || initialUrl || 'about:blank');
     attachWebviewEvents(wv);
-
     if (tier === 'warm') { wv.style.display = 'none'; try { wv.stop(); } catch {} }
-
     container.appendChild(wv);
     webviewRef.current = wv;
+    webviewStore.set(storeKey, wv);
+  }, [tier, activeTabId, storeKey]);
 
-    return () => { removeWebview(); };
-  }, [tier, activeTabId]);
+  // On unmount: detach from DOM but keep alive in store
+  useEffect(() => {
+    return () => {
+      if (webviewRef.current) {
+        try { webviewRef.current.remove(); } catch {}
+        webviewRef.current = null;
+      }
+    };
+  }, []);
 
   // ── Navigation ──
   const navigateTo = (u: string) => {
@@ -247,13 +321,12 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
     }
   }, [initialUrl]);
 
-  // Pause webview when hidden
+  // Pause webview when hidden — critical for preventing Electron GPU
+  // Hide/show webview via CSS only — never call stop() here as it
+  // interrupts the page and causes a reload when visible again
   useEffect(() => {
-    if (visible === false) {
-      try { webviewRef.current?.stop(); } catch {}
-      if (webviewRef.current) webviewRef.current.style.display = 'none';
-    } else {
-      if (webviewRef.current) webviewRef.current.style.display = 'flex';
+    if (webviewRef.current) {
+      webviewRef.current.style.display = visible === false ? 'none' : 'flex';
     }
   }, [visible]);
 
@@ -296,6 +369,12 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
 
   return (
     <div className="flex flex-col h-full relative">
+      {/* ── Debug badge ── */}
+      <div className="absolute top-0 right-0 z-50 px-2 py-0.5 text-[9px] rounded-bl"
+        style={{ background: 'rgba(0,0,0,0.7)', color: '#0f0', fontFamily: 'monospace' }}>
+        {mountIdRef.current.slice(-6)} wv:{webviewRef.current ? 'Y' : 'N'} vis:{String(visible)} tier:{tier} renders:{renderCountRef.current}
+      </div>
+
       {/* ── URL bar ── */}
       <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ background: 'var(--wiki-surface)', borderBottom: '1px solid var(--wiki-border)' }}>
         <button onClick={goBack} className="p-1 rounded hover:bg-wiki-surface2 transition-colors"><ArrowLeftIcon size={14} style={{ color: 'var(--wiki-text2)' }} /></button>
@@ -430,15 +509,12 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
       `}</style>
       {browserLoading && <div className="browser-progress" />}
 
-      {/* Webview / Cold placeholder */}
-      <div
-        ref={wvContainerRef}
-        className="flex-1 flex flex-col overflow-hidden"
-        style={{ display: 'flex' }}
-        onContextMenu={handleContextMenu}
-      >
-        {tier === 'cold' && (
-          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--wiki-surface2)' }}>
+      {/* Webview — isolated from React DOM to prevent re-render on focus change */}
+      <WebviewContainer ref={wvContainerRef} />
+
+      {/* Cold tier placeholder overlay */}
+      {tier === 'cold' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: 'var(--wiki-surface2)' }}>
             <div className="text-center px-6">
               <div className="text-xs text-wiki-text3 mb-1">浏览器已休眠</div>
               <div className="text-[11px] text-wiki-text3 opacity-60 truncate max-w-[300px]">
@@ -447,7 +523,6 @@ export default function Browser({ initialUrl, windowId, onUrlChange, onTitleChan
             </div>
           </div>
         )}
-      </div>
 
       {/* Context menu with fade animation */}
       {ctxMenu && (

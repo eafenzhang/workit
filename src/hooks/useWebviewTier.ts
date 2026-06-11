@@ -37,7 +37,7 @@ export function useWebviewTier({ windows, activeWindowId, previousActiveId, setW
     return new Set(hot.slice(0, HOT_MAX));
   }, []);
 
-  // ── Periodic tier rebalancing ──────────────────────────────────
+  // ── Periodic tier rebalancing (count-based, not time-based) ─────
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -45,7 +45,7 @@ export function useWebviewTier({ windows, activeWindowId, previousActiveId, setW
       const hotSet = computeHot();
       hotIdsRef.current = hotSet;
 
-      // Upgrade: hot-set windows that aren't hot → hot tier
+      // Upgrade: windows in hotSet that aren't hot → promote
       for (const win of browserWindows) {
         if (hotSet.has(win.id) && win.webviewTier !== 'hot') {
           console.log(`[WebviewTier] ${win.id} → hot`);
@@ -53,18 +53,19 @@ export function useWebviewTier({ windows, activeWindowId, previousActiveId, setW
         }
       }
 
-      // Downgrade: hot windows not in hotSet → warm (if inactive > HOT_TO_WARM_MS)
-      for (const win of browserWindows) {
-        if (win.webviewTier === 'hot' && !hotSet.has(win.id)) {
-          const inactiveMs = now - (win.lastActiveTime ?? 0);
-          if (inactiveMs >= HOT_TO_WARM_MS) {
-            console.log(`[WebviewTier] ${win.id} → warm (inactive ${(inactiveMs / 1000).toFixed(0)}s)`);
-            setWindowTier(win.id, 'warm');
-          }
+      // Count-based demotion: if hot pool exceeds HOT_MAX, demote oldest (by lastActiveTime)
+      const hotWindows = browserWindows.filter(w => w.webviewTier === 'hot');
+      if (hotWindows.length > HOT_MAX) {
+        const toDemote = hotWindows
+          .sort((a, b) => (a.lastActiveTime ?? 0) - (b.lastActiveTime ?? 0))
+          .slice(0, hotWindows.length - HOT_MAX);
+        for (const win of toDemote) {
+          console.log(`[WebviewTier] ${win.id} → warm (hot pool full, ${hotWindows.length}>${HOT_MAX})`);
+          setWindowTier(win.id, 'warm');
         }
       }
 
-      // Downgrade: warm windows inactive > WARM_TO_COLD_MS → cold
+      // Time-based: warm windows inactive > WARM_TO_COLD_MS → cold
       for (const win of browserWindows) {
         if (win.webviewTier === 'warm') {
           const inactiveMs = now - (win.lastActiveTime ?? 0);
@@ -107,7 +108,7 @@ export function useWebviewTier({ windows, activeWindowId, previousActiveId, setW
     for (const win of windows) {
       if (win.type !== 'browser') continue;
       if (!win.webviewTier) {
-        const tier: WebviewTier = hotSet.has(win.id) ? 'hot' : 'cold';
+        const tier: WebviewTier = hotSet.has(win.id) ? 'hot' : 'warm';
         setWindowTier(win.id, tier, tier === 'cold' ? {
           url: win.initialUrl ?? 'about:blank',
           title: win.title,

@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useState, useEffect, type MouseEvent, type ComponentType } from 'react';
+import React, { Suspense, useCallback, useState, useEffect, useRef, type MouseEvent, type ComponentType } from 'react';
 import WindowTitleBar from './WindowTitleBar';
 import type { OSWindow } from '../../types/agent-os';
 import type { ResizeEdge, TempDragRect, TempResizeRect } from '../../hooks/useWindowManager';
@@ -169,15 +169,23 @@ export default function Window({
       : ('opacity 0.2s ease-out, transform 0.2s ease-out, left 0.25s ease-out, top 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out' as const),
   };
 
+  // Manage zIndex via DOM ref to avoid React re-render → webview reload
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.style.zIndex = String(win.zIndex);
+    }
+  }, [win.zIndex]);
+
   return (
     <div
+      ref={containerRef}
       className="absolute flex flex-col overflow-hidden select-none will-change-transform"
       style={{
         left: displayX,
         top: displayY,
         width: displayW,
         height: displayH,
-        zIndex: win.zIndex,
         borderRadius: '8px',
         boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.12)',
         background: 'var(--wiki-surface)',

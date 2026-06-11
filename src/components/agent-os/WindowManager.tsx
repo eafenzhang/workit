@@ -67,8 +67,7 @@ export default function WindowManager({ dockState = 'show' }: { dockState?: Dock
   return (
     <>
       {sortedWindows.map((win) => {
-        // Cold-tier browser windows: don't render React component (save VRAM + CPU)
-        const isColdBrowser = win.type === 'browser' && win.webviewTier === 'cold';
+        // Always render browser component — tier only controls webview lifecycle inside
         const isBrowser = win.type === 'browser';
         const tier = win.webviewTier ?? 'hot';
 
@@ -80,10 +79,10 @@ export default function WindowManager({ dockState = 'show' }: { dockState?: Dock
           onClose={closeWindow}
           onFocus={(id) => {
             focusWindow(id);
-            // Update lastActiveTime when focused
             const winTarget = windows.find(w => w.id === id);
-            if (winTarget) {
-              setWindowTier(id, tier, winTarget.snapshot);
+            if (winTarget && winTarget.webviewTier !== 'hot') {
+              console.log('[WindowManager] promoting to hot:', id, 'from', winTarget.webviewTier);
+              setWindowTier(id, 'hot');
             }
           }}
           onMinimize={(id) => {
@@ -99,7 +98,7 @@ export default function WindowManager({ dockState = 'show' }: { dockState?: Dock
           onStartResize={handleStartResize}
           tempDragRect={wm.tempDragRect}
           tempResizeRect={wm.tempResizeRect}
-          pageComponent={isColdBrowser ? undefined : getWindowPageComponent(win.type)}
+          pageComponent={getWindowPageComponent(win.type)}
           tier={isBrowser ? tier : undefined}
           snapshot={win.snapshot}
         />

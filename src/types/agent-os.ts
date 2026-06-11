@@ -261,6 +261,7 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
           return {
             ...w,
             webviewTier: tier,
+            lastActiveTime: tier === 'hot' ? Date.now() : w.lastActiveTime,
             ...(snapshot !== undefined ? { snapshot } : {}),
             ...(tier !== 'cold' ? { snapshot: undefined } : {}),
           };
@@ -292,9 +293,9 @@ export function agentOSReducer(state: AgentOSState, action: AgentOSAction): Agen
   }
 }
 
-// ── Tier management helpers ──────────────────────────────────────
+// ── Tier management: never degrade on window switch; only when pool exceeds limits ──
 
-export const HOT_MAX = 2;
-export const WARM_MAX = 3;
-export const HOT_TO_WARM_MS = 3_000;
-export const WARM_TO_COLD_MS = 30_000;
+export const HOT_MAX = 6;           // ≤6 hot windows — covers typical multi-tab use
+export const WARM_MAX = 8;          // up to 8 warm before coldest → cold
+export const HOT_TO_WARM_MS = 300_000;  // 5 min — long grace period before time-based demotion
+export const WARM_TO_COLD_MS = 600_000; // 10 min — rarely go cold

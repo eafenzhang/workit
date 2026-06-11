@@ -26,6 +26,11 @@ const Browser = lazy(() => import('./Browser'));
 const Messages = lazy(() => import('./Messages'));
 const Settings = lazy(() => import('./Settings'));
 const Profile = lazy(() => import('./Profile'));
+const Channels = lazy(() => import('./Channels'));
+const Agents = lazy(() => import('./Agents'));
+const Workflows = lazy(() => import('./Workflows'));
+const Assistants = lazy(() => import('./Assistants'));
+const Team = lazy(() => import('./Team'));
 
 // Loading fallback spinner
 const Loading = () => (
@@ -56,6 +61,11 @@ const MENU_MAP: Record<string, { type: string; title: string }> = {
   mcp: { type: 'mcp', title: '应用生态' },
   model: { type: 'model', title: '模型配置' },
   messages: { type: 'messages', title: '消息中心' },
+  channels: { type: 'channels', title: 'IM渠道' },
+  agents: { type: 'agents', title: 'Agent管理' },
+  workflows: { type: 'workflows', title: '定时任务' },
+  assistants: { type: 'assistants', title: 'AI助手' },
+  team: { type: 'team', title: '团队协作' },
   settings: { type: 'settings', title: '系统设置' },
   profile: { type: 'profile', title: '用户Agent' },
 };
@@ -275,6 +285,16 @@ export default function Index() {
         return <Lazy><Settings /></Lazy>;
       case 'profile':
         return <Lazy><Profile /></Lazy>;
+      case 'channels':
+        return <Lazy><Channels /></Lazy>;
+      case 'agents':
+        return <Lazy><Agents /></Lazy>;
+      case 'workflows':
+        return <Lazy><Workflows /></Lazy>;
+      case 'assistants':
+        return <Lazy><Assistants /></Lazy>;
+      case 'team':
+        return <Lazy><Team /></Lazy>;
       default:
         return <Home onOpenTab={(type: string) => openTab(type, MENU_MAP[type]?.title || type)} />;
     }

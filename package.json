@@ -12,9 +12,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "download:aioncore": "node scripts/download-aioncore.cjs",
     "electron:dev": "vite build && electron .",
-    "electron:build": "vite build && electron-builder --win --dir",
-    "electron:dist": "vite build && electron-builder --win",
+    "electron:build": "npm run download:aioncore && vite build && electron-builder --win --dir",
+    "electron:dist": "npm run download:aioncore && vite build && electron-builder --win",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -72,7 +73,18 @@
     },
     "asar": true,
     "asarUnpack": [
-      "**/electron/**/*"
+      "electron/preload.cjs",
+      "electron/main.cjs",
+      "electron/aioncore-manager.cjs",
+      "electron/window.cjs",
+      "electron/updater.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/aioncore",
+        "to": "aioncore",
+        "filter": ["**/*"]
+      }
     ],
     "files": [
       "dist/**/*",

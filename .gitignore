@@ -39,3 +39,8 @@ auto-imports.d.ts
 UPDATE_MEMORY.md
 workit.db
 workit/
+
+# AionCore
+electron/aioncore/
+previews/
+*.zip

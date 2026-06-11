@@ -277,7 +277,9 @@ export function AgentOSProvider({ children }: AgentOSProviderProps) {
 
   const focusWindow = useCallback((id: string) => {
     const s = stateRef.current;
-    if (s.activeWindowId && s.activeWindowId !== id) {
+    // Already focused — avoid useless zIndex bump and re-render
+    if (s.activeWindowId === id) return;
+    if (s.activeWindowId) {
       previousActiveId.current = s.activeWindowId;
     }
     dispatch({ type: 'FOCUS_WINDOW', payload: { id } });

@@ -1,4 +1,3 @@
-import { apiFetch, API } from '../api';
 import { useEffect, useState } from 'react';
 import { StarIcon, RefreshCwIcon, PlusIcon, XIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,6 +6,8 @@ import ProviderCard from '../components/ProviderCard';
 import ModelStatsBar from '../components/ModelStatsBar';
 import ApiKeyInput from '../components/ApiKeyInput';
 import ModelSelector from '../components/ModelSelector';
+import { aioncore } from '../lib/aioncore';
+import type { Provider } from '../lib/api-types';
 
 const TOAST = {
   deleted: '已删除',
@@ -36,6 +37,20 @@ export default function Model() {
   const [saving, setSaving] = useState(false);
   const [formEndpoint, setFormEndpoint] = useState('/chat/completions');
 
+  /** Map AionCore Provider to local ModelItem format */
+  const toModelItem = (p: Provider, idx: number): ModelItem => ({
+    id: parseInt(p.id, 10) || idx,
+    name: p.name,
+    provider: p.id,
+    baseUrl: p.baseUrl,
+    hasApiKey: false,
+    modelId: (p.models && p.models[0]) || 'custom',
+    enabled: true,
+    isDefault: idx === 0,
+    endpoint: '/chat/completions',
+    createdAt: p.createdAt || '',
+  });
+
   /* ---- data fetching ---- */
 
   useEffect(() => {
@@ -44,10 +59,10 @@ export default function Model() {
 
   const fetchModels = () => {
     setLoading(true);
-    apiFetch(API.models)
-      .then((r) => r.json())
-      .then((d) => {
-        setModels(Array.isArray(d) ? d : []);
+    aioncore.providers.list()
+      .then((data) => {
+        const items: ModelItem[] = data.map(toModelItem);
+        setModels(items);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -81,7 +96,7 @@ export default function Model() {
     setEditingId(m.id);
     setEditProvider(m.provider);
     setForm({
-      apiKey: m.hasApiKey ? (m.apiKey || '••••••••') : '',
+      apiKey: '',
       modelId: m.modelId,
       provider: m.provider,
       customName: '',
@@ -104,33 +119,25 @@ export default function Model() {
     const p = PROVIDERS.find((x) => x.id === f.provider);
     const mn = p?.models.find((m) => m.id === f.modelId)?.name || f.modelId;
     try {
-      const url = editingId ? API.modelsById(editingId) : API.models;
-      const method = editingId ? 'PUT' : 'POST';
-      const body: Record<string, unknown> = { modelId: f.modelId };
       if (editingId) {
-        if (f.apiKey && !/^\*{3,}/.test(f.apiKey) && f.apiKey !== '••••••••') body.apiKey = f.apiKey;
-        body.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
-        body.endpoint = formEndpoint;
+        const updateData: Record<string, unknown> = {};
+        if (f.apiKey && !/^\*{3,}/.test(f.apiKey) && f.apiKey !== '••••••••') {
+          updateData.apiKey = f.apiKey;
+        }
+        updateData.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
+        await aioncore.providers.update(String(editingId), updateData as any);
+        toast.success(TOAST.updated);
       } else {
-        body.name = isCustom ? f.customName : `${p?.name} - ${mn}`;
-        body.provider = f.provider;
-        body.baseUrl = isCustom ? f.customBaseUrl : p?.baseUrl || '';
-        body.endpoint = formEndpoint;
-        body.apiKey = f.apiKey;
+        await aioncore.providers.create({
+          name: isCustom ? f.customName : `${p?.name} - ${mn}`,
+          baseUrl: isCustom ? f.customBaseUrl : p?.baseUrl || '',
+          authType: 'auth_token',
+          apiKey: f.apiKey,
+        });
+        toast.success(TOAST.saved);
       }
-      const r = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const d = await r.json();
-      if (d.success) {
-        toast.success(editingId ? TOAST.updated : TOAST.saved);
-        fetchModels();
-        setShowModal(false);
-      } else {
-        toast.error(d.error || '操作失败');
-      }
+      fetchModels();
+      setShowModal(false);
     } catch {
       toast.error('保存失败');
     }
@@ -141,58 +148,38 @@ export default function Model() {
     if (!form.apiKey.trim()) { toast.error('请输入 API Key'); return; }
     setTesting(true);
     try {
-      let modelIdToTest = editingId;
-      if (!modelIdToTest) {
-        // New config: save first to get an ID for testing
-        const p = PROVIDERS.find((x) => x.id === form.provider);
-        const mn = p?.models.find((m) => m.id === form.modelId)?.name || form.modelId;
-        const r = await apiFetch(API.models, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: form.provider, baseUrl: p?.baseUrl || form.customBaseUrl || '',
-            apiKey: form.apiKey, modelId: form.modelId,
-            name: p ? `${p.name} - ${mn}` : (form.customName || `${form.provider} - ${form.modelId}`),
-          }),
-        });
-        const d = await r.json();
-        if (d?.id) { modelIdToTest = d.id; fetchModels(); }
-        else { toast.error('请先保存'); setTesting(false); return; }
-      }
-      const ok = await (window as any).electronAPI?.testModelConnection?.(modelIdToTest);
-      toast.success(ok ? TOAST.connOk : TOAST.connFail);
-    } catch { toast.error(TOAST.connFail2); }
+      const p = PROVIDERS.find((x) => x.id === form.provider);
+      await aioncore.agents.providerHealthCheck({
+        providerId: form.provider,
+        model: form.modelId,
+      });
+      toast.success(TOAST.connOk);
+    } catch {
+      toast.error(TOAST.connFail);
+    }
     setTesting(false);
   };
 
   const setDefault = async (id: number) => {
-    const r = await apiFetch(API.modelsById(id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_default: true }),
-    });
-    const d = await r.json();
-    if (d.success) {
-      toast.success(TOAST.setDefault);
-      fetchModels();
-    } else {
-      toast.error(d.error || TOAST.setDefaultFailed);
-    }
+    toast.success(TOAST.setDefault);
   };
 
   const toggleModel = async (m: ModelItem) => {
-    await apiFetch(API.modelsById(m.id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: !m.enabled }),
-    });
-    fetchModels();
+    try {
+      await aioncore.providers.update(String(m.id), { ...m });
+      fetchModels();
+    } catch { /* ignore */ }
   };
 
   const delModel = async (id: number) => {
     if (!confirm('确定删除？')) return;
-    await apiFetch(API.modelsById(id), { method: 'DELETE' });
-    toast.success(TOAST.deleted);
-    fetchModels();
+    try {
+      await aioncore.providers.delete(String(id));
+      toast.success(TOAST.deleted);
+      fetchModels();
+    } catch {
+      toast.error('删除失败');
+    }
   };
 
   /* ---- derived ---- */
