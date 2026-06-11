@@ -89,9 +89,8 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "build/**/*",
       "node_modules/@modelcontextprotocol/**/*",
-      "build/icon.png",
-      "build/icon.ico",
       "package.json"
     ],
     "win": {
@@ -103,7 +102,10 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     },
     "publish": {
       "provider": "github",

@@ -44,3 +44,4 @@ workit/
 electron/aioncore/
 previews/
 *.zip
+release*/

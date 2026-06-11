@@ -6,7 +6,19 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 const { app } = require('electron');
+
+// Use a global flag to log only once
+let _diagnosticsLogged = false;
+
+function log(msg) {
+  console.log(`[aioncore] ${msg}`);
+}
+
+function warn(msg) {
+  console.warn(`[aioncore] ${msg}`);
+}
 
 class AionCoreManager {
   constructor() {
@@ -19,68 +31,117 @@ class AionCoreManager {
 
   /**
    * Resolve the AionCore binary path.
-   * Priority: env var → bundled resources → PATH
+   * Tries multiple locations, logs all attempts.
    */
   resolveBinaryPath() {
-    // 1. Environment variable override (for development)
+    const isWin = process.platform === 'win32';
+    const binName = isWin ? 'aioncore.exe' : 'aioncore';
+
+    // 1. Environment variable override
     if (process.env.AIONCORE_PATH) {
-      const userPath = process.env.AIONCORE_PATH;
-      console.log(`[aioncore] Using AIONCORE_PATH: ${userPath}`);
-      return userPath;
+      log(`Using AIONCORE_PATH env: ${process.env.AIONCORE_PATH}`);
+      return process.env.AIONCORE_PATH;
     }
 
-    // 2. Bundled with Electron (production)
-    const resourcesPath = process.resourcesPath || path.join(app.getAppPath(), '..', 'Resources');
-    const bundledPath = process.platform === 'win32'
-      ? path.join(resourcesPath, 'aioncore', 'aioncore.exe')
-      : path.join(resourcesPath, 'aioncore', 'aioncore');
+    // 2. All candidate paths in priority order
+    const candidates = [];
 
-    const fs = require('fs');
-    if (fs.existsSync(bundledPath)) {
-      console.log(`[aioncore] Using bundled binary: ${bundledPath}`);
-      return bundledPath;
+    // a: process.resourcesPath (standard Electron resources dir)
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, 'aioncore', binName));
     }
 
-    // 3. Check in app's own directory (dev mode)
-    const appPath = path.join(app.getAppPath(), 'aioncore',
-      process.platform === 'win32' ? 'aioncore.exe' : 'aioncore');
-    if (fs.existsSync(appPath)) {
-      console.log(`[aioncore] Using app-adjacent binary: ${appPath}`);
-      return appPath;
+    // b: Resources next to app (macOS .app bundle fallback)
+    try {
+      candidates.push(path.join(app.getAppPath(), '..', 'Resources', 'aioncore', binName));
+    } catch (e) {}
+
+    // c: App-adjacent (dev mode / portable)
+    try {
+      candidates.push(path.join(app.getAppPath(), 'aioncore', binName));
+    } catch (e) {}
+
+    // d: App executable dir
+    try {
+      const exeDir = path.dirname(app.getPath('exe'));
+      candidates.push(path.join(exeDir, 'aioncore', binName));
+      candidates.push(path.join(exeDir, 'resources', 'aioncore', binName));
+    } catch (e) {}
+
+    // e: CWD
+    candidates.push(path.join(process.cwd(), 'aioncore', binName));
+
+    // f: PATH fallback
+    candidates.push(binName);
+
+    // Log diagnostics once
+    if (!_diagnosticsLogged) {
+      _diagnosticsLogged = true;
+      log(`Searching for ${binName}...`);
+      log(`process.resourcesPath = ${process.resourcesPath || '(undefined)'}`);
+      try { log(`app.getAppPath() = ${app.getAppPath()}`); } catch (e) {}
+      try { log(`app.getPath('exe') = ${app.getPath('exe')}`); } catch (e) {}
+      log(`app.getPath('userData') = ${app.getPath('userData')}`);
     }
 
-    // 4. Fallback to PATH
-    console.warn('[aioncore] No bundled binary found, falling back to PATH');
-    return 'aioncore';
+    for (const candidate of candidates) {
+      if (candidate === binName) {
+        // PATH fallback — no file to check
+        log(`Falling back to PATH: ${binName}`);
+        return binName;
+      }
+      try {
+        if (fs.existsSync(candidate)) {
+          log(`Found binary at: ${candidate}`);
+          return candidate;
+        } else {
+          warn(`Not found: ${candidate}`);
+        }
+      } catch (e) {
+        warn(`Error checking path ${candidate}: ${e.message}`);
+      }
+    }
+
+    // If nothing found, return PATH fallback
+    warn('No aioncore binary found anywhere, using PATH fallback');
+    return binName;
   }
 
   /**
    * Start the AionCore backend process.
-   * @param {Object} options
-   * @param {number} [options.port=13400] - HTTP port
-   * @param {string} [options.dataDir] - Data directory (defaults to app userData)
-   * @param {number} [options.timeout=30000] - Startup timeout in ms
    */
   async start(options = {}) {
     const port = options.port || 13400;
     const dataDir = options.dataDir || path.join(app.getPath('userData'), 'aioncore-data');
-    const timeout = options.timeout || 30000;
+    const timeout = options.timeout || 60000; // 60s timeout
 
     this.port = port;
     this.dataDir = dataDir;
     this.binaryPath = this.resolveBinaryPath();
 
-    console.log(`[aioncore] Starting backend on port ${port}`);
-    console.log(`[aioncore] Data directory: ${dataDir}`);
-    console.log(`[aioncore] Binary: ${this.binaryPath}`);
+    log(`Starting on port ${port}`);
+    log(`Data directory: ${dataDir}`);
+    log(`Binary path: ${this.binaryPath}`);
 
     // Ensure data directory exists
-    const fs = require('fs');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
+      log(`Created data directory: ${dataDir}`);
+    }
+
+    // Verify binary exists before spawning
+    if (this.binaryPath !== 'aioncore' && this.binaryPath !== 'aioncore.exe') {
+      if (!fs.existsSync(this.binaryPath)) {
+        const errMsg = `Binary not found at resolved path: ${this.binaryPath}`;
+        log(errMsg);
+        throw new Error(errMsg);
+      }
+      log(`Binary exists at: ${this.binaryPath}`);
     }
 
     // Spawn the process
+    log(`Spawning: ${this.binaryPath} --port ${port} --data-dir ${dataDir} --local`);
+
     this.process = spawn(this.binaryPath, [
       '--port', String(port),
       '--data-dir', dataDir,
@@ -88,35 +149,47 @@ class AionCoreManager {
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
+      windowsHide: true,
     });
 
     // Log stdout
     this.process.stdout.on('data', (data) => {
-      console.log(`[aioncore:out] ${data.toString().trim()}`);
+      const msg = data.toString().trim();
+      if (msg) log(`[out] ${msg}`);
     });
 
     // Log stderr
     this.process.stderr.on('data', (data) => {
-      console.error(`[aioncore:err] ${data.toString().trim()}`);
+      const msg = data.toString().trim();
+      if (msg) warn(`[err] ${msg}`);
     });
 
     // Handle process exit
     this.process.on('exit', (code, signal) => {
-      console.log(`[aioncore] Process exited (code: ${code}, signal: ${signal})`);
+      log(`Process exited (code: ${code}, signal: ${signal})`);
       this.process = null;
       this.ready = false;
     });
 
     this.process.on('error', (err) => {
-      console.error(`[aioncore] Process error: ${err.message}`);
+      warn(`Spawn error: ${err.message}`);
       this.process = null;
       this.ready = false;
     });
 
     // Wait for health check
-    await this.waitForReady(timeout);
-    this.ready = true;
-    console.log(`[aioncore] Backend ready on port ${port}`);
+    try {
+      await this.waitForReady(timeout);
+      this.ready = true;
+      log(`Backend ready on port ${port}`);
+    } catch (err) {
+      // Clean up the process if health check fails
+      if (this.process) {
+        this.process.kill();
+        this.process = null;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -125,11 +198,13 @@ class AionCoreManager {
   waitForReady(timeout) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-      const pollInterval = 500;
+      const pollInterval = 1000;
+      let lastError = '';
 
       const poll = () => {
-        if (Date.now() - startTime > timeout) {
-          reject(new Error(`AionCore startup timeout after ${timeout}ms`));
+        const elapsed = Date.now() - startTime;
+        if (elapsed > timeout) {
+          reject(new Error(`AionCore did not start within ${timeout}ms. ${lastError}`));
           return;
         }
 
@@ -142,20 +217,24 @@ class AionCoreManager {
               if (data.status === 'ok') {
                 resolve(data);
               } else {
+                lastError = `Health response: ${body.substring(0, 100)}`;
                 setTimeout(poll, pollInterval);
               }
-            } catch {
+            } catch (e) {
+              lastError = `Health parse error: ${e.message}`;
               setTimeout(poll, pollInterval);
             }
           });
         });
 
-        req.on('error', () => {
+        req.on('error', (err) => {
+          lastError = `Health error: ${err.message}`;
           setTimeout(poll, pollInterval);
         });
 
-        req.setTimeout(2000, () => {
+        req.setTimeout(3000, () => {
           req.destroy();
+          lastError = `Health request timeout`;
           setTimeout(poll, pollInterval);
         });
       };
@@ -168,51 +247,56 @@ class AionCoreManager {
    * Stop the AionCore process gracefully.
    */
   async stop() {
-    if (!this.process) return;
+    if (!this.process) {
+      log('No process to stop');
+      return;
+    }
 
-    console.log('[aioncore] Stopping backend...');
+    log('Stopping backend...');
 
     return new Promise((resolve) => {
-      const killTimeout = setTimeout(() => {
-        console.warn('[aioncore] Force killing backend');
+      const forceKillTimer = setTimeout(() => {
+        warn('Force killing backend');
         if (this.process) {
-          this.process.kill('SIGKILL');
+          try { this.process.kill('SIGKILL'); } catch (e) { warn(`Force kill failed: ${e.message}`); }
           this.process = null;
         }
+        this.ready = false;
         resolve();
-      }, 5000);
+      }, 8000);
 
       this.process.once('exit', () => {
-        clearTimeout(killTimeout);
+        clearTimeout(forceKillTimer);
         this.process = null;
         this.ready = false;
+        log('Backend stopped');
         resolve();
       });
 
-      // Send SIGTERM (or on Windows, use process.kill with no signal)
-      if (process.platform === 'win32') {
-        this.process.kill();  // Windows: spawn.kill() sends WM_CLOSE
-      } else {
-        this.process.kill('SIGTERM');
+      try {
+        if (process.platform === 'win32') {
+          this.process.kill();
+        } else {
+          this.process.kill('SIGTERM');
+        }
+      } catch (e) {
+        warn(`Kill failed: ${e.message}`);
+        clearTimeout(forceKillTimer);
+        this.process = null;
+        resolve();
       }
     });
   }
 
-  /**
-   * Check if the backend is currently running and healthy.
-   */
+  /** Check if the backend is currently running and healthy */
   async isHealthy() {
     return new Promise((resolve) => {
       const req = http.get(`http://localhost:${this.port}/health`, (res) => {
         let body = '';
         res.on('data', (chunk) => { body += chunk; });
         res.on('end', () => {
-          try {
-            const data = JSON.parse(body);
-            resolve(data.status === 'ok');
-          } catch {
-            resolve(false);
-          }
+          try { resolve(JSON.parse(body).status === 'ok'); }
+          catch { resolve(false); }
         });
       });
       req.on('error', () => resolve(false));
@@ -220,9 +304,7 @@ class AionCoreManager {
     });
   }
 
-  /** Get the backend port number */
   getPort() { return this.port; }
-  /** Check if backend has been started and is ready */
   isReady() { return this.ready; }
 }
 
